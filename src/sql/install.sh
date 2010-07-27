@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+set -x
+
+if [ -z "$PGDATABASE" ] || [ -z "$PGUSER" ] || [ -z "$PGPASSWORD" ]; then
+  echo "Please set variable PGDATABASE, PGUSER and PGPASSWORD"
+  exit 2
+fi 
+
+CREATE_DATABASE=$PGDATABASE
+CREATE_USER=$PGUSER
+CREATE_PASSWORD=$PGPASSWORD
+unset PGDATABASE PGUSER PGPASSWORD PGHOST PGPORT
+
+# Create user
+psql -c "CREATE ROLE $CREATE_USER WITH NOCREATEDB NOCREATEROLE NOCREATEUSER LOGIN" || true
+psql -c "ALTER ROLE $CREATE_USER WITH PASSWORD '$CREATE_PASSWORD'"
+
+# Create DB
+createdb -O "$CREATE_USER" --encoding UNICODE "$CREATE_DATABASE" "OASIS-DB persistent data" || true
+#psql < account-ext.sql
+

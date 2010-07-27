@@ -1,0 +1,3 @@
+version=3
+
+http://pauillac.inria.fr/~fpottier/menhir/menhir-(.*)\.tar\.gz

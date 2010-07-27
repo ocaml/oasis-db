@@ -1,0 +1,2 @@
+version=2
+ftp://ftp.inria.fr/INRIA/Projects/cristal/advi/advi-(.*)\.t(?:ar\.)?gz

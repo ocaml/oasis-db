@@ -1,0 +1,4 @@
+# Site		Directory		Pattern			Version	Script
+version=2
+http://perso.rd.francetelecom.fr/alvarado/soft/otags-(.*)\.tar\.gz
+

@@ -1,0 +1,5 @@
+version=3
+
+http://wwwfun.kurims.kyoto-u.ac.jp/soft/lsl/lablgtk.html \
+  dist/lablgtk-(\d+\.[\d.]+)\.tar\.gz
+  # forcing the '.' in version number to skip CVS snapshots

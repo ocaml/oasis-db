@@ -1,0 +1,5 @@
+(* OASIS_START *)
+(* DO NOT EDIT (digest: 5aab635f101318172bcf3dc3bfa7e34b) *)
+Authors of oasis-db
+Sylvain Le Gall
+(* OASIS_STOP *)

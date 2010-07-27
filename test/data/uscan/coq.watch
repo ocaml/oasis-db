@@ -1,0 +1,4 @@
+version=3
+
+opts=uversionmangle=s/pl/.pl/,dversionmangle=s/\+dfsg\d*$// \
+        http://coq.inria.fr/distrib1-eng.html .*/files/coq-([0-9a-z\.]*)\.tar\.gz

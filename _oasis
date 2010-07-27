@@ -1,0 +1,88 @@
+OASISFormat: 0.1
+Name:        oasis-db
+Version:     0.1.0
+Authors:     Sylvain Le Gall
+Copyrights:  (C) 2010 OCamlCore SARL 
+Homepage:    http://oasis.forge.ocamlcore.org/
+Plugins:     DevFiles (0.1.0), StdFiles (0.1.0), META (0.1.0)
+License:     LGPL-2.1 with OCaml linking exception
+LicenseFile: COPYING.txt
+FilesAB:     src/lib/ODBConf.ml.ab
+BuildTools:  ocamlbuild, make
+
+Synopsis: Database and web interface of OASIS packages
+
+Description:
+  OASIS-DB is a database of OCaml packages using OASIS.
+
+Flag gettext
+  Description: Use ocaml-gettext for i18n
+  Default: false
+
+if flag(gettext) 
+  PostBuildCommand: $make -C po all
+  PostCleanCommand: $make -C po clean
+  PostInstallCommand:   $make -C po install PODIR=$prefix/share/locale
+  PostUninstallCommand: $make -C po install PODIR=$prefix/share/locale
+
+Library "oasis-db"
+  Path: src/lib
+  CompiledObject: Byte
+  Modules: ODBUtils,
+           ODBConf,
+           ODBGettext,
+           ODBContext,
+           ODBMessage,
+           ODBTypes,
+           ODBFileUtil,
+           ODBProcess,
+           ODBArchive,
+           ODBPkg,
+           ODBVer,
+           ODBStorage,
+           ODBInotify,
+           ODBCompletion,
+           LwtExt
+  BuildDepends: lwt, lwt.unix,
+                unix, 
+                pcre,
+                oasis,
+                sexplib,
+                calendar,
+                inotify
+  
+Flag oasis_db_ocsigen
+  Description: Build ocsigen module for OASIS-DB. It requires postgresql running.
+  Default: false
+
+Library "oasis-db-ocsigen"
+  FindlibParent:   oasis-db
+  FindlibName: ocsigen
+  Path: src/web
+  CompiledObject:  Byte
+  Build$: flag(oasis_db_ocsigen)
+  Modules: Index,
+           Account,
+           Template,
+           SQL
+  BuildDepends: oasis-db, 
+                ocsigen, 
+                pgocaml, 
+                netstring, 
+                threads, 
+                calendar
+  
+Executable test
+  Path:   test
+  MainIs: test.ml
+  BuildDepends: oUnit
+  
+Test main
+  Type: custom (0.1.0)
+  Command: $test
+  WorkingDirectory: test/
+  
+Executable inrestart 
+  Path:         src/tools/inrestart
+  MainIs:       Main.ml
+  BuildDepends: inotify, unix 

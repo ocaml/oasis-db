@@ -1,0 +1,3 @@
+version=3
+
+http://ocaml.info/ocaml_sources/postgresql-ocaml-(.*)\.tar\.gz

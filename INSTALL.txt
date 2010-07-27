@@ -1,0 +1,47 @@
+(* OASIS_START *)
+(* DO NOT EDIT (digest: b3609b13132548706391c0d442e2b9f3) *)
+This is the INSTALL file for the oasis-db distribution.
+
+This package uses OASIS to generate its build system. See section OASIS for
+full information. 
+
+Dependencies
+============
+
+In order to compile this package, you will need:
+* ocaml for all, test main
+* findlib
+* lwt for library oasis-db
+* pcre for library oasis-db
+* oasis for library oasis-db
+* sexplib for library oasis-db
+* calendar for library oasis-db, library oasis-db-ocsigen
+* inotify for library oasis-db, executable inrestart
+* make for all, test main
+* ocsigen for library oasis-db-ocsigen
+* pgocaml for library oasis-db-ocsigen
+* netstring for library oasis-db-ocsigen
+* oUnit for executable test
+
+Installing
+==========
+
+1. Uncompress source directory and got to the root of the package
+2. Run 'ocaml setup.ml -configure'
+3. Run 'ocaml setup.ml -build'
+4. Run 'ocaml setup.ml -install'
+
+Uninstalling
+============
+
+1. Go to the root of the package 
+2. Run 'ocaml setup.ml -uninstall'
+
+OASIS
+=====
+
+OASIS is a software that helps to write setup.ml using a simple '_oasis'
+configuration file. The generated setup only depends on standard OCaml
+installation, no additional library is required.
+
+(* OASIS_STOP *)

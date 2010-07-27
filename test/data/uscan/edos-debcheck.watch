@@ -1,0 +1,4 @@
+version=3
+
+http://www.edos-project.org/xwiki/bin/view/Main/debcheck_home/index.html \
+	http://www.edos-project.org/xwiki/bin/download/Main/debcheck_home/debrpmcheck-([\d\.]*)\.tar\.gz

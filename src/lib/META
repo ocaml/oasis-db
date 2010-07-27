@@ -1,0 +1,14 @@
+# OASIS_START
+# DO NOT EDIT (digest: d0e25832ebf4f3f5343ece087f6d66be)
+version = "0.1.0"
+description = "Database and web interface of OASIS packages"
+requires = "lwt lwt.unix unix pcre oasis sexplib calendar inotify"
+archive(byte) = "oasis-db.cma"
+package "ocsigen" (
+ version = "0.1.0"
+ description = "Database and web interface of OASIS packages"
+ requires = "oasis-db ocsigen pgocaml netstring threads calendar"
+ archive(byte) = "oasis-db-ocsigen.cma"
+)
+# OASIS_STOP
+

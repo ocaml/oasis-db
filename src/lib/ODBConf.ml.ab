@@ -1,0 +1,10 @@
+
+let version = "$(pkg_version)"
+
+let tar   = "tar"
+
+let unzip = "unzip"
+
+let dist_dir = "../test/filestorage/dist"
+
+let incoming_dir = "../test/filestorage/incoming" 

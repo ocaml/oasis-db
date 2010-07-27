@@ -1,0 +1,3 @@
+version=3
+
+http://www.ocaml.info/ocaml_sources/ ocaml-sqlite3-(.*)\.tar\.gz

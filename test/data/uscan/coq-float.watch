@@ -1,0 +1,3 @@
+version=3
+
+http://lipforge.ens-lyon.fr/frs/?group_id=11&release_id=85 .*/Float([0-9a-z\-\.]*)\.tar\.gz
