@@ -1,6 +1,7 @@
 
 open Lwt
 open ODBGettext
+open ODBMessage
 
 exception EStatus of string * string list * Unix.process_status;;
 
@@ -39,10 +40,7 @@ type handle_status =
   | StatusFunction of (Unix.process_status -> unit Lwt.t)
 
 let run_logged 
-      ?section 
-      ?logger 
-      ?timeout 
-      ?env 
+      ~ctxt ?timeout ?env 
       ?(status=StatusExpected [Unix.WEXITED 0])
       cmd args = 
 
@@ -65,8 +63,7 @@ let run_logged
                 let exc = 
                   EStatus (cmd, args, st)
                 in
-                  Lwt_log.error ?section ?logger 
-                    (string_of_exception exc)
+                  error ~ctxt "%s" (string_of_exception exc)
                   >>= fun () ->
                   fail exc
               end
@@ -97,7 +94,7 @@ let run_logged
     in
       read_and_log_aux ()
   in
-    Lwt_log.debug_f ?section ?logger
+    debug ~ctxt
       (f_ "Running '%s'")
       (String.concat " " (cmd :: args))
     >>= fun () ->
@@ -105,8 +102,8 @@ let run_logged
     >>= fun () ->
       join 
         [       
-          read_and_log (Lwt_log.info ?section ?logger) p#stdout;
-          read_and_log (Lwt_log.error ?section ?logger) p#stderr;
+          read_and_log (info ~ctxt "%s") p#stdout;
+          read_and_log (error ~ctxt "%s") p#stderr;
         ]
     >>= fun () ->
     p#close 

@@ -90,22 +90,31 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
 
   let watch_dir fn t = 
     let watch_dir_aux fn t =
-      let wd = 
-        add_watch t.fd fn [S_Create; S_Delete; S_Close_write; S_Delete_self]
-      in
-        debug ~ctxt (f_ "Now watching directory '%s'") fn
-        >>= fun () ->
-        return {t with wds = MapInt.add (int_of_wd wd) fn t.wds}
-        >>= fun t ->
-        monitor (Dir (Created fn)) t.acc
-        >>= fun acc ->
-        return {t with acc = acc}
+      try 
+        let wd = 
+          add_watch t.fd fn [S_Create; S_Delete; S_Close_write; S_Delete_self]
+        in
+          debug ~ctxt (f_ "Now watching directory '%s'") fn
+          >>= fun () ->
+          return {t with wds = MapInt.add (int_of_wd wd) fn t.wds}
+          >>= fun t ->
+          monitor (Dir (Created fn)) t.acc
+          >>= fun acc ->
+          monitor (Dir (Changed fn)) t.acc
+          >>= fun acc ->
+          return {t with acc = acc}
+      with Inotify.Error (func, err) ->
+        fail
+          (Failure
+            (Printf.sprintf 
+              (f_ "Inotify.%s error: %s")
+              func fn
+              (* TODO: Inotify error should be unix
+              (Unix.error_message err)*)))
     in
 
     if Sys.file_exists fn && Sys.is_directory fn then
       begin
-        watch_dir_aux fn t
-        >>= fun t ->
         if recurse then 
           ODBFileUtil.fold_fs 
             (fun ev t ->
@@ -116,13 +125,24 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
               | PostDir _ ->
                   return t
               
-              | ODBFileUtil.File _ ->
+              | ODBFileUtil.File fn ->
                   monitor (File (Created fn)) t.acc
+                  >>= fun acc ->
+                  monitor (File (Changed fn)) t.acc
                   >>= fun acc ->
                   return {t with acc = acc})
             fn t
         else
-          return t
+          watch_dir_aux fn t
+          >>= fun t ->
+          ODBFileUtil.fold_dir
+            (fun full _ t ->
+              monitor (File (Created full)) t.acc
+              >>= fun acc ->
+              monitor (File (Changed full)) t.acc
+              >>= fun acc ->
+              return {t with acc = acc})
+            fn t
       end
     else
       begin
@@ -264,3 +284,19 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
     watch_dir topdir t
     >>= 
     run
+
+let monitor_dir ~ctxt f fn acc = 
+  monitor_low 
+    ~ctxt ~recurse:false
+    (fun ev acc ->
+      match ev with 
+      | Dir _ -> return acc
+      | File e -> f e acc)
+    fn acc
+    
+let monitor_fs ~ctxt f fn acc = 
+  monitor_low 
+    ~ctxt ~recurse:true
+    f fn acc
+
+

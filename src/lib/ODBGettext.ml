@@ -11,6 +11,9 @@ let fn_ f1 f2 n =
 let s_ s = 
   s
 
+let sn_ s p n =
+  p
+
 IFDEF HAS_GETTEXT THEN
 include
   Gettext.Library

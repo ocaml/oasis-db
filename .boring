@@ -116,3 +116,4 @@
 ^setup.log$
 ^setup.data$
 ^Makefile.secret$
+^test/data/storage$

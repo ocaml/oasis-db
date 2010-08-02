@@ -1,5 +1,5 @@
 
-let version = "$(pkg_version)"
+let version = "0.1.0"
 
 let tar   = "tar"
 

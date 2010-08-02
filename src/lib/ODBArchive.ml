@@ -16,17 +16,17 @@ let string_of_exception =
     | e ->
         raise e
 
-let uncompress ?section ?logger fn dn = 
+let uncompress ~ctxt fn dn = 
   let handlers = 
     [ 
       ".tar.gz",
-      (fun () -> run_logged ODBConf.tar ["-C"; dn; "-xzf"; fn]);
+      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xzf"; fn]);
 
       ".tar.bz2",
-      (fun () -> run_logged ODBConf.tar ["-C"; dn; "-xjf"; fn]);
+      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xjf"; fn]);
 
       ".zip",
-      (fun () -> run_logged ODBConf.unzip [fn; "-d"; dn]);
+      (fun () -> run_logged ~ctxt ODBConf.unzip [fn; "-d"; dn]);
     ]
   in
 
@@ -46,15 +46,15 @@ let uncompress ?section ?logger fn dn =
     find_handler handlers 
 
 
-let uncompress_tmp_dir ?section ?logger fn f = 
+let uncompress_tmp_dir ~ctxt fn f = 
   temp_dir "oasis-db-" "" 
   >>= fun dn ->
   (finalize
      (fun () ->
-        uncompress ?section ?logger fn dn
+        uncompress ~ctxt fn dn
         >>= fun an ->
         (* Do something with content *)
         f fn an dn)
 
      (fun () ->
-        rm ?section ?logger ~recurse:true [dn]))
+        rm ~ctxt ~recurse:true [dn]))

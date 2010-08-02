@@ -1,4 +1,5 @@
 
+open ODBMessage
 open ODBGettext
 open Lwt
 open Sexplib
@@ -51,10 +52,14 @@ struct
      with e ->
        fail e
 
-  let sexp_dump ~ctxt sexp_of_t fn t = 
+  let sexp_dump ~ctxt sexp_of_vt version fn t = 
     let str = 
-      Sexp.to_string_hum ~indent:2 (sexp_of_t t)
+      Sexp.to_string_hum ~indent:2 (sexp_of_vt (version t))
     in
+      debug ~ctxt
+        (f_ "Creating file '%s'")
+        fn
+      >>= fun () ->
       Lwt_io.with_file
         ~mode:Lwt_io.output fn
         (fun chn ->

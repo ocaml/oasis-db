@@ -24,7 +24,14 @@ let () =
   in
 
   let watch_dn () = 
-    ignore(add_watch fd dn [S_Close_write; S_Delete_self])
+    if Sys.file_exists dn && Sys.is_directory dn then
+      let _wd : wd = 
+        add_watch fd dn [S_Close_write; S_Delete_self]
+      in
+        ()
+    else
+      failwith 
+        (Printf.sprintf "No directory '%s'" dn)
   in
 
   let () = 

@@ -42,11 +42,15 @@ Library "oasis-db"
            ODBStorage,
            ODBInotify,
            ODBCompletion,
+           ODBIncoming,
+           ODBMain,
+           ODBRunner,
+           ODBOASIS,
            LwtExt
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,
-                oasis,
+                oasis, oasis.builtin-plugins,
                 sexplib,
                 calendar,
                 inotify
@@ -64,23 +68,30 @@ Library "oasis-db-ocsigen"
   Modules: Index,
            Account,
            Template,
+           MyAccount,
+           Browse,
            SQL
   BuildDepends: oasis-db, 
                 ocsigen, 
                 pgocaml, 
                 netstring, 
                 threads, 
-                calendar
+                calendar,
+                markdown, markdown.html
   
+Executable FakeIncoming
+  Path: test
+  MainIs: FakeIncoming.ml
+  BuildDepends: oasis-db
+
 Executable test
   Path:   test
   MainIs: test.ml
-  BuildDepends: oUnit
+  BuildDepends: oUnit, fileutils, oasis-db
   
 Test main
-  Type: custom (0.1.0)
   Command: $test
-  WorkingDirectory: test/
+  TestTools: test, FakeIncoming
   
 Executable inrestart 
   Path:         src/tools/inrestart

@@ -13,3 +13,9 @@ let warning ~ctxt fmt =
 
 let error ~ctxt fmt =
   error_f ~logger:ctxt.logger ~section:ctxt.section fmt
+
+let string_of_exception e =
+  try 
+    OASISMessage.string_of_exception e
+  with e ->
+    raise e 

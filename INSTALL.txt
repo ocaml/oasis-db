@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: b3609b13132548706391c0d442e2b9f3) *)
+(* DO NOT EDIT (digest: a41ef169fe46f910762173efd53a4264) *)
 This is the INSTALL file for the oasis-db distribution.
 
 This package uses OASIS to generate its build system. See section OASIS for
@@ -18,10 +18,11 @@ In order to compile this package, you will need:
 * calendar for library oasis-db, library oasis-db-ocsigen
 * inotify for library oasis-db, executable inrestart
 * make for all, test main
+* oUnit for executable test
+* fileutils for executable test
 * ocsigen for library oasis-db-ocsigen
 * pgocaml for library oasis-db-ocsigen
 * netstring for library oasis-db-ocsigen
-* oUnit for executable test
 
 Installing
 ==========

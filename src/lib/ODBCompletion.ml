@@ -5,11 +5,27 @@
 
 open Lwt 
 open ODBGettext
+open ODBTypes
+open ODBMessage
+
+TYPE_CONV_PATH "ODBCompletion"
+
+(** {2 Types} *)
+
+type 'a answer = 
+  | Sure of 'a
+  | Unsure of float * 'a
+  | NotFound with sexp 
+
+type t =
+  {
+    pkg:       string answer;
+    ver:       version answer;
+    ord:       int answer;
+    oasis_fn:  filename option;
+  } with sexp
 
 (** {2 Utils} *)
-
-type name = string
-type version = string
 
 let pkg_regexp_str = 
   "[\\w\\-]+?"
@@ -30,17 +46,14 @@ let tarname_regexp =
         let substrs = 
           Pcre.exec ~rex:regexp nm
         in
-          [
-            q,
-            Pcre.get_substring substrs 1,
-            Pcre.get_substring substrs 2;
-          ]
+          Unsure (q, Pcre.get_substring substrs 1),
+          Unsure (q, Pcre.get_substring substrs 2)
       with Not_found ->
-        []
+        NotFound, NotFound
 
 (** Define the top directory
   *)
-let topdir ?section ?logger fn dn = 
+let topdir ~ctxt fn dn = 
   ODBFileUtil.fold_dir 
    (fun full base (acc, count) ->
      return 
@@ -52,7 +65,7 @@ let topdir ?section ?logger fn dn =
    (None, 0)
    >>= fun (res, count) ->
    if count <> 1 then
-     Lwt_log.warning_f ?section ?logger 
+     warning ~ctxt 
         (fn_ 
           "Archive '%s' contains %d top level file/directory."
           "Archive '%s' contains %d top level files/directories."
@@ -65,8 +78,8 @@ let topdir ?section ?logger fn dn =
 
 (** Search files in the top directory and run a function on them.
   *)
-let find ?section ?logger fn dn files f = 
-  topdir ?section ?logger fn dn
+let find ~ctxt fn dn files f acc = 
+  topdir ~ctxt fn dn
   >>= function
     | Some (topdir, _) ->
         (** Find configure.{in,ac} *)
@@ -77,216 +90,367 @@ let find ?section ?logger fn dn files f =
             else 
               return acc)
           topdir
-          []
+          acc
 
     | None ->
-        return []
+        return acc
 
 (** Search files in the top directory and scan their contents.
   *)
-let find_and_scan ?section ?logger fn dn files scan = 
-  find 
-    ?section 
-    ?logger 
-    fn 
-    dn 
-    files 
+let find_and_scan ~ctxt fn dn files scan acc = 
+  find ~ctxt  fn dn files 
     (fun full acc -> 
-      Lwt_stream.fold
-        scan
+      Lwt_stream.fold_s
+        (fun line acc -> scan full line acc)
         (Lwt_io.lines_of_file full)
         acc)
+    acc
 
 (** {2 Package/version completion methods}
  *)
 
 (** Extract version from tarball name *)
-let tarball_name ?section ?logger fn an dn = 
-  Lwt_log.debug_f 
-    ?section ?logger
+let tarball_name ~ctxt fn an dn = 
+  debug ~ctxt
     (f_ "Try to match tarname '%s'")
     an 
   >>= fun () ->   
   return (tarname_regexp 0.9 an)
 
 (** Extract version from top level directory *)
-let topdir_name ?section ?logger fn an dn =
-  topdir ?section ?logger fn dn 
+let topdir_name ~ctxt fn an dn =
+  topdir ~ctxt fn dn 
   >>= function
     | Some (full, base) ->
         return (tarname_regexp 0.8 base)
     | None ->
-        return []
+        return (NotFound, NotFound)
+
+let merge_partial_result ~ctxt prev fn v fmt_diff fmt_debug = 
+  match prev with 
+    | None ->
+        begin
+          return (Some (fn, v))
+        end
+
+    | Some (ref_fn, ref_v) ->
+        begin
+          if v <> ref_v then
+            warning ~ctxt fmt_diff ref_fn ref_v fn v
+            >>= fun () ->
+            return (Some (fn, v))
+          else
+            debug ~ctxt fmt_debug fn v
+            >>= fun () ->
+            return prev
+        end
+
+let partial_result q =
+  function
+    | None -> NotFound
+    | Some (_, v) -> Unsure (q, v)
 
 (** Extract data from configure.ac/configure.in files *)
-let configure_ac ?section ?logger fn an dn =
+let configure_ac ~ctxt fn an dn =
   let ac_init_rgxp = 
     Pcre.regexp
       ("AC_INIT\\(\\s*("^pkg_regexp_str^")\\s*,\\s*("^ver_regexp_str^")")
   in
-  let ac_init_extract line acc = 
+  let ac_init_extract fn line ((pkg_prev, ver_prev) as prev) = 
     try 
       let substrs =
         Pcre.exec ~rex:ac_init_rgxp line
       in
-        (0.7,
-         Pcre.get_substring substrs 1,
-         Pcre.get_substring substrs 2)
-        :: acc
+        (* Package *)
+        merge_partial_result ~ctxt 
+          pkg_prev fn (Pcre.get_substring substrs 1)
+          (f_ "File '%s' uses package '%s' and '%s' package '%s'")
+          (f_ "File '%s' uses package '%s'")
+        >>= fun pkg_cur ->
+        begin
+          (* Version *)
+          merge_partial_result ~ctxt
+            ver_prev fn (Pcre.get_substring substrs 2)
+            (f_ "File '%s' uses version '%s' and '%s' version '%s'")
+            (f_ "File '%s' uses version '%s'")
+          >>= fun ver_cur ->
+          return (pkg_cur, ver_cur)
+        end
+
     with Not_found ->
-      acc
+      return prev
   in
     find_and_scan 
       fn dn
-      ?section ?logger
+      ~ctxt
       ["configure.ac"; "configure.in"]
       ac_init_extract
+      (None, None)
+    >>= fun (pkg, ver) ->
+    return (partial_result 0.7 pkg, partial_result 0.7 ver)
+
 
 (** Extract data from META files *)
-let meta ?section ?logger fn an dn =
+let meta ~ctxt fn an dn =
   let meta_ver_rgxp =
     Pcre.regexp 
       ("version\\s*=\\s*\"("^ver_regexp_str^")\"")
   in
-  let meta_extract line acc = 
+  let meta_extract fn line prev =
     try 
       let substrs = 
         Pcre.exec ~rex:meta_ver_rgxp line
       in
-        (* TODO: separate pkg_name/pkg_ver extraction *)
-        (0.6,
-         "toto",
-         Pcre.get_substring substrs 1)
-        :: acc
+      let ver_s = 
+        Pcre.get_substring substrs 1
+      in
+        merge_partial_result ~ctxt
+          prev fn ver_s 
+          (f_ "File '%s' uses version '%s' and '%s' version '%s'")
+          (f_ "File '%s' uses version '%s'")
+
     with Not_found ->
-      acc
+      return prev
   in
     (* TODO: this only apply to topdir, look deeper in the the 
        filesystem.
      *)
     find_and_scan 
       fn dn
-      ?section ?logger
+      ~ctxt
       ["META"]
       meta_extract
+      None
+    >>= fun ver ->
+    return (NotFound, partial_result 0.6 ver)
 
-exception OASISFileTooBig of int64 * string
 open OASISTypes
 
 (** Extract data from OASIS file *)
-let oasis ?section ?logger fn an dn = 
-  let oasis_extract fn acc =
-    LwtExt.IO.with_file_content fn
-    >>= fun str ->
-    begin
-      let pkg = 
-        OASISParse.from_string 
-          (* TODO: redirect context to logger *)
-          ~ctxt:!OASISContext.default
-          ~ignore_unknown:true
-          ~fn:fn
-          str
-      in
-        return ((1.0, pkg.name, OASISVersion.string_of_version pkg.version) :: acc)
-    end
+let oasis ~ctxt fn an dn = 
+  let oasis_extract fn _ =
+    ODBOASIS.from_file ~ctxt ~ignore_plugins:true fn
+    >>= fun pkg ->
+    return 
+      (Some fn,
+       Sure pkg.name,
+       Sure (OASISVersion.string_of_version pkg.version))
   in
-    find
-      fn dn
-      ?section ?logger
+    find fn dn ~ctxt
       ["_oasis"]
       oasis_extract
+      (None, NotFound, NotFound)
 
 (** {2 Completion} *)
 
 module MapString = Map.Make(String)
 
-(** Merge a list of tuples to find what the best guess
-    for pkg/ver
+(** Merge two possible answers
   *)
-let merge lst = 
-  let sort_choices lst = 
-    let rec merge mp =
-      function
-        | (q, ans) :: tl ->
-            begin
-              let q = 
-                try 
-                  max q (MapString.find ans mp)
-                with Not_found ->
-                  q
-              in
-                merge (MapString.add ans q mp) tl
-            end
+let merge a1 a2 = 
+  match a1, a2 with
+  | ((Sure _) as a), _ 
+  | _, ((Sure _) as a)
+  | NotFound, a
+  | a, NotFound ->
+      a
 
-        | [] ->
-            mp
-    in
-    let mp =
-      merge MapString.empty lst
-    in
-    let lst = 
-      MapString.fold
-        (fun ans q acc -> (q, ans) :: acc)
-        mp
-        []
-    in
-      List.rev_map snd
-        (List.sort compare lst)
-  in
-    sort_choices (List.rev_map (fun (q, pkg, _) -> q, pkg) lst),
-    sort_choices (List.rev_map (fun (q, _, ver) -> q, ver) lst)
+  | Unsure (q1, v1), Unsure (q2, v2) ->
+      if v1 = v2 then
+        a1
+      else if q1 > q2 then
+        a1
+      else
+        a2
 
-(** TODO: move to unit testing 
-let test () = 
-  List.iter
-    (fun an -> 
-       let lst = 
-         tarname_regexp 0.8 an
-       in
-         Printf.printf "tarname: %s\n%!" an;
-         List.iter 
-           (fun (q, pkg, ver) ->
-              Printf.printf "q: %f; pkg: %s; ver: %s\n%!" 
-                q pkg ver)
-           lst)
-    [
-      "foo-0.1.0";
-      "bar-0.2.0";
-      "baz_3.0~alpha1";
-      "sexplib310-release-5.1.0";
-    ]
-    *)
+let value = 
+  function 
+    | Unsure (_, a) | Sure a -> Some a
+    | NotFound -> None
 
-let run ?section ?logger fn an dn =
-  let lst = 
+let is_sure = 
+  function 
+    | Sure _ -> true
+    | Unsure _ | NotFound -> false
+
+(** Try to determine order, using guessed answer for 
+    package and version
+ *)
+let order ~ctxt a_pkg a_ver =
+  match value a_pkg, value a_ver with 
+  | Some pkg_s, Some ver ->
+      begin
+        catch 
+          (fun () ->
+            ODBStorage.versions pkg_s
+            >>= fun lst ->
+            (* Try to insert this version between two. If version = latest -> sure
+             * otherwise -> unsure.
+             *)
+            let cmp =
+              OASISVersion.version_compare 
+            in
+            let rec find_position =
+              function
+                | v1 :: ((v2 :: _) as tl) ->
+                    let ver1 = v1.ODBVer.ver in
+                    let ver2 = v2.ODBVer.ver in
+
+                    if cmp ver1 ver = 0 || cmp ver2 ver = 0 then
+                      begin
+                        error ~ctxt 
+                        (f_ "Version '%s' for package '%s' already exists")
+                        (OASISVersion.string_of_version ver) pkg_s
+                        >>= fun () ->
+                        return NotFound
+                      end
+                    else if cmp ver ver1 < 0 then
+                      begin
+                        let order = 
+                          v1.ODBVer.ord - 10
+                        in
+                          return (Unsure (0.5, order))
+                      end
+                    else if cmp ver1 ver < 0 && cmp ver ver2 < 0 then
+                      begin
+                        let order = 
+                          (v1.ODBVer.ord + v2.ODBVer.ord) / 2
+                        in
+                          return (Unsure (0.5, order))
+                      end
+                    else
+                      begin
+                        find_position tl
+                      end
+
+                | v1 :: [] ->
+                    begin
+                      return (Sure (v1.ODBVer.ord + 10))
+                    end
+
+                | [] ->
+                    begin
+                      return NotFound
+                    end
+            in
+              find_position lst)
+
+          (function 
+            | Not_found ->
+                (* The package doesn't exist, use default order. *)
+                return (Sure 0)
+            | e ->
+                fail e)
+      end
+
+  | _, _ ->
+      return NotFound
+
+
+(** Try to guess parameter for a tarball
+ *)
+let run ~ctxt fn an dn =
+  let completions = 
     [
       "tarball_name", tarball_name;
       "topdir_name",  topdir_name;
       "configure_ac", configure_ac;
       "meta",         meta;
-      "oasis",        oasis;
     ]
   in
-    (* TODO: catch, log and ignore exceptions *)
-    Lwt_list.map_s
-      (fun (nm, f) ->
-        Lwt_log.debug_f ?section ?logger 
-          (f_ "Running package/version completion %s on '%s'")
-          nm fn
-        >>= fun () ->
-        f ?section ?logger fn an dn
-        >>= fun lst ->
-        Lwt_list.iter_s 
-         (fun (q, pkg, ver) ->
-           Lwt_log.debug_f
-             ?section ?logger
-             (f_ "Result of %s: q: %f; pkg: %s; ver: %s")
-             nm q pkg ver)
-         lst
-        >>= fun () ->
-        return lst)
-      lst
-    >>= fun lst' ->
-    return (merge (List.flatten lst'))
 
-(** TODO: load _oasis file, guess order *)
+  let catch_log (nm, run) dflt = 
+    debug ~ctxt
+      (f_ "Running completion '%s' on '%s'")
+      nm fn 
+    >>= fun () ->
+      catch 
+        (fun () ->
+          run ~ctxt fn an dn)
+        (fun e ->
+          warning ~ctxt
+            (f_ "Error in completion '%s' on '%s': %s")
+            nm fn (ODBMessage.string_of_exception e)
+          >>= fun () ->
+          return dflt)
+  in
+
+  let debug_value pkg ver =
+    let string_of_answer =
+      function
+        | Sure v -> 
+            v 
+        | Unsure (q, v) -> 
+            Printf.sprintf "%s with %.2f%%" v (q *. 100.)
+        | NotFound ->
+            s_ "unknown"
+    in
+      debug ~ctxt
+        (f_ "Package: %s")
+        (string_of_answer pkg)
+      >>= fun () ->
+      debug ~ctxt
+        (f_ "Version: %s")
+        (string_of_answer ver)
+  in
+
+    debug ~ctxt (f_ "Looking for _oasis file in '%s'") fn
+    >>= fun () ->
+    (* Completion with _oasis is top priority because we can have
+     * a definitive answer with this method
+     *)
+    catch_log
+      ("oasis", oasis)
+      (None, NotFound, NotFound)
+    >>= fun (oasis_fn, pkg, ver) ->
+    begin
+      let further_guesses = 
+        match pkg, ver with
+        | Sure _, Sure _ ->
+            (* We have everything no need to continue *)
+            debug_value pkg ver
+            >>= fun () ->
+            debug ~ctxt (f_ "Found an _oasis file, no need to continue")
+            >>= fun () ->
+            return (pkg, ver) 
+
+        | _, _ ->
+            (* Apply further completion methods *)
+            Lwt_list.fold_left_s
+              (fun (pre_pkg, pre_ver) completion ->
+                catch_log completion (NotFound, NotFound)
+                >>= fun (cur_pkg, cur_ver) ->
+                begin
+                  debug_value cur_pkg cur_ver
+                  >>= fun () ->
+                  return 
+                    (merge pre_pkg cur_pkg,
+                    merge pre_ver cur_ver)
+                end)
+              (pkg, ver)
+              completions
+      in
+        further_guesses
+        >>= fun (a_pkg, a_ver_s) ->
+        let a_ver =
+          (* Use a version rather than a string *)
+          let vos  = OASISVersion.version_of_string  in
+          match a_ver_s with 
+          | Sure s -> Sure (vos s)
+          | Unsure (q, s) -> Unsure (q, vos s)
+          | NotFound -> NotFound
+        in
+          order ~ctxt a_pkg a_ver
+          >>= fun a_ord ->
+          return 
+            {
+              pkg       = a_pkg;
+              ver       = a_ver;
+              ord       = a_ord;
+              oasis_fn  = oasis_fn;
+            }
+    end
+
+(* TODO: Other possible checks:
+   - if user <> www-data then assert user provided = user
+ *)

@@ -5,93 +5,184 @@ open Eliom_services
 open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod.Xhtml
-open BocageGettext
+open ODBGettext
+open ODBVer
+open CalendarLib
 open Template
 
-(* Packages *)
-let packages = 
-  [
-    "ocaml-fileutils", "0.4.4", "2010/05/05";
-    "ocaml-gettext",   "0.5.1", "2010/05/04";
-    "sexplib310",      "6.0",   "2010/05/03";
-    "ocaml-pcre",      "5.1",   "2010/05/02";
-  ]
+let _ = 
+  ODBMain.run ~ctxt:ODBContext.default ()
+
+type t = 
+  {
+    num_packages: int;
+    num_uploads:  int;
+    latest:       ODBVer.t list; 
+    first_date:   Calendar.t;
+  }
+
+let info () = 
+  (* Get the n elements in front of the list *)
+  let rec nhd n lst = 
+    if n > 0 then 
+      match lst with 
+      | hd :: tl ->
+          hd :: (nhd (n - 1) tl)
+      | [] ->
+          []
+    else
+      []
+  in
+
+  let nlatest = 
+    20
+  in
+
+  ODBStorage.packages () 
+  >>= fun pkg_lst -> 
+  Lwt_list.fold_left_s
+    (fun t pkg ->
+      ODBStorage.versions pkg
+      >>= fun ver_lst ->
+
+      (* Try to find a date older *)
+      let first_date = 
+        List.fold_left 
+          (fun frst ver ->
+            if Calendar.compare ver.upload_date frst < 0 then
+              ver.upload_date
+            else
+              frst)
+          t.first_date
+          ver_lst
+      in
+
+      (* We are interested in the most recent
+       * version of a package, in term of date
+       * and among this among the most recent
+       * in term of date for all packages
+       *)
+      let higher_versions = 
+        nhd nlatest (List.rev ver_lst)
+      in
+      let latest = 
+        nhd nlatest
+          (List.sort 
+            (fun v1 v2 ->
+              Calendar.compare v2.upload_date v1.upload_date)
+            (t.latest @ higher_versions))
+      in
+
+      (* Number of uploads = number of versions, no reason
+       * to upload twice the same 
+       *)
+      let num_uploads = 
+        t.num_uploads + List.length ver_lst
+      in
+
+      return 
+        {t with 
+          num_uploads = num_uploads; 
+          latest      = latest;
+          first_date  = first_date})
+
+    {
+      num_packages = List.length pkg_lst;
+      num_uploads  = 0;
+      latest       = [];
+      first_date   = Calendar.now ();
+    }
+    pkg_lst
 
 let _ = 
   register
     home
     (fun sp () () ->
-       page_template sp (s_ "Home") Account.box
-         [
-           div ~a:[a_id "home_highlight"]
-             [
-               ul
-                 (li [a browse sp [pcdata (s_ "Browse packages")] ()])
-                 [li [a browse sp [pcdata (s_ "Upload your package")] ()]];
-             ];
+      info () 
+      >>= fun t ->
+      page_template sp (s_ "Home") Account.box
+        [
+          div ~a:[a_id "home_highlight"]
+            [
+              ul
+                (li [a browse sp [pcdata (s_ "Browse packages")] ()])
+                [li [a browse sp [pcdata (s_ "Upload your package")] ()]];
+            ];
 
-           div ~a:[a_class ["introduction"]]
-             [
-               h2 [pcdata "OASIS DB, the comprehensive OCaml package archive"];
-               p [pcdata 
-                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                     Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                     consectetur adipiscing elit. Aliquam eleifend consequat sem. 
-                     Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                     Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                     consectetur adipiscing elit."];
+          div ~a:[a_class ["introduction"]]
+            [
+              h2 [pcdata "OASIS DB, the comprehensive OCaml package archive"];
+              p [pcdata 
+                   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+                    Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
+                    consectetur adipiscing elit. Aliquam eleifend consequat sem. 
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+                    Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
+                    consectetur adipiscing elit."];
 
-               p [pcdata 
-                    "Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                     consectetur adipiscing elit. Aliquam eleifend consequat sem. 
-                     Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                     Aliquam eleifend consequat sem. Lorem ipsum dolor sit amet, 
-                     consectetur adipiscing elit. Aliquam eleifend consequat sem.
-                     Lorem ipsum dolor sit amet, consectetur adipiscing elit."];
-             ];
+              p [pcdata 
+                   "Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
+                    consectetur adipiscing elit. Aliquam eleifend consequat sem. 
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+                    Aliquam eleifend consequat sem. Lorem ipsum dolor sit amet, 
+                    consectetur adipiscing elit. Aliquam eleifend consequat sem.
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit."];
+            ];
 
-           div ~a:[a_class ["whatsnew"]]
-             [
-               h2 [pcdata "What's new"];
+          div ~a:[a_class ["whatsnew"]]
+            [
+              h2 [pcdata "What's new"];
 
-               (match packages with
-                  | hd :: tl ->
-                      begin
-                        let to_li (nm, ver, date) =
-                          li 
-                            [a 
-                               (preapply Account.browse_pkg_ver (nm, ver))
-                               sp
-                               [pcdata 
-                                  (Printf.sprintf 
-                                     (f_ "%s v%s (%s)")
-                                     nm ver date)]
-                            ()]
-                        in
-                          ul (to_li hd) (List.map to_li tl)
-                      end
-                  | [] ->
-                      pcdata "");
-             ];
+              (match t.latest with
+                 | hd :: tl ->
+                     begin
+                       let to_li ver =
+                         let pkg = 
+                           ver.pkg 
+                         in
+                         let date =
+                           CalendarLib.Printer.Calendar.to_string 
+                             ver.upload_date
+                         in
+                         let ver_s = 
+                           OASISVersion.string_of_version 
+                             ver.ver
+                         in
+                           li 
+                             [a 
+                                (preapply 
+                                  Browse.browse_pkg_ver 
+                                  (pkg, ver_s))
+                                sp
+                                [pcdata 
+                                   (Printf.sprintf 
+                                      (f_ "%s v%s (%s)")
+                                      pkg ver_s date)]
+                             ()]
+                       in
+                         ul (to_li hd) (List.map to_li tl)
+                     end
+                 | [] ->
+                     pcdata "");
+            ];
 
-           div ~a:[a_class ["statistics"]]
-             [
-               h2 [pcdata "Statistics"];
-               img 
-                 ~alt:"Package uploads graph"
-                 ~src:(mk_static_uri sp ["chart-upload.png"])
-                 ();
-               p [pcdata "250 uploads since 2010/10/01"];
-               p [pcdata "100 packages in the database"];
-             ];
-         ])
+          div ~a:[a_class ["statistics"]]
+            [
+              h2 [pcdata "Statistics"];
+              img 
+                ~alt:"Package uploads graph"
+                ~src:(mk_static_uri sp ["chart-upload.png"])
+                ();
+              p 
+                [pcdata 
+                  (Printf.sprintf 
+                    (f_ "%d uploads and %d packages in the database since %s")
+                    t.num_uploads
+                    t.num_packages
+                    (Printer.Calendar.sprint "%F" t.first_date))];
+            ];
+        ])
 
-let _ = 
-  register
-    browse
-    (fun sp () () ->
-       page_template sp (s_ "Browse packages") Account.box
-         [p [pcdata "Browse"]])
 
 let _ = 
   register 
@@ -111,5 +202,6 @@ let _ =
   register 
     about
     (fun sp () () ->
-       page_template sp (s_ "About this website") Account.box
-         [p [pcdata "About"]])
+      (*ignore (tic_tac ());*)
+      page_template sp (s_ "About this website") Account.box
+        [p [pcdata "About"]])

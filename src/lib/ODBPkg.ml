@@ -10,6 +10,9 @@ type t = string with sexp
 
 type vt = V1 of t with sexp 
 
+let make nm =
+  nm
+
 let upgrade ~ctxt =
   function
     | V1 t -> return t
@@ -20,5 +23,5 @@ let from_file =
 
 (** Dump to file *)
 let to_file =
-  LwtExt.IO.sexp_dump sexp_of_vt
+  LwtExt.IO.sexp_dump sexp_of_vt (fun t -> V1 t)
 

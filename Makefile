@@ -23,9 +23,14 @@
 -include Makefile.secret 
 export PGDATABASE PGUSER PGPASSWORD PGHOST
 
+LWT_LOG=* -> info
+LWT_LOG=* -> debug
+export LWT_LOG
+
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
 
+#default: test
 default: build
 #TESTFLAGS      += -long 
 #TESTFLAGS      += -verbose
@@ -102,18 +107,14 @@ dist-step2:
 
 .PHONY: dist dist-step2
 
-run: test
-	mkdir tmp || true
-	ocsigen -c etc/ocsigen.conf
-	-$(RM) tmp
-
 clean-run:
-	-$(RM) tmp
+	-$(RM) -r tmp
 
 clean: clean-run
 
 # Run ocsigen
 run-ocsigen:
+	mkdir tmp || true
 	./src/tools/ocsigen-autorestart.sh
 
 # Create DB

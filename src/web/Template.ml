@@ -5,7 +5,7 @@ open Eliom_services
 open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod.Xhtml
-open BocageGettext
+open ODBGettext
 
 (* Main services *)
 let home = 
@@ -114,9 +114,6 @@ let page_template sp ttl account_box content =
                           [pcdata (s_ "Sponsors ");
                            ocamlcore_logo; 
                            janest_logo]);
-
-                       (div ~a:[a_class ["lastmodified"]]
-                          [pcdata "Last Modified 2010/06/28"]);
 
                        (div ~a:[a_class ["links"]]
                           [a about sp [pcdata (s_ "About this website")] ()]);

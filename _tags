@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: aa672844b08903b15dad8c3c92827c31)
+# DO NOT EDIT (digest: b31014cbecf1e3b51d56b928b3498651)
 # Library oasis-db
 "src/lib": include
 <src/lib/*.ml{,i}>: pkg_unix
@@ -10,6 +10,39 @@
 <src/lib/*.ml{,i}>: pkg_lwt
 <src/lib/*.ml{,i}>: pkg_inotify
 <src/lib/*.ml{,i}>: pkg_calendar
+# Executable test
+"test/test.byte": use_oasis-db
+"test/test.byte": pkg_unix
+"test/test.byte": pkg_sexplib
+"test/test.byte": pkg_pcre
+"test/test.byte": pkg_oasis
+"test/test.byte": pkg_oUnit
+"test/test.byte": pkg_lwt.unix
+"test/test.byte": pkg_lwt
+"test/test.byte": pkg_inotify
+"test/test.byte": pkg_fileutils
+"test/test.byte": pkg_calendar
+<test/*.ml{,i}>: pkg_oUnit
+<test/*.ml{,i}>: pkg_fileutils
+# Executable FakeIncoming
+"test/FakeIncoming.byte": use_oasis-db
+"test/FakeIncoming.byte": pkg_unix
+"test/FakeIncoming.byte": pkg_sexplib
+"test/FakeIncoming.byte": pkg_pcre
+"test/FakeIncoming.byte": pkg_oasis
+"test/FakeIncoming.byte": pkg_lwt.unix
+"test/FakeIncoming.byte": pkg_lwt
+"test/FakeIncoming.byte": pkg_inotify
+"test/FakeIncoming.byte": pkg_calendar
+<test/*.ml{,i}>: use_oasis-db
+<test/*.ml{,i}>: pkg_unix
+<test/*.ml{,i}>: pkg_sexplib
+<test/*.ml{,i}>: pkg_pcre
+<test/*.ml{,i}>: pkg_oasis
+<test/*.ml{,i}>: pkg_lwt.unix
+<test/*.ml{,i}>: pkg_lwt
+<test/*.ml{,i}>: pkg_inotify
+<test/*.ml{,i}>: pkg_calendar
 # Executable inrestart
 "src/tools/inrestart/Main.byte": pkg_unix
 "src/tools/inrestart/Main.byte": pkg_inotify
@@ -30,15 +63,20 @@
 <src/web/*.ml{,i}>: pkg_lwt
 <src/web/*.ml{,i}>: pkg_inotify
 <src/web/*.ml{,i}>: pkg_calendar
-# Executable test
-"test/test.byte": pkg_oUnit
-<test/*.ml{,i}>: pkg_oUnit
 # OASIS_STOP
 
 "src/lib/ODBGettext.ml": syntax_camlp4o, pkg_camlp4.macro
 "src/lib/ODBGettext.ml": cond_pkg_gettext.base
                 
+"src/lib/ODBTypes.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBPkg.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBVer.ml": syntax_camlp4o, pkg_sexplib.syntax
+"src/lib/ODBCompletion.ml": syntax_camlp4o, pkg_sexplib.syntax
+"src/lib/ODBIncoming.ml": syntax_camlp4o, pkg_sexplib.syntax
 
 "src/web/Account.ml": syntax_camlp4o, pkg_pgocaml.syntax
+
+"test/test.ml": syntax_camlp4o, pkg_camlp4.macro
+
+"test/test.byte": use_ocamlbuild
+"test/FakeIncoming.byte": use_ocamlbuild

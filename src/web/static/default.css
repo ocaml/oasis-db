@@ -239,3 +239,18 @@ h3 { color: #555; font-size; medium;}
 #home_highlight a {
 }
 
+#browse table {
+  width: 100%;
+}
+
+#browse tr.odd {
+  background: silver;
+}
+
+#browse tr.even {
+  background: white;
+}
+ 
+#browse th {
+  text-align: left;
+}
