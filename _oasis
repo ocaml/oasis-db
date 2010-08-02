@@ -70,7 +70,8 @@ Library "oasis-db-ocsigen"
            Template,
            MyAccount,
            Browse,
-           SQL
+           SQL,
+           Dist
   BuildDepends: oasis-db, 
                 ocsigen, 
                 pgocaml, 

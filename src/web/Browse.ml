@@ -55,11 +55,15 @@ let mk_version_page ~sp fver =
           >>= fun ver_latest ->
           return (ver, ver_lst, ver_latest))))
        >>= fun (ver, ver_lst, ver_latest) ->
-       ODBStorage.version_filename 
-         ver.pkg 
-         (OASISVersion.string_of_version ver.ver) 
+       Dist.a_dist 
+         ~sp ver 
+         (fun fn -> 
+            [pcdata 
+               (Printf.sprintf 
+                  (f_ "%s (backup)") 
+                  (FilePath.basename fn))])
          ODBStorage.Tarball
-       >>= fun tarball_fn ->
+       >>= fun (a_backup, fn_backup) ->
        begin
          (* Load OASIS file *)
          ODBStorage.version_filename 
@@ -306,31 +310,18 @@ let mk_version_page ~sp fver =
                           ("downloads",
                            s_ "Downloads: ",
                            begin
-                             let tarball_in_dest_dir = 
-                               let pwd = 
-                                 FileUtil.pwd ()
-                               in
-                                 FilePath.make_relative 
-                                   (FilePath.make_absolute pwd ODBConf.dist_dir)
-                                   (FilePath.make_absolute pwd tarball_fn)
-                             in
-                             let backup = 
-                               (* TODO: real link *)
-                               a
-                                 (preapply (static_dir sp)
-                                    (["dist"; tarball_in_dest_dir]))
-                                 sp
-                                 [pcdata (s_ "backup")]
-                                 ()
-                             in
-                               match ver.publink with 
-                                 | Some url ->
+                             match ver.publink with 
+                               | Some url ->
+                                   [
                                      (a_of_url 
                                         (uri_of_string url)
-                                        [b [pcdata (s_ "upstream")]])
-                                     :: backup :: []
-                                 | None ->
-                                     backup :: []
+                                        [b 
+                                           [pcdata 
+                                              (FilePath.basename fn_backup)]]);
+                                     a_backup
+                                   ]
+                               | None ->
+                                   [a_backup]
                            end);
                       ]);
                ]
