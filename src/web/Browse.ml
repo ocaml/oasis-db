@@ -44,17 +44,139 @@ let browse_pkg_ver =
     ~get_params:(suffix (string "pkg" ** string "ver"))
     ()
 
+
+let non_zero_lst id nm lst =
+  let len =
+    List.length lst 
+  in
+    if len > 0 then
+      Some (id, nm len, [pcdata (String.concat (s_ ", ") lst)])
+    else
+      None
+
+
+let oasis_fields pkg =
+  (* TODO: tool dependencies which includes test/doc, for dependencies
+   * and provides.
+   * TODO: link to packages that depends/provides 
+   *)
+  let dependencies =
+    let deps = 
+      List.fold_left
+        (fun acc ->
+           function
+             | Executable (_, bs, _)
+             | Library (_, bs, _) ->
+                 begin
+                   List.fold_left
+                     (fun acc ->
+                        function
+                          | FindlibPackage (nm, ver_opt) ->
+                              BuildDepends.add nm ver_opt acc
+ 
+                          | InternalLibrary _ ->
+                              acc)
+                     acc
+                     bs.bs_build_depends
+                 end
+                   
+             | Flag _ | Test _ | Doc _ | SrcRepo _ ->
+                 acc)
+        BuildDepends.empty
+        pkg.sections
+    in
+      BuildDepends.fold
+        (fun nm ver_opt acc ->
+           let hd = 
+             match ver_opt with 
+               | Some cmp ->
+                   Printf.sprintf (f_ "%s (%s)")
+                     nm
+                     (OASISVersion.string_of_comparator cmp)
+               | None ->
+                   nm
+           in
+             hd :: acc)
+        deps
+        []
+  in
+ 
+  let provides =
+    OASISUtils.MapString.fold
+      (fun _ vl acc ->
+         let hd = 
+           match vl with 
+             | Some pre, nm -> 
+                 pre^"."^nm
+             | None, nm -> 
+                 nm
+         in
+           hd :: acc)
+      (OASISLibrary.findlib_name_map pkg)
+      []
+  in
+    [
+      begin
+        match pkg.homepage with
+          | Some url ->
+              Some 
+                ("homepage",
+                 s_ "Homepage",
+                 [XHTML.M.a 
+                    ~a:[a_href (uri_of_string url)]
+                    [pcdata url]])
+          | None ->
+              None
+      end;
+      
+      non_zero_lst
+        "dependencies"
+        (sn_ "Dependency: " "Dependencies: ")
+        dependencies;
+
+      non_zero_lst
+        "provides"
+        (sn_ "Provide: " "Provides: ")
+        provides;
+
+      Some 
+        ("license",
+         s_ "License: ",
+         [pcdata (OASISLicense.to_string pkg.license)]);
+
+      non_zero_lst
+        "authors"
+        (sn_ "Author: " "Authors: ") 
+        pkg.authors;
+
+      non_zero_lst
+        "maintainers"
+        (sn_ "Maintainer: " "Maintainers: ")
+        pkg.maintainers;
+
+      non_zero_lst 
+        "categories"
+        (sn_ "Category: " "Categories: ")
+        pkg.categories;
+
+      (* TODO: VCS 
+       * s_ "Source repository: ",
+       * ...;
+       *)
+    ]
+
 let mk_version_page ~sp fver = 
   catch 
     (fun () -> 
-       (fver () 
-        >>= fun ver ->
-        (ODBStorage.versions ver.pkg 
-         >>= fun ver_lst ->
-         (ODBStorage.version_latest ver.pkg
-          >>= fun ver_latest ->
-          return (ver, ver_lst, ver_latest))))
-       >>= fun (ver, ver_lst, ver_latest) ->
+       (* Versions (current, all and latest) *)
+       fver () 
+       >>= fun ver ->
+       ODBStorage.versions ver.pkg 
+       >>= fun ver_lst ->
+       ODBStorage.version_latest ver.pkg
+       >>= fun ver_latest ->
+
+       (* Backup download link *)
        Dist.a_dist 
          ~sp ver 
          (fun fn -> 
@@ -64,30 +186,45 @@ let mk_version_page ~sp fver =
                   (FilePath.basename fn))])
          ODBStorage.Tarball
        >>= fun (a_backup, fn_backup) ->
-       begin
-         (* Load OASIS file *)
-         ODBStorage.version_filename 
-           ver.pkg 
-           (OASISVersion.string_of_version ver.ver)
-           ODBStorage.OASIS
-         >>= 
-         ODBOASIS.from_file 
-           (* TODO: don't use default context *)
-           ~ctxt:ODBContext.default
-           ~ignore_plugins:true
-         >>= fun pkg ->
-         return (ver, pkg)
-       end
-       >>= fun (ver, pkg) ->
-       let browser_ttl =
-         Printf.sprintf (f_ "%s v%s") 
-           ver.pkg 
-           (OASISVersion.string_of_version ver.ver)
+
+       (* Load OASIS file *)
+       catch 
+         (fun () ->
+            ODBStorage.version_filename 
+              ver.pkg 
+              (OASISVersion.string_of_version ver.ver)
+              ODBStorage.OASIS
+            >>= 
+            ODBOASIS.from_file 
+              (* TODO: don't use default context *)
+              ~ctxt:ODBContext.default
+              ~ignore_plugins:true
+            >>= fun pkg ->
+            return (Some pkg))
+         (fun e ->
+            return None)
+       >>= fun pkg_opt ->
+
+       (* End of data gathering, really create the page *)
+       let synopsis, description, extra_fields = 
+         match pkg_opt with 
+           | Some pkg ->
+               Some pkg.synopsis,
+               pkg.description,
+               oasis_fields pkg
+
+           | None -> 
+               None,
+               (* TODO: link to create an oasis file *)
+               Some (s_ "This version doesn't have an _oasis file."),
+               []
        in
-       let ttl = 
-         Printf.sprintf (f_ "%s: %s")
-           ver.pkg pkg.synopsis
+
+       let sov = 
+         OASISVersion.string_of_version
        in
+
+       (* Field generation: odd and even lines *)
        let field clss (id, nm, vl) =
          (tr
             ~a:[a_id id;
@@ -109,14 +246,9 @@ let mk_version_page ~sp fver =
          gen_fields "even" odd_fields lst
        in
 
-       let sov = 
-         OASISVersion.string_of_version 
-       in
-
-       let a_of_url url =
-         XHTML.M.a ~a:[a_href url]
-       in
-
+       (* Field for versions number and their links to 
+        * version's page
+        *)
        let versions_field =
          let mk_pcdata ver = 
            if ver = ver_latest then
@@ -132,11 +264,10 @@ let mk_version_page ~sp fver =
                     mk_pcdata cur_ver
                   else
                     a
-                      (preapply browse_pkg_ver 
-                         (cur_ver.pkg, sov cur_ver.ver))
+                      browse_pkg_ver
                       sp
                       [mk_pcdata cur_ver]
-                      ()
+                      (cur_ver.pkg, sov cur_ver.ver)
                 in
                   hd :: acc)
              []
@@ -153,84 +284,25 @@ let mk_version_page ~sp fver =
            add_comma (List.rev lst)
        in
 
-       let non_zero_lst id nm lst =
-         let len =
-           List.length lst 
-         in
-           if len > 0 then
-             Some (id, nm len, [pcdata (String.concat (s_ ", ") lst)])
-           else
-             None
+       (* Page titles *)
+       let browser_ttl =
+         Printf.sprintf (f_ "%s v%s") ver.pkg (sov ver.ver)
+       in
+       let ttl = 
+         match synopsis with 
+           | Some s -> Printf.sprintf (f_ "%s: %s") ver.pkg s
+           | None   -> ver.pkg
        in
 
-       (* TODO: tool dependencies which includes test/doc, for dependencies
-        * and provides.
-        * TODO: link to packages that depends/provides 
-        *)
-       let dependencies =
-         let deps = 
-           List.fold_left
-             (fun acc ->
-                function
-                  | Executable (_, bs, _)
-                  | Library (_, bs, _) ->
-                      begin
-                        List.fold_left
-                          (fun acc ->
-                             function
-                               | FindlibPackage (nm, ver_opt) ->
-                                   BuildDepends.add nm ver_opt acc
-
-                               | InternalLibrary _ ->
-                                   acc)
-                          acc
-                          bs.bs_build_depends
-                      end
-                        
-                  | Flag _ | Test _ | Doc _ | SrcRepo _ ->
-                      acc)
-             BuildDepends.empty
-             pkg.sections
-         in
-           BuildDepends.fold
-             (fun nm ver_opt acc ->
-                let hd = 
-                  match ver_opt with 
-                    | Some cmp ->
-                        Printf.sprintf (f_ "%s (%s)")
-                          nm
-                          (OASISVersion.string_of_comparator cmp)
-                    | None ->
-                        nm
-                in
-                  hd :: acc)
-             deps
-             []
-       in
-
-       let provides =
-         OASISUtils.MapString.fold
-           (fun _ vl acc ->
-              let hd = 
-                match vl with 
-                  | Some pre, nm -> 
-                      pre^"."^nm
-                  | None, nm -> 
-                      nm
-              in
-                hd :: acc)
-           (OASISLibrary.findlib_name_map pkg)
-           []
-       in
-
+         (* The page itself *)
          page_template sp browser_ttl Account.box
            [
              h2 [pcdata ttl];
-
+     
              div 
                ~a:[a_id "browse"]
                [
-                 (match pkg.description with 
+                 (match description with 
                     | Some txt -> 
                         div 
                           ~a:[a_id "description"]
@@ -241,91 +313,43 @@ let mk_version_page ~sp fver =
                              (Markdown.parse_text txt))
                     | None -> 
                         pcdata "");
-
+     
                  table 
                    (field 
                       "odd" 
                       ("versions", (s_ "Versions: "), versions_field))
                    (even_fields
-                      [
-                        begin
-                          match pkg.homepage with
-                            | Some url ->
-                                Some 
-                                  ("homepage",
-                                   s_ "Homepage",
-                                   [a_of_url 
-                                      (uri_of_string url)
-                                      [pcdata url]])
-                            | None ->
-                                None
-                        end;
-                        
-                        non_zero_lst
-                          "dependencies"
-                          (sn_ "Dependency: " "Dependencies: ")
-                          dependencies;
-
-                        non_zero_lst
-                          "provides"
-                          (sn_ "Provide: " "Provides: ")
-                          provides;
-
-                        Some 
-                          ("license",
-                           s_ "License: ",
-                           [pcdata (OASISLicense.to_string pkg.license)]);
-
-                        non_zero_lst
-                          "authors"
-                          (sn_ "Author: " "Authors: ") 
-                          pkg.authors;
-
-                        non_zero_lst
-                          "maintainers"
-                          (sn_ "Maintainer: " "Maintainers: ")
-                          pkg.maintainers;
-
-                        non_zero_lst 
-                          "categories"
-                          (sn_ "Category: " "Categories: ")
-                          pkg.categories;
-
-                        (* TODO: VCS 
-                         * s_ "Source repository: ",
-                         * ...;
-                         *)
-
-                        Some 
-                          ("upload_date",
-                           s_ "Upload date: ",
-                           [pcdata (Printer.Calendar.to_string ver.upload_date)]);
-
-                        Some 
-                          ("upload_method",
-                           s_ "Upload method: ",
-                           [pcdata (string_of_upload_method ver.upload_method)]);
-
-                        Some 
-                          ("downloads",
-                           s_ "Downloads: ",
-                           begin
-                             match ver.publink with 
-                               | Some url ->
-                                   [
-                                     (a_of_url 
-                                        (uri_of_string url)
-                                        [b 
-                                           [pcdata 
-                                              (FilePath.basename fn_backup)]]);
-                                     a_backup
-                                   ]
-                               | None ->
-                                   [a_backup]
-                           end);
-                      ]);
-               ]
-           ])
+                      (extra_fields
+                       @
+                       [
+                         Some 
+                           ("upload_date",
+                            s_ "Upload date: ",
+                            [pcdata (Printer.Calendar.to_string ver.upload_date)]);
+     
+                         Some 
+                           ("upload_method",
+                            s_ "Upload method: ",
+                            [pcdata (string_of_upload_method ver.upload_method)]);
+     
+                         Some 
+                           ("downloads",
+                            s_ "Downloads: ",
+                            begin
+                              match ver.publink with 
+                                | Some url ->
+                                    [
+                                      (XHTML.M.a 
+                                         ~a:[a_href (uri_of_string url)]
+                                         [b 
+                                            [pcdata 
+                                               (FilePath.basename fn_backup)]]);
+                                      a_backup
+                                    ]
+                                | None ->
+                                    [a_backup]
+                            end);
+                       ]))]])
     (function
        | Not_found ->
            fail Eliom_common.Eliom_404
@@ -360,12 +384,10 @@ let edit_info =
             [h2 [pcdata ttl]])
 
 let a_edit_info sp (pkg,ver) = 
-  a (preapply edit_info (pkg, ver)) sp 
-    [pcdata (s_ "Edit version")] ()
+  a edit_info sp [pcdata (s_ "Edit version")] (pkg, ver)
 
 let a_browse_pkg_ver sp (pkg, ver) =
-  a (preapply browse_pkg_ver (pkg, ver)) sp
-    [pcdata (s_ "Browse version")] ()
+  a browse_pkg_ver sp [pcdata (s_ "Browse version")] (pkg, ver)
 
 let _ = 
   register
@@ -377,17 +399,21 @@ let _ =
         (fun pkg ->
            ODBStorage.version_latest pkg 
            >>= fun ver ->
-           ODBStorage.version_filename 
-             ver.pkg 
-             (OASISVersion.string_of_version ver.ver)
-             ODBStorage.OASIS
-           >>= 
-           ODBOASIS.from_file 
-             (* TODO: don't use default context *)
-             ~ctxt:ODBContext.default
-             ~ignore_plugins:true
-           >>= fun oasis_pkg ->
-           return (pkg, ver, oasis_pkg))
+           catch 
+             (fun () ->
+                ODBStorage.version_filename 
+                  ver.pkg 
+                  (OASISVersion.string_of_version ver.ver)
+                  ODBStorage.OASIS
+                >>= 
+                ODBOASIS.from_file 
+                  (* TODO: don't use default context *)
+                  ~ctxt:ODBContext.default
+                  ~ignore_plugins:true
+                >>= fun oasis ->
+                return (pkg, ver, Some oasis))
+             (fun e ->
+                return (pkg, ver, None)))
       >>= fun pkg_lst ->
       page_template sp (s_ "Browse packages") Account.box
         [
@@ -399,15 +425,17 @@ let _ =
             match pkg_lst with 
             | hd :: tl ->
                 begin
-                  let to_li (pkg, _, oasis_pkg) = 
+                  let to_li (pkg, _, oasis_opt) = 
                     li 
-                      [a (preapply browse_pkg pkg)
-                        sp [pcdata pkg] ();
+                      [a browse_pkg sp [pcdata pkg] pkg;
                        
-                       pcdata 
-                         (Printf.sprintf (f_ ": %s")
-                            oasis_pkg.synopsis)
-                      ]
+                       match oasis_opt with 
+                         | Some oasis ->
+                             pcdata 
+                               (Printf.sprintf (f_ ": %s")
+                                  oasis.synopsis)
+                         | None ->
+                             pcdata ""]
                   in
                     ul (to_li hd) (List.map to_li tl)
                 end

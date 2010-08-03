@@ -19,6 +19,7 @@ type t =
     num_uploads:  int;
     latest:       ODBVer.t list; 
     first_date:   Calendar.t;
+    no_oasis:     int;
   }
 
 let info () = 
@@ -44,6 +45,13 @@ let info () =
     (fun t pkg ->
       ODBStorage.versions pkg
       >>= fun ver_lst ->
+      ODBStorage.version_latest pkg
+      >>= fun ver_latest ->
+      ODBStorage.version_filename 
+        pkg 
+        (OASISVersion.string_of_version ver_latest.ver)
+        ODBStorage.OASIS
+      >>= fun oasis_fn ->
 
       (* Try to find a date older *)
       let first_date = 
@@ -80,17 +88,28 @@ let info () =
         t.num_uploads + List.length ver_lst
       in
 
-      return 
-        {t with 
-          num_uploads = num_uploads; 
-          latest      = latest;
-          first_date  = first_date})
+      (* Count the number of missing oasis files 
+       *)
+      let no_oasis =
+        if Sys.file_exists oasis_fn then
+          t.no_oasis
+        else
+          t.no_oasis + 1 
+      in
+
+        return 
+          {t with 
+            num_uploads = num_uploads; 
+            latest      = latest;
+            first_date  = first_date;
+            no_oasis    = no_oasis})
 
     {
       num_packages = List.length pkg_lst;
       num_uploads  = 0;
       latest       = [];
       first_date   = Calendar.now ();
+      no_oasis     = 0;
     }
     pkg_lst
 
@@ -180,6 +199,12 @@ let _ =
                     t.num_uploads
                     t.num_packages
                     (Printer.Calendar.sprint "%F" t.first_date))];
+
+              p
+                [pcdata
+                   (Printf.sprintf 
+                      (f_ "%d%% of the latest package's versions have an _oasis file.")
+                      (((t.num_packages - t.no_oasis) * 100) / t.num_packages))]
             ];
         ])
 
