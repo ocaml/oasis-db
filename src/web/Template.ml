@@ -29,7 +29,7 @@ let mk_static_uri sp path =
     ~sp
     path
 
-let page_template sp ttl account_box content =
+let page_template sp ?(extra_headers=[]) ttl account_box content =
   let mk_static_uri path =
     mk_static_uri sp path
   in
@@ -69,17 +69,15 @@ let page_template sp ttl account_box content =
                (title 
                   (pcdata 
                      (Printf.sprintf "OASIS DB: %s" ttl)))
-               [
-                 link ~a:[a_rel [`Stylesheet];
-                          a_href (mk_static_uri ["default.css"]);
-                          a_type "text/css"] ();
-
-                 link ~a:[a_rel [`Other "shortcut icon"];
-                          a_href (mk_static_uri ["caml.ico"]);
-                          a_type "images/ico"] ();
-
-                 (* TODO: RSS feed *)
-               ])
+               (link ~a:[a_rel [`Stylesheet];
+                         a_href (mk_static_uri ["default.css"]);
+                         a_type "text/css"] ()
+                ::
+                link ~a:[a_rel [`Other "shortcut icon"];
+                         a_href (mk_static_uri ["caml.ico"]);
+                         a_type "images/ico"] ()
+                ::
+                extra_headers))
             (body 
                [div ~a:[a_id "top"]
                   [div ~a:[a_id "header"]

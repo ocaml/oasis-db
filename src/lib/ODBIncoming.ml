@@ -6,6 +6,7 @@ open ODBTypes
 open ODBInotify
 open ODBCompletion
 open ODBVer
+open Sexplib.Sexp
 open Sexplib.Conv
 open Lwt
 
@@ -45,6 +46,8 @@ let from_file =
 let to_file =
   LwtExt.IO.sexp_dump sexp_of_vt (fun t -> V1 t)
 
+(** We got all files and all parameters are set, so move tarball to storage
+  *)
 let move_to_storage ~ctxt ut pkg ver ord tarball_fn sexp_fn oasis_fn =
   let upload_date =
     CalendarLib.Calendar.from_unixfloat
@@ -66,6 +69,8 @@ let move_to_storage ~ctxt ut pkg ver ord tarball_fn sexp_fn oasis_fn =
     >>= fun () ->
     ODBFileUtil.rm ~ctxt [tarball_fn; sexp_fn]
 
+(** We got all files, try to run completion on them
+  *)
 let upload_complete ~ctxt sexp_fn tarball_fn = 
   from_file ~ctxt sexp_fn
   >>= function
@@ -119,6 +124,8 @@ let upload_complete ~ctxt sexp_fn tarball_fn =
 
 module SetString = Set.Make(String)
 
+(** Wait to have tarball + sexp files
+  *)
 let wait_complete ~ctxt ev changed = 
   match ev with 
   | Created fn ->
@@ -179,6 +186,8 @@ let wait_complete ~ctxt ev changed =
         return (SetString.remove fn changed)
       end
 
+(** Main loop for incoming/ watch
+  *)
 let run = 
   ODBRunner.singleton 
     "ODBIncoming.run"
@@ -205,5 +214,125 @@ let run =
         else
           return ())
 
-let make upload_method = 
-  Step1_JustUploaded {publink = None; upload_method = upload_method}
+let make ?publink upload_method = 
+  Step1_JustUploaded {publink = publink; upload_method = upload_method}
+
+let sexp_of_tarball tarball = 
+  FilePath.concat
+    ODBConf.incoming_dir
+    (tarball ^ ".sexp")
+
+(** Upload a tarball -> step 1
+  *)
+let upload ~ctxt ~tarball_fn mthd tarball = 
+  let tarball_tgt =
+    FilePath.concat ODBConf.incoming_dir tarball
+  in
+
+    ODBFileUtil.cp ~ctxt [tarball_fn] tarball_tgt
+    >>= fun () ->
+    to_file ~ctxt (sexp_of_tarball tarball) mthd
+
+
+(** Try to load .sexp  
+  *)
+let check_file ~ctxt tarball f_test f_doesnt_exist f_invalid =
+  let sexp_fn =
+    sexp_of_tarball tarball
+  in
+    catch 
+      (fun () ->
+         if Sys.file_exists sexp_fn then
+           begin
+             from_file 
+               ~ctxt
+               (sexp_of_tarball tarball)
+             >>=
+             f_test
+           end
+         else
+           begin
+             f_doesnt_exist ()
+           end)
+      (function
+         | Of_sexp_error _ 
+         | Parse_error _ ->
+             (* the .sexp file is corrupted, probably related
+              * to the fact that we write and read on it at 
+              * the same time. Ignore this error
+              *)
+             f_invalid ()
+
+         | e ->
+             fail e)
+
+(** Answers for {check_step2}
+  *)
+type check_step2_t = 
+  | Step2_NotYet
+  | Step2_Reached of upload_t * ODBCompletion.t
+  | Step2_Bypassed
+
+(** Wait that a file reach Step2 or disappear (step 1 -> step 2)
+  *)
+let check_step2 ~ctxt tarball = 
+  check_file ~ctxt tarball
+    (function
+       | Step1_JustUploaded _ ->
+           return Step2_NotYet
+             
+       | Step2_UserEditable (ut, ct) ->
+           return (Step2_Reached (ut, ct))
+             
+       | Step3_UserValidated _ ->
+           return Step2_Bypassed)
+
+    (fun () -> 
+       return Step2_Bypassed)
+
+    (fun () -> 
+       return Step2_NotYet)
+
+(** Validate a tarball (step 2 -> step 3)
+  *)
+let validate ~ctxt mthd publink pkg ver ord oasis_fn tarball = 
+  let sexp_fn = 
+    sexp_of_tarball tarball
+  in
+    to_file ~ctxt 
+      sexp_fn
+      (Step3_UserValidated 
+         ({publink = publink; upload_method = mthd},
+          pkg, ver, ord, oasis_fn))
+
+(** Answers for {check_step3}
+  *)
+type check_step3_t =
+  | Step3_NotYet 
+  | Step3_Back1
+  | Step3_Back2
+  | Step3_Finished
+  | Step3_Bypassed
+
+(** Wait that a file go into archive (step3 -> )
+  *)
+let check_step3 ~ctxt tarball = 
+  check_file ~ctxt tarball
+    (function
+       | Step1_JustUploaded _ ->
+           return Step3_Back1
+
+       | Step2_UserEditable _ ->
+           return Step3_Back2
+             
+       | Step3_UserValidated _ ->
+           return Step3_NotYet)
+
+    (fun () -> 
+       (* TODO: check in the log that we have really finished
+        * the upload. If not -> Step3_Bypassed
+        *)
+       return Step3_Finished)
+
+    (fun () -> 
+       return Step3_NotYet)

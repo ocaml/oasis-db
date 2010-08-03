@@ -521,6 +521,9 @@ let add_version ~ctxt ver tarball_fn oasis_fn =
         ODBFileUtil.cp ~ctxt [tarball_fn] dn
         >>= fun () ->
         begin
+          (* TODO: Possible race condition here: oasis_fn points
+           * to temporary storage, it could have been deleted
+           *)
           match oasis_fn with
             | Some fn -> 
                 begin

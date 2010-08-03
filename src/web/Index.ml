@@ -106,7 +106,7 @@ let _ =
             [
               ul
                 (li [a browse sp [pcdata (s_ "Browse packages")] ()])
-                [li [a browse sp [pcdata (s_ "Upload your package")] ()]];
+                [li [a upload sp [pcdata (s_ "Upload your package")] ()]];
             ];
 
           div ~a:[a_class ["introduction"]]
@@ -183,13 +183,6 @@ let _ =
             ];
         ])
 
-
-let _ = 
-  register 
-    upload
-    (fun sp () () ->
-       page_template sp (s_ "Upload packages") Account.box 
-         [p [pcdata "Upload"]])
 
 let _ = 
   register 
