@@ -1,0 +1,36 @@
+
+!! Upload your own package
+
+To create a package, you need to add a `_oasis` file in the toplevel directory
+of your project and upload the tarball containnig it. 
+
+You can also advertise for this website on your project page. Just add this 
+HTML code to your webpage, don't forget to replace `YOURPACKAGE` by the name 
+of your package:
+
+\ ![OASIS-DB badge](oasis-db-badge.png)
+
+{{
+    <a href="http://oasis.ocamlcore.org/browse_pkg/YOURPACKAGE">
+      <img
+      src="http://oasis.ocamlcore.org/oasis-db-badge.png"
+      alt="OASIS-DB" style="border: none;" />
+    </a>
+}}
+
+We really appreciate to get your feedback, through 
+[bug reports](https://forge.ocamlcore.org/tracker/?group_id=54&atid=291) or 
+[features requests](https://forge.ocamlcore.org/tracker/?atid=294&group_id=54&func=browse).
+
+!! Improve other's packages
+
+Once you are logged in this website, you can edit any packages or versions:
+
+* edit or create `_oasis` file for every version
+* create a watch file to take care of automatically upload new versions
+* upload tarballs from others
+
+!! Get involved into the development
+
+Goto [OASIS project website](http://oasis.forge.ocamlcore.org) for more
+information about the development of *OASIS-DB*.

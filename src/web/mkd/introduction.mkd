@@ -1,0 +1,26 @@
+
+!! *OASIS-DB*, the comprehensive OCaml package archive
+
+*OASIS-DB* is a collection of released OCaml packages. Each package contains an
+`_oasis` file, which is a way to provide information about it. The pages on
+this website display information from this file. *OASIS-DB* is part of the
+project [OASIS](http://oasis.forge.ocamlcore.org) which aims at providing an
+infrastructure to host OCaml libraries and applications.
+
+!!! Find packages
+
+The __Browse__ link allow you to browse all the available packages and to
+perform a full text search of the package pages with Google. The 
+__What's new__ section lists recent addition.
+
+!!! Releasing packages through *OASIS-DB*
+
+To upload your own packages, you'll first need to add and `_oasis` to your 
+package's sources. See the 
+[quickstart guide](http://oasis.forge.ocamlcore.org/quickstart.html) 
+for a tutorial. You can check and upload your package using the __Upload__ link
+above, you'll need to login into a valid 
+[OCaml Forge](https://forge.ocamlcore.org) user account to proceed.
+
+It is possible to upload package without `_oasis` in it, in this case you won't
+get all the benefits of this website.

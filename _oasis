@@ -72,7 +72,8 @@ Library "oasis-db-ocsigen"
            Browse,
            SQL,
            Dist,
-           Upload
+           Upload,
+           Mkd
   BuildDepends: oasis-db, 
                 ocsigen, 
                 pgocaml, 

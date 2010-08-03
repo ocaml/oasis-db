@@ -1,0 +1,22 @@
+
+!! Sponsors and authors
+
+*OASIS-DB* is brought to you by two major players in the OCaml community,
+thanks for their support.
+
+\ ![Jane Street Capital](jane-street-logo.png) ![OCamlCore](ocamlcore-logo.png)
+
+!! Technologies
+
+*OASIS-DB* is written in OCaml and uses many third party libraries and softwares
+written in OCaml. Thanks to all authors of this piece of software, who made
+this website possible.
+
+\ ![The Caml Language](http://caml.inria.fr//pub/logos/caml-inria-fr.128x58.gif)
+ ![OASIS](http://oasis.forge.ocamlcore.org/powered-by-oasis.png)
+ ![ocsigen](http://ocsigen.org/ocsigen8-100x30.png)
+
+And also: [ocaml-inotify](http://projects.snarc.org/ocaml-inotify/), 
+[ocaml-fileutils](https://forge.ocamlcore.org/projects/ocaml-fileutils), 
+[ocaml-gettext](https://forge.ocamlcore.org/projects/ocaml-gettext), 
+[lwt](http://ocsigen.org/lwt/)...

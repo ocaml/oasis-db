@@ -119,34 +119,11 @@ let _ =
     (fun sp () () ->
       info () 
       >>= fun t ->
+      Mkd.load "introduction" 
+      >>= fun intro_html ->
       page_template sp (s_ "Home") Account.box
         [
-          div ~a:[a_id "home_highlight"]
-            [
-              ul
-                (li [a browse sp [pcdata (s_ "Browse packages")] ()])
-                [li [a upload sp [pcdata (s_ "Upload your package")] ()]];
-            ];
-
-          div ~a:[a_class ["introduction"]]
-            [
-              h2 [pcdata "OASIS DB, the comprehensive OCaml package archive"];
-              p [pcdata 
-                   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                    Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                    consectetur adipiscing elit. Aliquam eleifend consequat sem. 
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                    Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                    consectetur adipiscing elit."];
-
-              p [pcdata 
-                   "Aliquam eleifend consequat sem.Lorem ipsum dolor sit amet, 
-                    consectetur adipiscing elit. Aliquam eleifend consequat sem. 
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-                    Aliquam eleifend consequat sem. Lorem ipsum dolor sit amet, 
-                    consectetur adipiscing elit. Aliquam eleifend consequat sem.
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit."];
-            ];
+          div ~a:[a_class ["introduction"]] intro_html;
 
           div ~a:[a_class ["whatsnew"]]
             [
@@ -213,13 +190,16 @@ let _ =
   register 
     contribute
     (fun sp () () ->
+       Mkd.load "contribute"
+       >>= fun contribute_html ->
        page_template sp (s_ "Contribute") Account.box 
-         [p [pcdata "Contribute"]])
+         ((h2 [pcdata "Contribute"]) :: contribute_html))
 
 let _ = 
   register 
     about
     (fun sp () () ->
-      (*ignore (tic_tac ());*)
-      page_template sp (s_ "About this website") Account.box
-        [p [pcdata "About"]])
+       Mkd.load "about"
+       >>= fun about_html ->
+         page_template sp (s_ "About this website") Account.box
+           ((h2 [pcdata "About"]) :: about_html))
