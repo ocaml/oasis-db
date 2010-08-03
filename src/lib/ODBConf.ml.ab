@@ -10,3 +10,5 @@ let dist_dir = "test/data/storage/dist"
 let incoming_dir = "test/data/storage/incoming" 
 
 let mkd_dir = "src/web/mkd"
+
+let min_running_time = 300.0
