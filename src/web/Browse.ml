@@ -40,8 +40,8 @@ end
 
 let browse_pkg_ver = 
   new_service 
-    ~path:["browse_pkg_ver"] 
-    ~get_params:(suffix (string "pkg" ** string "ver"))
+    ~path:["browse"] 
+    ~get_params:(string "pkg" ** string "ver")
     ()
 
 
@@ -368,8 +368,8 @@ let _ =
 
 let browse_pkg =
   register_new_service 
-    ~path:["browse_pkg"] 
-    ~get_params:(suffix (string "pkg"))
+    ~path:["browse"]
+    ~get_params:(string "pkg")
     (fun sp pkg () ->
        let ctxt =
          Context.get ()

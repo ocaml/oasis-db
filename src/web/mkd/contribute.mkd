@@ -11,7 +11,7 @@ of your package:
 \ ![OASIS-DB badge](oasis-db-badge.png)
 
 {{
-    <a href="http://oasis.ocamlcore.org/browse_pkg/YOURPACKAGE">
+    <a href="http://oasis.ocamlcore.org/browse?pkg=YOURPACKAGE">
       <img
       src="http://oasis.ocamlcore.org/oasis-db-badge.png"
       alt="OASIS-DB" style="border: none;" />
