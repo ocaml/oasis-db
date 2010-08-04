@@ -51,7 +51,7 @@ let uncompress ~ctxt fn dn =
 
 
 let uncompress_tmp_dir ~ctxt fn f = 
-  temp_dir "oasis-db-" "" 
+  temp_dir ~ctxt "oasis-db-" "" 
   >>= fun dn ->
   (finalize
      (fun () ->

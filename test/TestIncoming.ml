@@ -259,10 +259,11 @@ let tests ctxt =
     in
     begin
       try 
-        (* TODO: remove alos storage and tmp *)
-        rm ~recurse:true [ctxt.odb.incoming_dir; ctxt.odb.dist_dir];
+        rm ~recurse:true [ctxt.odb.storage_dir]; 
+        mkdir ctxt.odb.storage_dir;
         mkdir ctxt.odb.incoming_dir;
         mkdir ctxt.odb.dist_dir;
+        mkdir ctxt.odb.tmp_dir;
 
         (* Auto upload *)
         List.iter 

@@ -2,8 +2,10 @@
 open Lwt
 open Unix
 open Lwt_unix
+open Lwt_io
 open ODBGettext
 open ODBMessage
+open ODBContext
 
 type filename = string
 
@@ -174,10 +176,12 @@ let mkdir ?(ignore_exist=false) dn perm =
   | e ->
       fail e 
 
-let temp_dir pre suf = 
+let temp_dir ~ctxt pre suf = 
   let rec temp_dir_aux n = 
     let dn =
-      Printf.sprintf "%s%06d%s" pre n suf
+      FilePath.concat 
+        ctxt.tmp_dir
+        (Printf.sprintf "%s%06d%s" pre n suf)
     in
       catch 
         (fun () -> 
@@ -195,8 +199,6 @@ let temp_dir pre suf =
     1000000
   in
     temp_dir_aux start
-
-open Lwt_io
 
 let cp ~ctxt lst tgt =
   let cp_one src tgt =
