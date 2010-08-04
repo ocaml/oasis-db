@@ -118,62 +118,64 @@ let upload_complete ~ctxt sexp_fn tarball_fn =
   >>= function
     | Step1_JustUploaded ut ->
         begin
-          debug ~ctxt
-            (f_ "Run completion on tarball '%s'")
-            tarball_fn
+          debug ~ctxt (f_ "Run completion")
           >>= fun () ->
-          ODBArchive.uncompress_tmp_dir ~ctxt tarball_fn 
-          (fun fn an dn ->
-            ODBCompletion.run ~ctxt fn an dn 
-            >>= fun ct ->
-            (* Move _oasis file out of the temporary directory *)
-            begin
-              match ct.oasis_fn with 
-                | Some fn ->
-                    let tgt = 
-                      tarball_fn^".oasis"
-                    in
-                      ODBFileUtil.cp ~ctxt [fn] tgt
-                      >>= fun () ->
-                      return {ct with oasis_fn = Some tgt}
-                | None ->
-                    return ct
-            end
-            >>= fun ct ->
-            (* Conditions to go to step 2 or directly 
-             * to storage
-             *)
-            let upload_method_need_ack = 
-              match ut.upload_method with
-              | Manual _ -> true
-              | OCamlForge | Uscan | API _ -> false
-            in
+          catch 
+            (fun () ->
+               ODBArchive.uncompress_tmp_dir ~ctxt tarball_fn 
+               (fun fn an dn ->
+                 ODBCompletion.run ~ctxt fn an dn 
+                 >>= fun ct ->
+                 (* Move _oasis file out of the temporary directory *)
+                 begin
+                   match ct.oasis_fn with 
+                     | Some fn ->
+                         let tgt = 
+                           tarball_fn^".oasis"
+                         in
+                           ODBFileUtil.cp ~ctxt [fn] tgt
+                           >>= fun () ->
+                           return {ct with oasis_fn = Some tgt}
+                     | None ->
+                         return ct
+                 end
+                 >>= fun ct ->
+                 (* Conditions to go to step 2 or directly 
+                  * to storage
+                  *)
+                 let upload_method_need_ack = 
+                   match ut.upload_method with
+                   | Manual _ -> true
+                   | OCamlForge | Uscan | API _ -> false
+                 in
 
-              match ct with 
-              (* Completion is sure *)
-              | {ODBCompletion.pkg = Sure pkg; 
-                 ver = Sure ver; ord = Sure ord;
-                 oasis_fn = oasis_fn} 
-                 when not upload_method_need_ack ->
-                  debug ~ctxt 
-                    (f_ "Everything is complete, move tarball to storege")
-                  >>= fun () -> 
-                  (* We have everything we need -> move to storage *)
-                  move_to_storage ~ctxt ut pkg ver ord 
-                    tarball_fn sexp_fn oasis_fn
+                   match ct with 
+                   (* Completion is sure *)
+                   | {ODBCompletion.pkg = Sure pkg; 
+                      ver = Sure ver; ord = Sure ord;
+                      oasis_fn = oasis_fn} 
+                      when not upload_method_need_ack ->
+                       debug ~ctxt 
+                         (f_ "Moving tarball to storage")
+                       >>= fun () -> 
+                       (* We have everything we need -> move to storage *)
+                       move_to_storage ~ctxt ut pkg ver ord 
+                         tarball_fn sexp_fn oasis_fn
 
-              | _ ->
-                  (* We need some inputs from user -> go to step 2 *)
-                  to_file ~ctxt sexp_fn (Step2_UserEditable (ut, ct)))
+                   | _ ->
+                       (* We need some inputs from user -> go to step 2 *)
+                       to_file ~ctxt sexp_fn (Step2_UserEditable (ut, ct))))
+            (fun e ->
+               error ~ctxt
+                 (f_ "Error during completion: %s")
+                 (string_of_exception e))
         end
 
     | Step2_UserEditable _ ->
-        debug ~ctxt 
-          (f_ "Wait for user input")
+        debug ~ctxt (f_ "Wait for user input")
 
     | Step3_UserValidated (ut, pkg, ver, ord, oasis_fn) ->
-        debug ~ctxt
-          (f_ "Moving tarball to storage")
+        debug ~ctxt (f_ "Moving tarball to storage")
         >>= fun () ->
         move_to_storage ~ctxt ut pkg ver ord
           tarball_fn sexp_fn oasis_fn 
