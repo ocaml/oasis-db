@@ -19,6 +19,9 @@ let string_of_exception =
 let uncompress ~ctxt fn dn = 
   let handlers = 
     [ 
+      ".tgz",
+      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xzf"; fn]);
+
       ".tar.gz",
       (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xzf"; fn]);
 
