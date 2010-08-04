@@ -41,3 +41,11 @@ let version_of_sexp s =
 let sexp_of_version v = 
   sexp_of_string (OASISVersion.string_of_version v)
 
+
+(** A program, can be with or without full path *)
+type program = string
+
+(** A delay, in seconds *)
+type seconds = float
+
+

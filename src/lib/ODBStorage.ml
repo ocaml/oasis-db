@@ -3,6 +3,7 @@ open ODBMessage
 open ODBGettext
 open ODBTypes
 open ODBInotify
+open ODBContext
 open Lwt
 
 module MapString = Map.Make(String)
@@ -85,7 +86,7 @@ let package_tree_changed ?(timeout=1.0) cond =
 (** Get the directory of a package
  *)
 let dirname_of_package pkg =
-  Filename.concat ODBConf.dist_dir pkg 
+  Filename.concat ctxt.dist_dir pkg 
 
 (** Get the directory of a package's version
  *)
@@ -253,7 +254,7 @@ let run =
 
     | File (Changed fn) ->
         begin
-          if FilePath.is_subdir fn ODBConf.dist_dir then
+          if FilePath.is_subdir fn ctxt.dist_dir then
             begin
               try 
                 let pwd = 
@@ -261,7 +262,7 @@ let run =
                 in
                 let rel_fn = 
                   FilePath.make_relative 
-                    (FilePath.make_absolute pwd ODBConf.dist_dir)
+                    (FilePath.make_absolute pwd ctxt.dist_dir)
                     (FilePath.make_absolute pwd fn)
                 in
                 let rec split_fn fn acc =
@@ -314,7 +315,7 @@ let run =
               (Failure 
                 (Printf.sprintf
                   (f_ "Monitored file '%s' is not in '%s'")
-                  fn ODBConf.dist_dir))
+                  fn ctxt.dist_dir))
         end
 
     | File (Deleted fn) ->
@@ -327,9 +328,9 @@ let run =
       (fun ~ctxt () ->
         let ctxt = ODBContext.sub ctxt "storage" in
         (* Initialize packages and their versions *)
-        package_tree_mod (fold_packages ~ctxt ODBConf.dist_dir)
+        package_tree_mod (fold_packages ~ctxt ctxt.dist_dir)
         >>= fun () ->
-        monitor_fs ~ctxt (dispatch ~ctxt) ODBConf.dist_dir ())
+        monitor_fs ~ctxt (dispatch ~ctxt) ctxt.dist_dir ())
 
 
 (** All available packages
@@ -467,7 +468,7 @@ let add_package ~ctxt pkg =
     | true ->
         fail (PackageAlreadyExists pkg)
     | false ->
-        let dn = Filename.concat ODBConf.dist_dir pkg in
+        let dn = Filename.concat ctxt.dist_dir pkg in
         ODBFileUtil.mkdir ~ignore_exist:true dn 0o755
         >>= fun () ->
         ODBPkg.to_file ~ctxt 

@@ -22,7 +22,8 @@ open TestCommon
 let ctxt = 
   {
     fake_incoming = "_build/test/FakeIncoming";
-    ctxt          = ODBContext.default;
+    odb           = ODBContext.default 
+                      (FilePath.make_filename ["test"; "data"; "storage"]);
   }
 
 let _ = 

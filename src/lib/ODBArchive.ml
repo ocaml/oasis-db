@@ -2,6 +2,7 @@
 open ODBProcess
 open ODBGettext
 open ODBFileUtil
+open ODBContext
 open Lwt
 
 exception NoHandler of string
@@ -20,16 +21,16 @@ let uncompress ~ctxt fn dn =
   let handlers = 
     [ 
       ".tgz",
-      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xzf"; fn]);
+      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xzf"; fn]);
 
       ".tar.gz",
-      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xzf"; fn]);
+      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xzf"; fn]);
 
       ".tar.bz2",
-      (fun () -> run_logged ~ctxt ODBConf.tar ["-C"; dn; "-xjf"; fn]);
+      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xjf"; fn]);
 
       ".zip",
-      (fun () -> run_logged ~ctxt ODBConf.unzip [fn; "-d"; dn]);
+      (fun () -> run_logged ~ctxt ctxt.unzip [fn; "-d"; dn]);
     ]
   in
 

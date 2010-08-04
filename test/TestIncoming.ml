@@ -3,6 +3,7 @@ open TestCommon
 open OUnit
 open Unix
 open FileUtil
+open ODBContext
 open ODBVer
 open CalendarLib
 
@@ -193,21 +194,9 @@ let assert_changed ?timeout ~what fn f =
     (Printf.sprintf "File '%s' doesn't match %s" fn what) 
     (wait_change ?timeout fn f)
 
-let in_data_dir fn = 
-  FilePath.make_filename ["test"; "data"; fn]
-
-let in_incoming_dir fn = 
-  FilePath.concat ODBConf.incoming_dir fn 
-
-let in_dist_dir fn =
-  FilePath.concat ODBConf.dist_dir fn
-
-let odb_run ctxt f = 
-  Lwt_main.run (f ~ctxt:ctxt.ctxt ())
-
-let assert_ver_file ctxt ?(oasis=true) pkg ver =
+let assert_ver_file ~ctxt ?(oasis=true) pkg ver =
   let mk_fn bn =
-    in_dist_dir (FilePath.make_filename [pkg; ver; bn])
+    in_dist_dir ~ctxt (FilePath.make_filename [pkg; ver; bn])
   in
   let () =
     assert_create_file (mk_fn "storage.sexp");
@@ -229,11 +218,9 @@ let assert_ver_file ctxt ?(oasis=true) pkg ver =
 
 let upload ctxt mthd ?time fn = 
   let fn_sexp = 
-    Filename.concat 
-    ODBConf.incoming_dir 
-    ((Filename.basename fn)^".sexp")
+    ODBIncoming.sexp_of_tarball ~ctxt:ctxt.odb fn
   in
-    cp [in_data_dir fn] ODBConf.incoming_dir;
+    cp [in_data_dir ~ctxt fn] ctxt.odb.incoming_dir;
     begin 
       match time with 
         | Some date -> 
@@ -243,7 +230,7 @@ let upload ctxt mthd ?time fn =
              in
                touch 
                  ~time:(Touch_timestamp tm) 
-                 (in_incoming_dir fn)
+                 (in_incoming_dir ~ctxt fn)
 
         | None ->
             ()
@@ -272,9 +259,10 @@ let tests ctxt =
     in
     begin
       try 
-        rm ~recurse:true [ODBConf.incoming_dir; ODBConf.dist_dir];
-        mkdir ODBConf.incoming_dir;
-        mkdir ODBConf.dist_dir;
+        (* TODO: remove alos storage and tmp *)
+        rm ~recurse:true [ctxt.odb.incoming_dir; ctxt.odb.dist_dir];
+        mkdir ctxt.odb.incoming_dir;
+        mkdir ctxt.odb.dist_dir;
 
         (* Auto upload *)
         List.iter 
@@ -331,7 +319,7 @@ let tests ctxt =
         List.iter 
           (fun (mthd, fn, time, pkg, ver, has_oasis) -> 
              let sexp_fn = 
-               ODBIncoming.sexp_of_tarball fn
+               ODBIncoming.sexp_of_tarball ~ctxt:ctxt.odb fn
              in
              let () = 
                upload ctxt mthd ?time fn;
@@ -390,7 +378,7 @@ let tests ctxt =
                      assert_failure 
                        (Printf.sprintf "Unexpected value in %s" sexp_fn)
              in
-               assert_ver_file ctxt ~oasis:has_oasis pkg ver)
+               assert_ver_file ~ctxt ~oasis:has_oasis pkg ver)
           [
             Manual "gildor", "bar-0.2.0.tar.bz2",
             None,

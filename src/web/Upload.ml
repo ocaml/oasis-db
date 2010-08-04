@@ -38,7 +38,7 @@ let upload_step4 =
     ~get_params:(string "tarball")
     (fun sp tarball () ->
        check_step3 
-          ~ctxt:ODBContext.default (* TODO: right context *)
+          ~ctxt:(Context.get ())
          tarball
        >>= fun step3 ->
        begin
@@ -102,7 +102,7 @@ let upload_step3 =
        in
 
          ODBIncoming.validate
-           ~ctxt:ODBContext.default (* TODO: right context *)
+           ~ctxt:(Context.get ())
            (Manual "me") (* TODO: real user name *)
            (strip_opt publink)
            (strip pkg)
@@ -133,7 +133,7 @@ let upload_step2 =
     ~get_params:(string "tarball")
     (fun sp tarball _ ->
        check_step2 
-          ~ctxt:ODBContext.default (* TODO: right context *)
+          ~ctxt:(Context.get ())
          tarball
        >>= fun step2 ->
        begin
@@ -284,7 +284,7 @@ let upload_step1 =
          FilePath.basename (get_original_filename tarball_fd)
        in
          ODBIncoming.upload 
-           ~ctxt:ODBContext.default (* TODO: use a good context *)
+           ~ctxt:(Context.get ())
            ~tarball_fn:(get_tmp_filename tarball_fd)
            t
            tarball

@@ -3,9 +3,11 @@ open Lwt
 open Markdown
 open XHTML.M
 
+let mkd_dir = "src/web/mkd"
+
 let load nm = 
   LwtExt.IO.with_file_content 
-    (FilePath.concat ODBConf.mkd_dir (nm^".mkd")) 
+    (FilePath.concat mkd_dir (nm^".mkd")) 
   >>= fun txt ->
   return 
     (MarkdownHTML.to_html

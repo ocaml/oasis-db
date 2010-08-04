@@ -165,7 +165,7 @@ let oasis_fields pkg =
        *)
     ]
 
-let mk_version_page ~sp fver = 
+let mk_version_page ~sp ~ctxt fver = 
   catch 
     (fun () -> 
        (* Versions (current, all and latest) *)
@@ -178,7 +178,7 @@ let mk_version_page ~sp fver =
 
        (* Backup download link *)
        Dist.a_dist 
-         ~sp ver 
+         ~sp ~ctxt ver 
          (fun fn -> 
             [pcdata 
                (Printf.sprintf 
@@ -360,16 +360,22 @@ let _ =
   register 
     browse_pkg_ver
     (fun sp (pkg, ver) () ->
-       mk_version_page ~sp
-         (fun () -> ODBStorage.version pkg ver))
+       let ctxt =
+         Context.get ()
+       in
+         mk_version_page ~sp ~ctxt
+           (fun () -> ODBStorage.version pkg ver))
 
 let browse_pkg =
   register_new_service 
     ~path:["browse_pkg"] 
     ~get_params:(suffix (string "pkg"))
     (fun sp pkg () ->
-       mk_version_page ~sp
-         (fun () -> ODBStorage.version_latest pkg))
+       let ctxt =
+         Context.get ()
+       in
+         mk_version_page ~sp ~ctxt
+           (fun () -> ODBStorage.version_latest pkg))
 
 
 let edit_info =

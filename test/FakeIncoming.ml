@@ -3,6 +3,8 @@ open Lwt
 
 let ctxt = 
   ODBContext.default
+    (* TODO: configure *)
+    (FilePath.make_filename ["test"; "data"; "storage"])
 
 let rec tic_tac () =
   let aux str () =

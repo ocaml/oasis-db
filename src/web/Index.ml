@@ -11,7 +11,7 @@ open CalendarLib
 open Template
 
 let _ = 
-  ODBMain.run ~ctxt:ODBContext.default ()
+  ODBMain.run ~ctxt:(Context.get ()) ()
 
 type t = 
   {

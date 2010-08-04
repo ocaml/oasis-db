@@ -73,7 +73,8 @@ Library "oasis-db-ocsigen"
            SQL,
            Dist,
            Upload,
-           Mkd
+           Mkd,
+           Context
   BuildDepends: oasis-db, 
                 ocsigen, 
                 pgocaml, 

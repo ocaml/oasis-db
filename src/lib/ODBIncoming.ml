@@ -2,6 +2,7 @@
 (*open Sexplib.Conv*)
 open ODBMessage
 open ODBGettext
+open ODBContext
 open ODBTypes
 open ODBInotify
 open ODBCompletion
@@ -254,7 +255,7 @@ let run =
 
       ODBInotify.monitor_dir ~ctxt 
         (wait_complete ~ctxt)
-        ODBConf.incoming_dir SetString.empty
+        ctxt.incoming_dir SetString.empty
       >>= fun changed ->
       if SetString.cardinal changed > 0 then
         info ~ctxt
@@ -275,28 +276,28 @@ let run =
 let make ?publink upload_method = 
   Step1_JustUploaded {publink = publink; upload_method = upload_method}
 
-let sexp_of_tarball tarball = 
+let sexp_of_tarball ~ctxt tarball = 
   FilePath.concat
-    ODBConf.incoming_dir
+    ctxt.incoming_dir
     (tarball ^ ".sexp")
 
 (** Upload a tarball -> step 1
   *)
 let upload ~ctxt ~tarball_fn mthd tarball = 
   let tarball_tgt =
-    FilePath.concat ODBConf.incoming_dir tarball
+    FilePath.concat ctxt.incoming_dir tarball
   in
 
     ODBFileUtil.cp ~ctxt [tarball_fn] tarball_tgt
     >>= fun () ->
-    to_file ~ctxt (sexp_of_tarball tarball) mthd
+    to_file ~ctxt (sexp_of_tarball ~ctxt tarball) mthd
 
 
 (** Try to load .sexp  
   *)
 let check_file ~ctxt tarball f_test f_doesnt_exist f_invalid =
   let sexp_fn =
-    sexp_of_tarball tarball
+    sexp_of_tarball ~ctxt tarball
   in
     catch 
       (fun () ->
@@ -304,7 +305,7 @@ let check_file ~ctxt tarball f_test f_doesnt_exist f_invalid =
            begin
              from_file 
                ~ctxt
-               (sexp_of_tarball tarball)
+               (sexp_of_tarball ~ctxt tarball)
              >>=
              f_test
            end
@@ -355,7 +356,7 @@ let check_step2 ~ctxt tarball =
   *)
 let validate ~ctxt mthd publink pkg ver ord oasis_fn tarball = 
   let sexp_fn = 
-    sexp_of_tarball tarball
+    sexp_of_tarball ~ctxt tarball
   in
     to_file ~ctxt 
       sexp_fn
