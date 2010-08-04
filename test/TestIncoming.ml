@@ -205,14 +205,17 @@ let in_dist_dir fn =
 let odb_run ctxt f = 
   Lwt_main.run (f ~ctxt:ctxt.ctxt ())
 
-let assert_ver_file ctxt pkg ver =
+let assert_ver_file ctxt ?(oasis=true) pkg ver =
   let mk_fn bn =
     in_dist_dir (FilePath.make_filename [pkg; ver; bn])
   in
   let () =
     assert_create_file (mk_fn "storage.sexp");
-    assert_create_file (mk_fn "_oasis");
-    assert_create_file (mk_fn "_oasis.pristine")
+    if oasis then 
+      begin
+        assert_create_file (mk_fn "_oasis");
+        assert_create_file (mk_fn "_oasis.pristine")
+      end
   in
   let ver =
     odb_run ctxt 
@@ -326,7 +329,7 @@ let tests ctxt =
 
         (* Need confirmation *)
         List.iter 
-          (fun (mthd, fn, time, pkg, ver) -> 
+          (fun (mthd, fn, time, pkg, ver, has_oasis) -> 
              let sexp_fn = 
                ODBIncoming.sexp_of_tarball fn
              in
@@ -387,51 +390,51 @@ let tests ctxt =
                      assert_failure 
                        (Printf.sprintf "Unexpected value in %s" sexp_fn)
              in
-               assert_ver_file ctxt pkg ver)
+               assert_ver_file ctxt ~oasis:has_oasis pkg ver)
           [
             Manual "gildor", "bar-0.2.0.tar.bz2",
             None,
-            "bar", "0.2.0";
+            "bar", "0.2.0", true;
 
             OCamlForge, "mlblock-0.1.tar.bz2",
             Some "2008-04-25 23:49:02",
-            "mlblock", "0.1";
+            "mlblock", "0.1", false;
 
             OCamlForge, "hydro-0.7.1.tar.gz",
             Some "2010-04-11 13:35:02",
-            "hydro", "0.7.1";
+            "hydro", "0.7.1", false;
 
             OCamlForge, "crypt-1.0.tar.gz",
             Some "2010-04-11 13:35:02",
-            "crypt", "1.0";
+            "crypt", "1.0", false;
 
             OCamlForge, "ccss-1.0.tgz",
             Some "2010-03-10 16:58:02",
-            "ccss", "1.0";
+            "ccss", "1.0", false;
 
             OCamlForge, "batteries-1.2.2.tar.gz",
             Some "2010-06-15 03:49:02",
-            "batteries", "1.2.2";
+            "batteries", "1.2.2", false;
 
             OCamlForge, "batteries-1.2.1.tar.gz",
             Some "2010-06-12 15:33:02",
-            "batteries", "1.2.1";
+            "batteries", "1.2.1", false;
 
             OCamlForge, "batteries-1.2.0.tar.gz",
             Some "2010-06-06 01:38:00",
-            "batteries", "1.2.0";
+            "batteries", "1.2.0", false;
 
             OCamlForge, "batteries-1.1.0.tar.gz",
             Some "2010-02-28 14:26:02",
-            "batteries", "1.1.0";
+            "batteries", "1.1.0", false;
 
             OCamlForge, "batteries-1.0.1.tar.gz",
             Some "2010-02-01 15:07:02",
-            "batteries", "1.0.1";
+            "batteries", "1.0.1", false;
 
             OCamlForge, "batteries-1.0.0.tar.gz",
             Some "2010-01-15 19:57:00",
-            "batteries", "1.0.0";
+            "batteries", "1.0.0", false;
           ];
 
 
