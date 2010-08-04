@@ -49,25 +49,67 @@ let to_file =
 (** We got all files and all parameters are set, so move tarball to storage
   *)
 let move_to_storage ~ctxt ut pkg ver ord tarball_fn sexp_fn oasis_fn =
-  let upload_date =
-    CalendarLib.Calendar.from_unixfloat
-      (Unix.stat tarball_fn).Unix.st_mtime
+  (* All files for the upload *)
+  let all_files = 
+   let lst =
+     [tarball_fn; sexp_fn]
+   in
+     match oasis_fn with
+       | Some fn -> fn :: lst
+       | None ->  lst
   in
-  let ver = 
-    {
-      ODBVer.pkg    = pkg;
-      ver           = ver;
-      ord           = ord;
-      tarball       = Filename.basename tarball_fn;
-      upload_date   = upload_date;
-      upload_method = ut.upload_method;
-      publink       = ut.publink;
-    }
-  in
-    (* TODO: catch errors and avoid deletion *)
-    ODBStorage.add_version ~ctxt ver tarball_fn oasis_fn
-    >>= fun () ->
-    ODBFileUtil.rm ~ctxt [tarball_fn; sexp_fn]
+
+    catch 
+      (fun () ->
+         let upload_date =
+           CalendarLib.Calendar.from_unixfloat
+             (Unix.stat tarball_fn).Unix.st_mtime
+         in
+         let ver = 
+           {
+             ODBVer.pkg    = pkg;
+             ver           = ver;
+             ord           = ord;
+             tarball       = Filename.basename tarball_fn;
+             upload_date   = upload_date;
+             upload_method = ut.upload_method;
+             publink       = ut.publink;
+           }
+         in
+           ODBStorage.add_version ~ctxt ver tarball_fn oasis_fn
+           >>= fun () ->
+           ODBFileUtil.rm ~ctxt all_files)
+
+      (fun e ->
+         error ~ctxt
+           (f_ "Error while adding '%s' to storage: %s")
+           tarball_fn
+           (string_of_exception e)
+         >>= fun () ->
+         (* Check that we still have all files *)
+         let removed_files =
+           List.filter (fun fn -> not (Sys.file_exists fn)) all_files
+         in
+           if removed_files = [] then
+             (* Go back to step 2 *)
+             begin
+               let ct =
+                 {
+                   ODBCompletion.pkg = Unsure (0.0, pkg);
+                   ver               = Unsure (0.0, ver);
+                   ord               = Unsure (0.0, ord);
+                   oasis_fn          = oasis_fn;
+                 }
+               in
+                 to_file ~ctxt sexp_fn (Step2_UserEditable (ut, ct))
+             end
+           else
+             begin
+               error ~ctxt 
+                 (f_ "Missing files for '%s': %s")
+                 tarball_fn 
+                 (String.concat (s_ ", ") removed_files)
+             end)
 
 (** We got all files, try to run completion on them
   *)
@@ -83,6 +125,20 @@ let upload_complete ~ctxt sexp_fn tarball_fn =
           ODBArchive.uncompress_tmp_dir ~ctxt tarball_fn 
           (fun fn an dn ->
             ODBCompletion.run ~ctxt fn an dn 
+            >>= fun ct ->
+            (* Move _oasis file out of the temporary directory *)
+            begin
+              match ct.oasis_fn with 
+                | Some fn ->
+                    let tgt = 
+                      tarball_fn^".oasis"
+                    in
+                      ODBFileUtil.cp ~ctxt [fn] tgt
+                      >>= fun () ->
+                      return {ct with oasis_fn = Some tgt}
+                | None ->
+                    return ct
+            end
             >>= fun ct ->
             (* Conditions to go to step 2 or directly 
              * to storage
@@ -120,7 +176,7 @@ let upload_complete ~ctxt sexp_fn tarball_fn =
           (f_ "Moving tarball to storage")
         >>= fun () ->
         move_to_storage ~ctxt ut pkg ver ord
-          tarball_fn sexp_fn oasis_fn
+          tarball_fn sexp_fn oasis_fn 
 
 module SetString = Set.Make(String)
 
