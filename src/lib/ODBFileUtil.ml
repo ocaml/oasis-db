@@ -10,6 +10,7 @@ open ODBContext
 type filename = string
 
 type iter_t = 
+  | Symlink of filename 
   | File    of filename
   | PreDir  of filename (* Beware that the dir is opened *)
   | PostDir of filename (* Dir is closed *)
@@ -73,48 +74,42 @@ let fold_dir f fn a =
 
 
 let fold_fs f fn a = 
-  let rec fold_aux f fn a = 
-    catch 
-      (fun () ->
-        let do_predir (first, a) = 
-          if first then 
-            f (PreDir fn) a
-          else
-            return a
-        in
+  let rec fold_aux f fn _ a = 
+    try 
+      match FileUtil.stat fn with 
+        | {FileUtil.is_link = true} ->
+            f (Symlink fn) a
 
-        (* Recurse inside fold_dir *)
-        let f_fold sub_fn _ (first, a) = 
-          do_predir (first, a)
-          >>= fun a ->
-          fold_aux f sub_fn a
-          >>= fun a ->
-          return (false, a)
-        in
+        | {FileUtil.kind = FileUtil.Dir} ->
+            begin
+              f (PreDir fn) a
+              >>= fun a ->
+              fold_dir (fold_aux f) fn a
+              >>= fun a ->
+              f (PostDir fn) a
+            end
 
-           fold_dir f_fold fn (true, a)
-           >>= 
-           (* If the directory is empty, we don't yet 
-              have called PreDir.
-            *)
-           do_predir 
-           >>= fun a ->
-           f (PostDir fn) a)
-
-      (function 
-         | ENotDir fn ->
-             (* File handling *)
-             f (File fn) a
-
-         | ENotExist _ ->
-             (* No file, no dir, just skip *)
-             return a
-
-         | exc ->
-             fail exc)
-
+        | _ ->
+            f (File fn) a
+    with 
+      (* TODO: this should be handled in fileutils *)
+      | FileUtil.FileDoesntExist fn ->
+          begin
+            try 
+              let _st : stats = 
+                lstat fn 
+              in
+                f (Symlink fn) a
+            with 
+              | Unix_error (e, _, _) when e = ENOENT ->
+                  fail (ENotExist fn)
+              | e ->
+                  fail e
+          end
+      | e ->
+          fail e
   in
-    fold_aux f fn a
+    fold_aux f fn "" a
   
 
 let iter_fs f fn = 
@@ -137,9 +132,7 @@ let rm ~ctxt ?(recurse=false) lst =
 
           | PostDir fn ->
               begin
-                debug ~ctxt
-                  (f_ "Remove directory '%s'")
-                  fn
+                debug ~ctxt (f_ "Remove directory '%s'") fn
                 >>= fun () -> 
                 begin
                   try 
@@ -152,14 +145,25 @@ let rm ~ctxt ?(recurse=false) lst =
 
           | File fn ->
               begin
-                debug ~ctxt 
-                  (f_ "Remove file '%s'")
-                  fn
+                debug ~ctxt (f_ "Remove file '%s'") fn
                 >>= fun () ->
                 begin
                   try 
                     Unix.unlink fn;
                     return ()
+                  with e ->
+                    fail e
+                end
+              end
+
+          | Symlink fn ->
+              begin
+                debug ~ctxt (f_ "Remove symlink '%s'") fn
+                >>= fun () ->
+                begin
+                  try 
+                    Unix.unlink fn;
+                    return ();
                   with e ->
                     fail e
                 end

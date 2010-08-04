@@ -130,7 +130,12 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
                   >>= fun acc ->
                   monitor (File (Changed fn)) t.acc
                   >>= fun acc ->
-                  return {t with acc = acc})
+                  return {t with acc = acc}
+
+              | Symlink fn ->
+                  debug ~ctxt (f_ "Ignoring symlink '%s'") fn
+                  >>= fun () ->
+                  return t)
             fn t
         else
           watch_dir_aux fn t
