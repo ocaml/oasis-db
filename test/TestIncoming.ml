@@ -96,7 +96,11 @@ let wait_create ~is_file ?(timeout=default_timeout) topfn =
       end
   in
 
+  let res = 
     wait_aux ~is_file topfn
+  in
+    Unix.close fd;
+    res
 
 
 let wait_remove ?(timeout=default_timeout) fn =
@@ -116,11 +120,13 @@ let wait_remove ?(timeout=default_timeout) fn =
               false
       in
         Inotify.rm_watch fd wd;
+        Unix.close fd;
         res
 
     with 
       | Inotify.Error ("add_watch", 2) ->
           (* ENOENT *)
+          Unix.close fd;
           true
 
 let wait_change ?(timeout=default_timeout) fn f =
@@ -128,7 +134,7 @@ let wait_change ?(timeout=default_timeout) fn f =
     Inotify.init ()
   in
   let wd = 
-    Inotify.add_watch fd fn [Inotify.S_Delete_self]
+    Inotify.add_watch fd fn [Inotify.S_Close_write]
   in
 
   let end_timeout = 
@@ -140,21 +146,26 @@ let wait_change ?(timeout=default_timeout) fn f =
   in
 
   let rec aux () = 
-    match Unix.select [fd] [] [] (gtd ()) with 
-      | _ :: _, _, _ -> 
-          if f () then
-            true 
-          else
-            aux ()
-
-      | [], _, _ ->
-          false
+    if f () then
+      begin
+        true
+      end
+    else
+      begin
+        match Unix.select [fd] [] [] (gtd ()) with 
+          | _ :: _, _, _ -> 
+              aux ()
+                
+          | [], _, _ ->
+              false
+      end
   in
 
   let res =
     aux ()
   in
     Inotify.rm_watch fd wd;
+    Unix.close fd;
     res
 
 let assert_create_file ?timeout fn =
@@ -213,14 +224,27 @@ let assert_ver_file ctxt pkg ver =
     assert_create_file (mk_fn ver.tarball)
 
 
-let upload ctxt mthd time fn = 
+let upload ctxt mthd ?time fn = 
   let fn_sexp = 
     Filename.concat 
     ODBConf.incoming_dir 
     ((Filename.basename fn)^".sexp")
   in
     cp [in_data_dir fn] ODBConf.incoming_dir;
-    touch ~time (in_incoming_dir (Filename.basename fn));
+    begin 
+      match time with 
+        | Some date -> 
+             let tm = 
+               Calendar.to_unixfloat
+                 (Printer.Calendar.from_string date)
+             in
+               touch 
+                 ~time:(Touch_timestamp tm) 
+                 (in_incoming_dir fn)
+
+        | None ->
+            ()
+    end;
     odb_run
       ctxt
       (fun ~ctxt () ->
@@ -248,13 +272,11 @@ let tests ctxt =
         rm ~recurse:true [ODBConf.incoming_dir; ODBConf.dist_dir];
         mkdir ODBConf.incoming_dir;
         mkdir ODBConf.dist_dir;
+
+        (* Auto upload *)
         List.iter 
-          (fun (mthd, fn, date, pkg, ver) -> 
-             let tm = 
-               Calendar.to_unixfloat
-                 (Printer.Calendar.from_string date)
-             in
-             upload ctxt mthd (Touch_timestamp tm) fn;
+          (fun (mthd, fn, time, pkg, ver) -> 
+             upload ctxt mthd ~time fn;
              assert_ver_file ctxt pkg ver)
           [
             OCamlForge, "baz_3.O~alpha1.zip", 
@@ -302,8 +324,116 @@ let tests ctxt =
             "oasis", "0.1.0";
           ];
 
-        upload ctxt (Manual "gildor") Touch_now "bar-0.2.0.tar.bz2";
-        (* TODO: check and provide extra data for bar *)
+        (* Need confirmation *)
+        List.iter 
+          (fun (mthd, fn, time, pkg, ver) -> 
+             let sexp_fn = 
+               ODBIncoming.sexp_of_tarball fn
+             in
+             let () = 
+               upload ctxt mthd ?time fn;
+               assert_changed ~what:"Step2_UserEditable"
+                 sexp_fn
+                 (fun () -> 
+                    let t =
+                      odb_run ctxt 
+                        (fun ~ctxt () -> 
+                           ODBIncoming.check_step2 ~ctxt fn) 
+                    in
+                      match t with 
+                        | ODBIncoming.Step2_Reached _ -> 
+                            true
+                        | _ -> 
+                            false)
+             in
+             let incoming_level = 
+               odb_run ctxt 
+                 (fun ~ctxt () -> 
+                    ODBIncoming.from_file ~ctxt sexp_fn)
+             in
+             let the = 
+               function
+                 | Some v -> v
+                 | None -> assert false
+             in
+             let () = 
+               match incoming_level with 
+                 | ODBIncoming.Step2_UserEditable (ut, ct) ->
+                     assert_equal
+                       ~msg:(Printf.sprintf "Package of %s after completion" fn)
+                       ~printer:(function Some s -> s | None -> "<none>" )
+                       (Some pkg)
+                       (ODBCompletion.value ct.ODBCompletion.pkg);
+                     assert_equal
+                       ~msg:(Printf.sprintf "Version of %s after completion" fn)
+                       ~printer:(function 
+                                   | Some v ->
+                                       OASISVersion.string_of_version v
+                                   | None -> 
+                                       "<none>")
+                       (Some (OASISVersion.version_of_string ver))
+                       (ODBCompletion.value ct.ODBCompletion.ver);
+                     odb_run ctxt
+                       (fun ~ctxt () ->
+                          ODBIncoming.validate ~ctxt
+                            ut.ODBIncoming.upload_method 
+                            ut.ODBIncoming.publink 
+                            (the (ODBCompletion.value ct.ODBCompletion.pkg))
+                            (the (ODBCompletion.value ct.ODBCompletion.ver))
+                            (the (ODBCompletion.value ct.ODBCompletion.ord))
+                            ct.ODBCompletion.oasis_fn
+                            fn)
+                 | _ ->
+                     assert_failure 
+                       (Printf.sprintf "Unexpected value in %s" sexp_fn)
+             in
+               assert_ver_file ctxt pkg ver)
+          [
+            Manual "gildor", "bar-0.2.0.tar.bz2",
+            None,
+            "bar", "0.2.0";
+
+            OCamlForge, "mlblock-0.1.tar.bz2",
+            Some "2008-04-25 23:49:02",
+            "mlblock", "0.1";
+
+            OCamlForge, "hydro-0.7.1.tar.gz",
+            Some "2010-04-11 13:35:02",
+            "hydro", "0.7.1";
+
+            OCamlForge, "crypt-1.0.tar.gz",
+            Some "2010-04-11 13:35:02",
+            "crypt", "1.0";
+
+            OCamlForge, "ccss-1.0.tgz",
+            Some "2010-03-10 16:58:02",
+            "ccss", "1.0";
+
+            OCamlForge, "batteries-1.2.2.tar.gz",
+            Some "2010-06-15 03:49:02",
+            "batteries", "1.2.2";
+
+            OCamlForge, "batteries-1.2.1.tar.gz",
+            Some "2010-06-12 15:33:02",
+            "batteries", "1.2.1";
+
+            OCamlForge, "batteries-1.2.0.tar.gz",
+            Some "2010-06-06 01:38:00",
+            "batteries", "1.2.0";
+
+            OCamlForge, "batteries-1.1.0.tar.gz",
+            Some "2010-02-28 14:26:02",
+            "batteries", "1.1.0";
+
+            OCamlForge, "batteries-1.0.1.tar.gz",
+            Some "2010-02-01 15:07:02",
+            "batteries", "1.0.1";
+
+            OCamlForge, "batteries-1.0.0.tar.gz",
+            Some "2010-01-15 19:57:00",
+            "batteries", "1.0.0";
+          ];
+
 
       with e ->
         ignore (clean_exit ());

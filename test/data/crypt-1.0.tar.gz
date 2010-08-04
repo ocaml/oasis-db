@@ -1,0 +1,422 @@
+
+<html>
+  <head>
+    <title>GODI Source crypt-1.0</title>
+    <link rel="SHORTCUT ICON" href="//www.camlcity.org/files/img/favicon.ico">
+    <link rel="ICON" href="//www.camlcity.org/files/img/favicon.ico">
+    <style type="text/css">
+BODY {
+      margin: 0px;
+      background-color: white;
+}
+
+.cc-navigation a:visited {
+      text-decoration: none;
+      color: blue;
+}
+
+.cc-navigation a:link {
+      text-decoration: none;
+      color: blue;
+}
+
+.cc-navigation a:hover {
+      text-decoration: none;
+      color: blue;
+      background-color: transparent;
+}
+
+a:visited {
+      text-decoration: none;
+      color: blue;
+}
+
+a:link {
+      text-decoration: none;
+      color: blue;
+}
+
+div#cc-framelogo {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      width: 200px;
+      height: 120px;
+}
+
+div#cc-frametitle {
+      position: absolute;
+      left: 200px;
+      top: 85px;
+      width: 250px;
+      height: 50px;
+}
+
+div#cc-frametabs {
+      position: absolute;
+      left: 470px;
+      top: 25px;
+      width: 320px;
+      height: 100px;
+}
+
+table#cc-frametabstable {
+      display: table;
+      position: absolute; 
+      left: 0px;
+      bottom: 0px;
+}
+
+
+div#cc-frametabs table {
+      border-collapse: separate;
+      border-spacing: 5px;
+}
+
+div#cc-frametabs td {
+      border: solid 1px black;
+      font: 12pt sans-serif;
+      text-align: center;
+}
+
+.cc-navigation .tabselected {
+      background-color: #aaaaaa;
+}
+
+.cc-navigation a.tab:link {
+      color : black;
+}
+
+.cc-navigation a.tab:visited {
+      color : black;
+}
+
+div#cc-frameleftnav {
+      position: absolute;
+      left: 0px;
+      top: 140px;
+      width: 120px;
+      text-align: right;
+      margin-top: 15px;
+      z-index: 1;
+}
+
+div#cc-framesearch {
+      position: absolute;
+      left: 10px;
+      top: 290px;
+      width: 120px;
+      font: 10pt sans-serif;
+}
+
+div#cc-framegoogle {
+      position: absolute;
+      left: 10px;
+      top: 400px;
+      width: 120px;
+}
+
+
+.cc-framekreis {
+      margin: 5px;
+}
+
+div#cc-framecontent {
+      position: absolute;
+      left: 140px;
+      top: 140px;
+      width: 660px;
+      border-left: 1px solid black;
+      padding-left: 10px;
+}
+
+div#cc-frameicontent {
+      min-height: 450px;
+}
+
+div#cc-framefooter {
+      margin-top: 50px;
+      border-top: 1px solid black;
+      text-align: center;
+      font: 8pt sans-serif;
+}
+
+div#cc-framecamlpowered {
+      position: relative;
+      left: -100px;
+}
+
+.cc-framemenu {
+      position: absolute;
+      overflow: visible;
+      left: 73px;
+      min-width: 150px;
+      border: 1px solid black;
+      text-align: left;
+      z-index: 2;
+      background-color: #dddddd;
+      margin-top: 25px;
+      font: 10pt sans-serif;
+      white-space: nowrap;
+}
+
+.cc-framemenuhead {
+      margin: 3px;
+}
+
+.cc-framemenusep {
+      margin: 3px;
+      border-bottom: 1px solid black;
+}
+
+.cc-framemenuentry {
+      margin: 3px;
+      margin-left: 20px;
+}
+
+.cc-framemenuentry a {
+      display: block;
+      text-decoration: none;
+      color: black;
+}
+
+.cc-framemenuentry a:hover {
+      background-color: #aaaaaa;
+      color: black;
+}
+
+.cc-framemenuentry a:visited {
+      color: black;
+}
+
+.cc-framemenuentry a:link {
+      color: black;
+}
+
+.cc-framemenuspecial {
+      margin: 3px;
+      margin-left: 20px;
+}
+
+.cc-framemenuspecial a {
+      text-decoration: none;
+      color: black;
+}
+
+.cc-framemenuspecial a:hover {
+      background-color: #aaaaaa;
+}
+
+.cc-framemenuspecial a:visited {
+      color: black;
+}
+
+.cc-framenav-qbox {
+    background-color: #F0F0F0;
+}
+
+    </style>
+
+    <script type="text/javascript">
+var visible_menu;
+var last_show = new Date();
+
+function hidemenu(force) {
+  var time = new Date();
+  if (visible_menu && (force || time - last_show > 300) ) {
+    var menudiv = document.getElementById(visible_menu);
+    menudiv.style.display = "none";
+    visible_menu = null;
+  }
+}
+
+function showmenu(name) {
+  hidemenu(true);
+  var menudiv = document.getElementById(name);
+  menudiv.style.display = "block";
+  visible_menu = name;
+  last_show = new Date();
+}
+
+function togglemenu(name) {
+  if (visible_menu) {
+    hidemenu(false)
+  } else {
+    showmenu(name); return false
+  }
+}
+
+
+    </script>
+
+    
+
+  </head>
+
+  <body onclick="hidemenu(false)">
+    <div class="cc-navigation">
+    <div id="cc-framelogo"><img src="//www.camlcity.org/files/img/city0003.png" width="200" height="120"></div>
+    <div id="cc-frametitle"><img src="//www.camlcity.org/files/img/camlcityorg2.png" width="250" height="50"></div>
+    <div id="cc-frametabs">
+      <table id="cc-frametabstable">
+        <tr>
+          <td width="100"></td>
+          <td width="100"></td>
+          <td width="100"></td>
+        </tr>
+        <tr>
+          <td class="tabselected" width="100"><a href="//docs.camlcity.org/docs" class="tab">Docs</a></td>
+          <td width="100"><a href="//godi.camlcity.org/godi" class="tab">GODI</a></td>
+          <td width="100"><a href="//archive.camlcity.org/archive" class="tab">Archive</a></td>
+        </tr>
+        <tr>
+          <td width="100"><a href="//projects.camlcity.org/projects" class="tab">Projects</a></td>
+          <td width="100"><a href="//blog.camlcity.org/blog" class="tab">Blog</a></td>
+          <td width="100"><a href="http://links.camlcity.org" class="tab">Link DB</a></td>
+        </tr>
+      </table>
+    </div>
+    <div id="cc-frameleftnav">
+      <div class="cc-framemenu" id="cc-framemenu1" style="display:none">
+<div class="cc-framemenuhead">Location:</div>
+  <div class="cc-framemenuspecial">
+    
+	<a href="http://docs.camlcity.org/docs">Documentation</a>
+       &gt;&gt; 
+	<a href="http://docs.camlcity.org/docs/godisrc">Browse GODI 3.10 sources</a>
+      
+  </div>
+
+    <div class="cc-framemenusep"></div>
+    <div class="cc-framemenuhead">Contents:</div>
+  
+    
+  
+<div class="cc-framemenusep"></div>
+<div class="cc-framemenuhead">Starting Points:</div>
+<div class="cc-framemenuentry"><a href="//projects.camlcity.org/projects">Projects</a></div>
+<div class="cc-framemenuentry"><a href="//blog.camlcity.org/blog">Blog</a></div>
+<div class="cc-framemenuentry"><a href="//godi.camlcity.org/godi">GODI</a></div>
+<div class="cc-framemenuentry"><a href="http://links.camlcity.org">Link DB</a></div>
+<div class="cc-framemenuentry"><a href="//archive.camlcity.org/archive">Archive</a></div>
+<div class="cc-framemenuentry"><a href="//docs.camlcity.org/docs">Documentation</a></div>
+<div class="cc-framemenusep"></div>
+<div class="cc-framemenuhead">Special:</div>
+<div class="cc-framemenuentry"><a href="//download.camlcity.org/download">Download directory</a></div>
+</div><img class="cc-framekreis" src="//www.camlcity.org/files/img/kreis_dreieck_weiss.png" width="40" height="40" onmouseover="showmenu('cc-framemenu1')" onclick="return togglemenu('cc-framemenu1')"><br>
+      <div class="cc-framemenu" id="cc-framemenu2" style="display:none">
+<div class="cc-framemenuhead">Help</div>
+<div class="cc-framemenuentry"><a href="//www.camlcity.org/contact.html">Contact</a></div>
+</div>
+      <img class="cc-framekreis" src="//www.camlcity.org/files/img/kreis_fragezeichen_weiss.png" width="40" height="40" onmouseover="showmenu('cc-framemenu2')">
+
+    </div>
+
+    <div id="cc-framesearch">
+Look up function:<br>
+<form action="//docs.camlcity.org/docs/godipkg/3.11">
+<input class="cc-framenav-qbox" type="text" name="q" size="12"><br>
+(e.g. &quot;List.find&quot; or &quot;keysym&quot;)
+<br>
+<a href="//docs.camlcity.org/docs">More options</a>
+</form>
+    </div>
+
+    <div id="cc-framegoogle">
+
+
+<script type="text/javascript"><!--
+google_ad_client = "pub-4839170607990954";
+/* camlcity1 */
+google_ad_slot = "2295948768";
+google_ad_width = 120;
+google_ad_height = 240;
+//-->
+</script>
+<script type="text/javascript" src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+</script>
+
+
+    </div>
+    </div>
+
+    <div style="z-index: -1">
+      
+
+      <div id="cc-framecontent">
+
+        <div id="cc-frameicontent">
+          <body>
+    <style type="text/css">
+h1 {
+    font: 24pt serif;
+}
+
+.overtitle {
+    font: 8pt sans-serif;
+}
+
+.subtitle {
+    font: 12pt sans-serif;
+}
+
+.description {
+    font: 12pt serif;
+}
+
+.label {
+    font: 12pt sans-serif;
+}
+
+.data {
+    font: 12pt serif;
+}
+
+.datatable {
+    background-color: #F0F0F0;
+}
+
+    </style>
+
+    <p class="overtitle">FREE SOFTWARE ON CAMLCITY.ORG</p>
+
+
+    <h1>GODI Source crypt-1.0</h1>
+    
+    <div>
+      <table cellspacing="0" cellpadding="5" class="datatable">
+	<tr>
+	  <td class="label" valign="baseline">Used in packages:</td>
+          <td class="data" valign="baseline">
+
+	    <a href="http://docs.camlcity.org/docs/godipkg/3.10/godi-crypt">godi-crypt (in 3.10)</a><br><a href="http://docs.camlcity.org/docs/godipkg/3.11/godi-crypt">godi-crypt (in 3.11)</a><br>
+          </td>
+        </tr>
+	<tr>
+	  <td class="label" valign="baseline">Files:</td>
+          <td class="data" valign="baseline">
+
+	    <a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/META">crypt-1.0/META</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/Makefile">crypt-1.0/Makefile</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/OCamlMakefile">crypt-1.0/OCamlMakefile</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/README">crypt-1.0/README</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/crypt.ml">crypt-1.0/crypt.ml</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/crypt.mli">crypt-1.0/crypt.mli</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/libmlcrypt.c">crypt-1.0/libmlcrypt.c</a><br><a href="http://docs.camlcity.org/docs/godisrc/crypt-1.0.tar.gz/crypt-1.0/test.ml">crypt-1.0/test.ml</a><br>
+          </td>
+        </tr>
+
+      </table>
+
+    </div>
+  </body>
+        </div>
+
+        <div id="cc-framefooter">
+This web site is published by 
+<a href="//www.camlcity.org/contact.html">Informatikbüro Gerd Stolpmann</a>
+        </div>
+
+        <div id="cc-framecamlpowered">
+          <img src="//www.camlcity.org/files/img/caml-powered.80x30.gif" style="border:none" alt="Powered by Caml">
+        </div>
+
+      </div>
+    </div>
+
+  </body>
+</html>
