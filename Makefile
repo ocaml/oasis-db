@@ -92,10 +92,16 @@ clean-run:
 clean: clean-run
 
 # Run ocsigen
-run-ocsigen:
+ocsigen-run:
 	mkdir tmp || true
 	./src/tools/ocsigen-autorestart.sh
 
 # Create DB
 db-create:
 	./src/sql/install.sh
+
+# Sync dev
+DEV_SYNC_DEST=ssh.ocamlcore.org:/home/groups/oasis/oasis-server-dev/
+dev-sync: build
+	rsync -av _build/src/web/oasis-server $(DEV_SYNC_DEST)/oasis-server 
+	rsync -av etc src/web/static src/web/mkd $(DEV_SYNC_DEST)
