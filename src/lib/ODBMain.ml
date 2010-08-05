@@ -32,7 +32,10 @@ let run =
       "ODBMain.run"
       (fun ~ctxt () ->
          try 
-           OASISBuiltinPlugins.init ();
+           (* TODO: Deactivated because native linking doesn't work
+            * with ocamlbuild.
+            * OASISBuiltinPlugins.init ();
+            *)
            join 
              (List.map
                 (catch_exn ~ctxt)
