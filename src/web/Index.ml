@@ -171,13 +171,21 @@ let home_handler =
                     t.num_uploads
                     t.num_packages
                     (Printer.Calendar.sprint "%F" t.first_date))];
-
+              
               p
                 [pcdata
-                   (Printf.sprintf 
-                      (f_ "%d%% of the latest package's versions have an _oasis file.")
-                      (((t.num_packages - t.no_oasis) * 100) / t.num_packages))]
-            ];
+                   begin
+                     if t.num_packages > 0 then
+                       (Printf.sprintf 
+                          (f_ "%d%% of the latest package's versions \
+                               have an _oasis file.")
+                          (((t.num_packages - t.no_oasis) * 100) 
+                          / t.num_packages))
+                     else
+                       s_ "No packages"
+                   end
+                ]
+            ];            
         ])
 
 
