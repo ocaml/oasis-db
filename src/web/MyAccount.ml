@@ -21,9 +21,9 @@ let string_of_log_level =
     | Warning -> s_ "Warning"
     | Info    -> s_ "Info"
 
-let _ = 
-  register
-   Account.my_account
+let my_account_handler = 
+  Defer.register
+    Account.my_account
     (fun sp () () ->
 
        (* Compute events list *)
@@ -74,6 +74,9 @@ let _ =
                         td [lnk]])
                   events);
 
-             p [a Account.account_settings sp 
+             p [a (Account.account_settings ()) sp 
                   [pcdata (s_ "Account settings")] ()];
             ]))
+
+let init () =
+  my_account_handler ()

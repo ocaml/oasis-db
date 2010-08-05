@@ -12,7 +12,7 @@ open ODBVer
 open ODBContext
 
 let dist = 
-  register_new_service 
+  Defer.Files.register_new_service 
     ~path:["dist"]
     ~get_params:(suffix (all_suffix "path"))
     (fun sp lst () ->
@@ -56,13 +56,8 @@ let a_dist ~sp ~ctxt ver fcontent fn =
     *)
    ExtString.String.nsplit fn "/"
  in
-   return 
-     (Eliom_predefmod.Xhtml.a 
-        (preapply dist lst)
-        sp 
-        (fcontent fn)
-        (),
-      fn)
+   return (Eliom_predefmod.Xhtml.a (dist ()) sp (fcontent fn) lst, fn)
 
 
-
+let init () = 
+  ignore (dist ())

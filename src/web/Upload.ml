@@ -20,10 +20,10 @@ open Template
  * go back to step 0, the upload form
  *)
 let upload_step_no_post ~path =
-  Eliom_predefmod.Redirection.register_new_service 
+  Defer.Redirection.register_new_service 
     ~path
     ~get_params:unit
-    (fun sp () () -> return upload)
+    (fun sp () () -> return (upload ()))
 
 (*
  *
@@ -33,7 +33,7 @@ let upload_step_no_post ~path =
  *)
 
 let upload_step4 = 
-  register_new_service 
+  Defer.register_new_service 
     ~path:["upload_step4"]
     ~get_params:(string "tarball")
     (fun sp tarball () ->
@@ -82,15 +82,18 @@ let upload_step4 =
  *
  *)
 
+let upload_step3_no_post = 
+  upload_step_no_post ~path:["upload_step3"]
+
 let upload_step3 = 
-  Eliom_predefmod.Redirection.register_new_post_service
+  Defer.Redirection.register_new_post_service
     ~post_params:(opt (string "publink") ** 
                   string "tarball" ** 
                   string "package" ** 
                   string "version" ** 
                   int "order" **
                   opt (string "oasis_fn"))
-    ~fallback:(upload_step_no_post ~path:["upload_step3"])
+    ~fallback:upload_step3_no_post 
     (fun sp _ (publink, (tarball, (pkg, (ver, (ord, oasis_fn)))))->
        let strip = 
          ExtString.String.strip 
@@ -117,7 +120,7 @@ let upload_step3 =
           *)
          Lwt_unix.sleep 1.0
          >>= fun () ->
-         return (preapply upload_step4 tarball))
+         return (preapply (upload_step4 ()) tarball))
 
 (* 
  *  
@@ -128,7 +131,7 @@ let upload_step3 =
  *)
 
 let upload_step2 = 
-  register_new_service
+  Defer.register_new_service
     ~path:["upload_step2"]
     ~get_params:(string "tarball")
     (fun sp tarball _ ->
@@ -185,7 +188,7 @@ let upload_step2 =
 
                  let f = 
                    post_form 
-                     ~service:upload_step3
+                     ~service:(upload_step3 ())
                      ~sp
                      (fun (publink, (tarball_param, (pkg, (ver, (ord, oasis_fn))))) ->
                         [p 
@@ -266,10 +269,13 @@ let upload_step2 =
  *
  *)
 
+let upload_step1_no_post = 
+  upload_step_no_post ~path:["upload_step1"]
+
 let upload_step1 = 
-  Eliom_predefmod.Redirection.register_new_post_service
+  Defer.Redirection.register_new_post_service
     ~post_params:(string "publink" ** file "tarball")
-    ~fallback:(upload_step_no_post ~path:["upload_step1"])
+    ~fallback:upload_step1_no_post
     (fun sp _ (publink, tarball_fd)->
        let t =
          let publink = 
@@ -295,7 +301,7 @@ let upload_step1 =
           *)
          Lwt_unix.sleep 1.0
          >>= fun () ->
-         return (preapply upload_step2 tarball))
+         return (preapply (upload_step2 ()) tarball))
 
 (* 
  *
@@ -303,13 +309,13 @@ let upload_step1 =
  *
  *)
 
-let _ = 
-  register 
-    upload
+let upload_handler =
+  Defer.register 
+    upload 
     (fun sp () () ->
        let f = 
          post_form 
-           ~service:upload_step1
+           ~service:(upload_step1 ())
            ~sp
            (fun (publink, tarball) ->
               [p [pcdata (s_ "Tarball: ");
@@ -329,4 +335,13 @@ let _ =
        in
          page_template sp (s_ "Upload packages") Account.box 
            [f])
+
+let init () = 
+  upload_handler ();
+  ignore (upload_step4 ());
+  ignore (upload_step3_no_post ());
+  ignore (upload_step3 ());
+  ignore (upload_step2 ());
+  ignore (upload_step1_no_post ());
+  ignore (upload_step1 ())
 

@@ -2,13 +2,17 @@
 open Inotify
 
 let () =
-  let fn, cmd, args =
+  let fn, args =
     match Array.to_list Sys.argv with 
-      | _ :: fn :: cmd :: args ->
-          fn, cmd, args
+      | _ :: fn :: args ->
+          fn, args
       | _ ->
           failwith 
-            "Bad command line, should be 'inrestart fn cmd*'"
+            "Bad command line, should be 'inrestart prog args*'"
+  in
+
+  let fn_bak =
+    fn^".bak"
   in
 
   let fd = 
@@ -39,14 +43,17 @@ let () =
   in
 
   let cmdline = 
-    String.concat " " (cmd :: args)
+    String.concat " " (fn_bak :: args)
   in
 
   let run () = 
+    Printf.printf "Copy '%s' to '%s'\n%!" fn fn_bak;
+    FileUtil.cp [fn] fn_bak;
+    Unix.chmod fn_bak 0o700;
     Printf.printf "Running '%s'.\n%!" cmdline;
     Unix.create_process 
-      cmd 
-      (Array.of_list (cmd :: args)) 
+      fn_bak
+      (Array.of_list (fn_bak :: args)) 
       Unix.stdin
       Unix.stdout
       Unix.stderr
@@ -110,5 +117,7 @@ let () =
 
            ())
         (Inotify.read fd)
-    done
+    done;
+    (* Never reached... but this is what we should do *)
+    Unix.close fd
 

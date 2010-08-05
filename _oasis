@@ -27,7 +27,7 @@ if flag(gettext)
 
 Library "oasis-db"
   Path: src/lib
-  CompiledObject: Byte
+  CompiledObject: Best
   Modules: ODBUtils,
            ODBConf,
            ODBGettext,
@@ -60,10 +60,10 @@ Flag oasis_db_ocsigen
   Default: false
 
 Library "oasis-db-ocsigen"
-  FindlibParent:   oasis-db
+  FindlibParent: oasis-db
   FindlibName: ocsigen
   Path: src/web
-  CompiledObject:  Byte
+  CompiledObject: Best
   Build$: flag(oasis_db_ocsigen)
   Modules: Index,
            Account,
@@ -74,7 +74,9 @@ Library "oasis-db-ocsigen"
            Dist,
            Upload,
            Mkd,
-           Context
+           Context,
+           Defer,
+           Init
   BuildDepends: oasis-db, 
                 ocsigen, 
                 pgocaml, 
@@ -82,6 +84,21 @@ Library "oasis-db-ocsigen"
                 threads, 
                 calendar,
                 markdown, markdown.html
+
+Executable "oasis-server"
+  Path: src/web
+  CompiledObject: Native
+  Build$: flag(oasis_db_ocsigen)
+  MainIs: Main.ml
+  BuildDepends: oasis-db.ocsigen, 
+                threads, 
+                ocsigen.ext.staticmod,
+                ocsigen.ext.ocsipersist-sqlite,
+                ocsigen.ext.eliom,
+                ocsigen.ext.staticmod,
+                ocsigen.server,
+                ocsigen.commandline
+
   
 Executable FakeIncoming
   Path: test
@@ -100,4 +117,4 @@ Test main
 Executable inrestart 
   Path:         src/tools/inrestart
   MainIs:       Main.ml
-  BuildDepends: inotify, unix 
+  BuildDepends: inotify, unix, fileutils

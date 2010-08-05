@@ -10,9 +10,6 @@ open ODBVer
 open CalendarLib
 open Template
 
-let _ = 
-  ODBMain.run ~ctxt:(Context.get ()) ()
-
 type t = 
   {
     num_packages: int;
@@ -113,8 +110,8 @@ let info () =
     }
     pkg_lst
 
-let _ = 
-  register
+let home_handler = 
+  Defer.register
     home
     (fun sp () () ->
       info () 
@@ -146,15 +143,13 @@ let _ =
                          in
                            li 
                              [a 
-                                (preapply 
-                                  Browse.browse_pkg_ver 
-                                  (pkg, ver_s))
+                                (Browse.browse_pkg_ver ())
                                 sp
                                 [pcdata 
                                    (Printf.sprintf 
                                       (f_ "%s v%s (%s)")
                                       pkg ver_s date)]
-                             ()]
+                                (pkg, ver_s)]
                        in
                          ul (to_li hd) (List.map to_li tl)
                      end
@@ -186,8 +181,8 @@ let _ =
         ])
 
 
-let _ = 
-  register 
+let contribute_handler = 
+  Defer.register 
     contribute
     (fun sp () () ->
        Mkd.load "contribute"
@@ -195,11 +190,16 @@ let _ =
        page_template sp (s_ "Contribute") Account.box 
          ((h2 [pcdata "Contribute"]) :: contribute_html))
 
-let _ = 
-  register 
+let about_handler = 
+  Defer.register 
     about
     (fun sp () () ->
        Mkd.load "about"
        >>= fun about_html ->
          page_template sp (s_ "About this website") Account.box
            ((h2 [pcdata "About"]) :: about_html))
+
+let init () = 
+  home_handler ();
+  contribute_handler ();
+  about_handler ()

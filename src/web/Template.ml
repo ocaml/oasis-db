@@ -8,20 +8,11 @@ open Eliom_predefmod.Xhtml
 open ODBGettext
 
 (* Main services *)
-let home = 
-  new_service ["home"] unit ()
-
-let browse =
-  new_service ["browse"] unit ()
-
-let upload = 
-  new_service ["upload"] unit () 
-
-let contribute = 
-  new_service ["contribute"] unit ()
-
-let about =
-  new_service ["about"] unit ()
+let home       = Defer.new_service ["home"] unit
+let browse     = Defer.new_service ["browse"] unit
+let upload     = Defer.new_service ["upload"] unit
+let contribute = Defer.new_service ["contribute"] unit 
+let about      = Defer.new_service ["about"] unit
 
 let mk_static_uri sp path =
   make_uri
@@ -82,7 +73,7 @@ let page_template sp ?(extra_headers=[]) ttl account_box content =
                [div ~a:[a_id "top"]
                   [div ~a:[a_id "header"]
                      [h1 
-                        [a home sp [pcdata "OASIS DB"] ()];
+                        [a (home ()) sp [pcdata "OASIS DB"] ()];
                       div ~a:[a_id "subtitle"]
                         [pcdata (s_ "an OCaml packages archive")]];
                    
@@ -90,10 +81,10 @@ let page_template sp ?(extra_headers=[]) ttl account_box content =
 
                    div ~a:[a_id "menu"]
                      [ul
-                        (li [a home sp       [pcdata (s_ "Home")] ()])
-                        [li [a browse sp     [pcdata (s_ "Browse")] ()];
-                         li [a upload sp     [pcdata (s_ "Upload")] ()];
-                         li [a contribute sp [pcdata (s_ "Contribute")] ()]]];
+                        (li [a (home ()) sp       [pcdata (s_ "Home")] ()])
+                        [li [a (browse ()) sp     [pcdata (s_ "Browse")] ()];
+                         li [a (upload ()) sp     [pcdata (s_ "Upload")] ()];
+                         li [a (contribute ()) sp [pcdata (s_ "Contribute")] ()]]];
 
                    div ~a:[a_id "content"]
                      content;
@@ -114,10 +105,23 @@ let page_template sp ?(extra_headers=[]) ttl account_box content =
                            janest_logo]);
 
                        (div ~a:[a_class ["links"]]
-                          [a about sp [pcdata (s_ "About this website")] ()]);
+                          [a (about ()) sp [pcdata (s_ "About this website")] ()]);
                      ]]])))
 
-let _ =
+let fake_content = 
+  return 
+    (html
+       (head (title (pcdata "Fake")) [])
+       (body [p [pcdata "This is a fake"]]))
+
+let init () =
+  
+  let () = 
+    List.iter 
+      (fun f -> ignore (f ()))
+      [home; browse; upload; contribute; about]
+  in
+
   (* Empty account box for errors *)
   let _account_box _ = 
     []

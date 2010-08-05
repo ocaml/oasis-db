@@ -138,7 +138,7 @@ let service_uri ~sp service =
       suff
 
 let account_ext = 
-  Eliom_services.new_external_service
+  new_external_service
     ~prefix:"http://localhost"
     ~path:["~gildor"; "account-ext.php"]
     ~get_params:(string "action" ** 
@@ -153,13 +153,13 @@ let logout_ext sp =
   mk_account sp "logout"
 
 let my_account =
-  new_service ["my_account"] unit ()
+  Defer.new_service ["my_account"] unit
 
 let login_ext sp =
   preapply 
     account_ext 
     ("login", 
-     service_uri ~sp my_account)
+     service_uri ~sp (my_account ()))
 
 let new_account_ext sp =
   mk_account sp "new"
@@ -171,7 +171,7 @@ let lost_passwd_ext sp =
   mk_account sp "lost_passwd"
 
 let new_account = 
-  new_service ["new_account"] unit ()
+  Defer.new_service ["new_account"] unit 
 
 let box sp = 
   (account sp)
@@ -181,15 +181,15 @@ let box sp =
         return 
           [ul 
              (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
-             [li [a my_account sp  [pcdata (s_ "My account")] ()]]]
+             [li [a (my_account ()) sp  [pcdata (s_ "My account")] ()]]]
      | None ->
          return 
            [ul
               (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
-              [li [a new_account sp [pcdata (s_ "New account")] ()]]])
+              [li [a (new_account ()) sp [pcdata (s_ "New account")] ()]]])
 
-let _ = 
-  register
+let new_account_handler = 
+  Defer.register
     new_account
     (fun sp () () ->
        page_template sp (s_ "New account") box
@@ -224,7 +224,7 @@ let _ =
          ])
 
 let account_settings = 
-  register_new_service
+  Defer.register_new_service
     ~path:["account"; "settings"]
     ~get_params:unit
     (fun sp () () -> 
@@ -261,3 +261,8 @@ let account_settings =
               | None ->
                   [p [pcdata "Not logged in"]])))
 
+let init () = 
+  ignore (my_account ());
+  ignore (new_account ());
+  ignore (new_account_handler ());
+  ignore (account_settings ())
