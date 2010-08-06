@@ -254,3 +254,19 @@ h3 { color: #555; font-size; medium;}
 #browse th {
   text-align: left;
 }
+
+#dev_warning {
+  text-align: center;
+  width: 80%;
+  background: white;
+  border: solid 2px red;
+  margin-top: 0.5em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#dev_warning p {
+  color: red;
+  font-weight: bold;
+}
+

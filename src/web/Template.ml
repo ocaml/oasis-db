@@ -86,6 +86,28 @@ let page_template sp ?(extra_headers=[]) ttl account_box content =
                          li [a (upload ()) sp     [pcdata (s_ "Upload")] ()];
                          li [a (contribute ()) sp [pcdata (s_ "Contribute")] ()]]];
 
+                   if ODBConf.dev then
+                     div ~a:[a_id "dev_warning"]
+                       [
+                         p [pcdata 
+                              (Printf.sprintf
+                                 (f_ "This is the development version %s of \
+                                   OASIS-DB. Packages uploaded here will be \
+                                   removed. Use this website to test your \
+                                   packages or help the OASIS-DB project to \
+                                   find bugs.")
+                                 ODBConf.version)];
+                         XHTML.M.a
+                           ~a:[a_href (uri_of_string "https://forge.ocamlcore.org/tracker/?group_id=54")]
+                           [pcdata (s_ "Submit bug reports or feature requests")];
+                         pcdata " | ";
+                         XHTML.M.a
+                           ~a:[a_href (uri_of_string "http://oasis.ocamlcore.org/")]
+                           [pcdata (s_ "Go to the real OASIS-DB website")];
+                       ]
+                   else
+                     pcdata "";
+
                    div ~a:[a_id "content"]
                      content;
 
