@@ -10,20 +10,21 @@ open Eliom_sessions
 open Eliom_predefmod.Files
 open ODBVer
 open ODBContext
+open Context
 
 let dist = 
   Defer.Files.register_new_service 
     ~path:["dist"]
     ~get_params:(suffix (all_suffix "path"))
     (fun sp lst () ->
-       let ctxt =
-         Context.get ()
-       in
+       Context.get ~sp ()
+       >>= fun ctxt ->
+
        let fn = 
          FilePath.make_filename 
-           (ctxt.dist_dir :: lst)
+           (ctxt.odb.dist_dir :: lst)
        in
-         if FilePath.is_subdir ctxt.dist_dir fn then
+         if FilePath.is_subdir ctxt.odb.dist_dir fn then
            (* TODO: log *)
            fail
              Eliom_common.Eliom_404
@@ -46,7 +47,7 @@ let a_dist ~sp ~ctxt ver fcontent fn =
      FileUtil.pwd ()
    in
      FilePath.make_relative 
-       (FilePath.make_absolute pwd ctxt.dist_dir)
+       (FilePath.make_absolute pwd ctxt.odb.dist_dir)
        (FilePath.make_absolute pwd fn)
  in
 

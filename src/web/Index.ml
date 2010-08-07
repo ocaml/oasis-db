@@ -110,6 +110,13 @@ let info () =
     }
     pkg_lst
 
+let default_page = 
+  Defer.Redirection.register_new_service
+    ~path:[""]
+    ~get_params:unit
+    (fun sp () () ->
+       return (home ()))
+
 let home_handler = 
   Defer.register
     home
@@ -118,7 +125,13 @@ let home_handler =
       >>= fun t ->
       Mkd.load "introduction" 
       >>= fun intro_html ->
-      page_template sp (s_ "Home") Account.box
+      unauth_template 
+        ~sp 
+        ~title:(OneTitle (s_ "Home"))
+        ~div_id:"home"
+        ()
+      >>= fun (_, tmpl) ->
+      tmpl
         [
           div ~a:[a_class ["introduction"]] intro_html;
 
@@ -195,8 +208,13 @@ let contribute_handler =
     (fun sp () () ->
        Mkd.load "contribute"
        >>= fun contribute_html ->
-       page_template sp (s_ "Contribute") Account.box 
-         ((h2 [pcdata "Contribute"]) :: contribute_html))
+       unauth_template 
+         ~sp 
+         ~title:(OneTitle (s_ "Contribute"))
+         ~div_id:"contribute"
+         ()
+       >>= fun (_, tmpl) ->
+       tmpl contribute_html)
 
 let about_handler = 
   Defer.register 
@@ -204,10 +222,16 @@ let about_handler =
     (fun sp () () ->
        Mkd.load "about"
        >>= fun about_html ->
-         page_template sp (s_ "About this website") Account.box
-           ((h2 [pcdata "About"]) :: about_html))
+       unauth_template 
+         ~sp 
+         ~title:(OneTitle (s_ "About this website"))
+         ~div_id:"about"
+         () 
+       >>= fun (_, tmpl) ->
+       tmpl about_html)
 
 let init () = 
   home_handler ();
   contribute_handler ();
-  about_handler ()
+  about_handler ();
+  ignore (default_page ())

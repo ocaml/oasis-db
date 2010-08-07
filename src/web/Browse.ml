@@ -9,6 +9,7 @@ open CalendarLib
 open ODBVer
 open OASISTypes
 open ODBGettext
+open Context
 open Template
 
 module BuildDepends =
@@ -163,7 +164,9 @@ let oasis_fields pkg =
        *)
     ]
 
-let mk_version_page ~sp ~ctxt fver = 
+let mk_version_page ~sp fver = 
+  Context.get ~sp () 
+  >>= fun ctxt ->
   catch 
     (fun () -> 
        (* Versions (current, all and latest) *)
@@ -194,8 +197,7 @@ let mk_version_page ~sp ~ctxt fver =
               ODBStorage.OASIS
             >>= 
             ODBOASIS.from_file 
-              (* TODO: don't use default context *)
-              ~ctxt:ODBContext.default
+              ~ctxt:ctxt.odb
               ~ignore_plugins:true
             >>= fun pkg ->
             return (Some pkg))
@@ -286,68 +288,68 @@ let mk_version_page ~sp ~ctxt fver =
        let browser_ttl =
          Printf.sprintf (f_ "%s v%s") ver.pkg (sov ver.ver)
        in
-       let ttl = 
+       let page_ttl = 
          match synopsis with 
            | Some s -> Printf.sprintf (f_ "%s: %s") ver.pkg s
            | None   -> ver.pkg
        in
 
          (* The page itself *)
-         page_template sp browser_ttl Account.box
+         unauth_template ~sp 
+           ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
+           ~div_id:"browse" 
+           ()
+         >>= fun (_, tmpl) ->
+         tmpl
            [
-             h2 [pcdata ttl];
-     
-             div 
-               ~a:[a_id "browse"]
-               [
-                 (match description with 
-                    | Some txt -> 
-                        div 
-                          ~a:[a_id "description"]
-                          (MarkdownHTML.to_html
-                             ~render_link:(fun _ -> i [pcdata "link removed"])
-                             ~render_img:(fun _ -> i [pcdata "image removed"])
-                             ~render_pre:(fun ~kind s -> pre [pcdata s])
-                             (Markdown.parse_text txt))
-                    | None -> 
-                        pcdata "");
-     
-                 table 
-                   (field 
-                      "odd" 
-                      ("versions", (s_ "Versions: "), versions_field))
-                   (even_fields
-                      (extra_fields
-                       @
-                       [
-                         Some 
-                           ("upload_date",
-                            s_ "Upload date: ",
-                            [pcdata (Printer.Calendar.to_string ver.upload_date)]);
-     
-                         Some 
-                           ("upload_method",
-                            s_ "Upload method: ",
-                            [pcdata (string_of_upload_method ver.upload_method)]);
-     
-                         Some 
-                           ("downloads",
-                            s_ "Downloads: ",
-                            begin
-                              match ver.publink with 
-                                | Some url ->
-                                    [
-                                      (XHTML.M.a 
-                                         ~a:[a_href (uri_of_string url)]
-                                         [b 
-                                            [pcdata 
-                                               (FilePath.basename fn_backup)]]);
-                                      a_backup
-                                    ]
-                                | None ->
-                                    [a_backup]
-                            end);
-                       ]))]])
+             (match description with 
+                | Some txt -> 
+                    div 
+                      ~a:[a_id "description"]
+                      (MarkdownHTML.to_html
+                         ~render_link:(fun _ -> i [pcdata "link removed"])
+                         ~render_img:(fun _ -> i [pcdata "image removed"])
+                         ~render_pre:(fun ~kind s -> pre [pcdata s])
+                         (Markdown.parse_text txt))
+                | None -> 
+                    pcdata "");
+ 
+             table 
+               (field 
+                  "odd" 
+                  ("versions", (s_ "Versions: "), versions_field))
+               (even_fields
+                  (extra_fields
+                   @
+                   [
+                     Some 
+                       ("upload_date",
+                        s_ "Upload date: ",
+                        [pcdata (Printer.Calendar.to_string ver.upload_date)]);
+ 
+                     Some 
+                       ("upload_method",
+                        s_ "Upload method: ",
+                        [pcdata (string_of_upload_method ver.upload_method)]);
+ 
+                     Some 
+                       ("downloads",
+                        s_ "Downloads: ",
+                        begin
+                          match ver.publink with 
+                            | Some url ->
+                                [
+                                  (XHTML.M.a 
+                                     ~a:[a_href (uri_of_string url)]
+                                     [b 
+                                        [pcdata 
+                                           (FilePath.basename fn_backup)]]);
+                                  a_backup
+                                ]
+                            | None ->
+                                [a_backup]
+                        end);
+                   ]))])
     (function
        | Not_found ->
            fail Eliom_common.Eliom_404
@@ -358,22 +360,16 @@ let browse_pkg_ver_handler =
   Defer.register 
     browse_pkg_ver
     (fun sp (pkg, ver) () ->
-       let ctxt =
-         Context.get ()
-       in
-         mk_version_page ~sp ~ctxt
-           (fun () -> ODBStorage.version pkg ver))
+       mk_version_page ~sp 
+         (fun () -> ODBStorage.version pkg ver))
 
 let browse_pkg =
   Defer.register_new_service 
     ~path:["browse"]
     ~get_params:(string "pkg")
     (fun sp pkg () ->
-       let ctxt =
-         Context.get ()
-       in
-         mk_version_page ~sp ~ctxt
-           (fun () -> ODBStorage.version_latest pkg))
+       mk_version_page ~sp
+         (fun () -> ODBStorage.version_latest pkg))
 
 
 let edit_info =
@@ -384,8 +380,9 @@ let edit_info =
        let ttl =
          Printf.sprintf (f_ "Edit %s v%s") pkg ver
        in
-         page_template sp ttl Account.box
-            [h2 [pcdata ttl]])
+         auth_template ~sp ~title:(OneTitle ttl) ~div_id:"edit_info" ()
+         >>= fun (_, tmpl, _) ->
+           tmpl [])
 
 let a_edit_info sp (pkg,ver) = 
   a (edit_info ()) sp [pcdata (s_ "Edit version")] (pkg, ver)
@@ -397,6 +394,8 @@ let browse_handler =
   Defer.register
     browse
     (fun sp () () ->
+      Context.get ~sp () 
+      >>= fun ctxt ->
       ODBStorage.packages () 
       >>= 
       Lwt_list.map_s
@@ -411,18 +410,21 @@ let browse_handler =
                   ODBStorage.OASIS
                 >>= 
                 ODBOASIS.from_file 
-                  (* TODO: don't use default context *)
-                  ~ctxt:ODBContext.default
+                  ~ctxt:ctxt.odb
                   ~ignore_plugins:true
                 >>= fun oasis ->
                 return (pkg, ver, Some oasis))
              (fun e ->
                 return (pkg, ver, None)))
       >>= fun pkg_lst ->
-      page_template sp (s_ "Browse packages") Account.box
+      unauth_template 
+        ~sp 
+        ~title:(BrowserAndPageTitle (s_ "Browse", s_ "Packages by category"))
+        ~div_id:"browse"
+        ()
+      >>= fun (_, tmpl) ->
+      tmpl
         [
-          h2 [pcdata (s_ "Packages by category")];
-
           (* TODO: category list + group by category *)
           
           begin

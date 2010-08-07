@@ -10,28 +10,34 @@ open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod.Xhtml
 open ODBGettext
-open Template
 open SQL
-
-type role = 
-  | Anon
-  | User 
-  | Admin
-
-let string_of_role =
-  function
-    | Anon  -> "anonymous"
-    | User  -> "user"
-    | Admin -> "administrator"
 
 type account =
     {
-      id:   int32;
-      name: string;
-      role: role;
+      accnt_id:   int32;
+      accnt_name: string;
     }
 
-let account sp = 
+type t = 
+  | Anon
+  | User of account 
+  | Admin of account
+
+let string_of_role =
+  function
+    | Anon  -> s_ "anonymous"
+    | User accnt -> 
+        Printf.sprintf 
+          (f_ "user %s") 
+          accnt.accnt_name
+
+    | Admin accnt -> 
+        Printf.sprintf 
+          (f_ "administrator %s")
+          accnt.accnt_name
+
+
+let get ~sp () = 
   let the =
     function 
       | Some i -> i
@@ -39,26 +45,27 @@ let account sp =
   in
    catch 
      (fun () ->
-        (let cookies =
-           Eliom_sessions.get_cookies sp
-         in
-           try 
-             return 
-               (Netencoding.Url.decode
-                  (Ocsigen_lib.String_Table.find 
-                     "account_ext_token"
-                     cookies))
-           with Not_found ->
-             fail 
-               (Failure (s_ "Forge cookie not found")))
+        let cookies =
+          Eliom_sessions.get_cookies sp
+        in
+          begin
+            try 
+              return 
+                 (Netencoding.Url.decode
+                    (Ocsigen_lib.String_Table.find 
+                       "account_ext_token"
+                       cookies))
+             with Not_found ->
+               fail 
+                 (Failure (s_ "Forge cookie not found"))
+          end
 
-        >>=
-        (fun token ->
-           Lwt_pool.use SQL.pool
-             (fun db -> 
-                PGSQL(db) 
-                  "SELECT user_id, realname FROM account_ext \
-                     WHERE token = $token"))
+        >>= fun token ->
+          Lwt_pool.use SQL.pool
+            (fun db -> 
+               PGSQL(db) 
+                 "SELECT user_id, realname FROM account_ext \
+                     WHERE token = $token")
 
         >>= 
         (function
@@ -70,17 +77,16 @@ let account sp =
         >>= 
         (fun (user_id, realname) ->
            return
-             (Some
+             (User
                 {
-                  id   = the user_id;
-                  name = the realname;
-                  role = User;
+                  accnt_id   = the user_id;
+                  accnt_name = the realname;
                 }))
      )
      
      (function
         | Failure msg ->
-            return None
+            return Anon
         | e ->
             fail e)
 
@@ -176,96 +182,27 @@ let lost_passwd_ext sp =
 let new_account = 
   Defer.new_service ["new_account"] unit 
 
-let box sp = 
-  (account sp)
+let box ?role sp = 
+  begin
+    match role with 
+      | Some role ->
+          return role
+      | None ->
+          (get ~sp ())
+  end
   >>=
   (function 
-    | Some _ ->
+    | User _ | Admin _->
         return 
           [ul 
              (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
              [li [a (my_account ()) sp  [pcdata (s_ "My account")] ()]]]
-     | None ->
+     | Anon ->
          return 
            [ul
               (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
               [li [a (new_account ()) sp [pcdata (s_ "New account")] ()]]])
 
-let new_account_handler = 
-  Defer.register
-    new_account
-    (fun sp () () ->
-       page_template sp (s_ "New account") box
-         [
-           h2 [pcdata (s_ "New account")];
-           p [pcdata 
-                (s_ 
-                   "Browsing OASIS-DB web interface is available to all. \
-                   However, editing OASIS-DB and uploading packages require \
-                   a username and password.")];
-
-           h3 [pcdata (s_ "Getting an OASIS-DB username")];
-           p [pcdata 
-                (s_
-                   "OASIS-DB and OCaml forge share accounts information. 
-                    If you need a username, you must create an account on \
-                    OCaml forge.")];
-
-           p [a (new_account_ext sp) sp 
-                [pcdata (s_ "Create an account on OCaml forge")] ()];
-
-
-           h3 [pcdata (s_ "Lost password")];
-           p [pcdata 
-                (s_ 
-                   "Passwords are managed by OCaml forge. In order to recover \
-                    your password, just follow the password recovery process \
-                    of the forge.")];
-
-           p [a (lost_passwd_ext sp) sp
-                [pcdata (s_ "Reset your password on OCaml forge")] ()];
-         ])
-
-let account_settings = 
-  Defer.register_new_service
-    ~path:["account"; "settings"]
-    ~get_params:unit
-    (fun sp () () -> 
-       (account sp)
-       >>=
-       (fun accnt ->
-          page_template sp (s_ "Account settings") box 
-            (match accnt with 
-               | Some accnt ->
-                   [
-                     h2 [pcdata (s_ "Manage account")];
-                     p [pcdata 
-                          (s_ "OASIS-DB use two kinds of information: the one stored \
-                             in its own database and the one coming from OCaml forge. \
-                             You can edit the first one here but you need to go to \
-                             OCaml forge to edit the later.")];
-
-                     h2 [pcdata (s_ "OCaml forge information")];
-
-                     table
-                       (tr
-                          (td [pcdata (s_ "Name")])
-                          [td [pcdata accnt.name]])
-                       [tr
-                          (td [pcdata (s_ "Role")])
-                          [td [pcdata (string_of_role accnt.role)]]
-                       ];
-
-                     p [a (manage_account_ext sp) sp
-                          [pcdata (s_ "Edit settings on OCaml forge")] ()];
-
-                     h2 [pcdata (s_ "Local information")];
-                   ]
-              | None ->
-                  [p [pcdata "Not logged in"]])))
-
 let init () = 
   ignore (my_account ());
   ignore (new_account ());
-  ignore (new_account_handler ());
-  ignore (account_settings ())

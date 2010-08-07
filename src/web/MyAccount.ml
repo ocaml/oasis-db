@@ -9,6 +9,8 @@ open CalendarLib
 open ODBGettext
 open Lwt
 open Template
+open Context
+open Account
 
 type log_level =
   | Error
@@ -20,6 +22,42 @@ let string_of_log_level =
     | Error   -> s_ "Error"
     | Warning -> s_ "Warning"
     | Info    -> s_ "Info"
+
+let account_settings = 
+  Defer.register_new_service
+    ~path:["account"; "settings"]
+    ~get_params:unit
+    (fun sp () () -> 
+       auth_template 
+         ~sp 
+         ~title:(OneTitle (s_ "Account settings"))
+         ~div_id:"account_settings"
+         () 
+       >>= fun (ctxt, tmpl, accnt) ->
+       tmpl
+         [
+           p [pcdata 
+                (s_ "OASIS-DB use two kinds of information: the one stored \
+                   in its own database and the one coming from OCaml forge. \
+                   You can edit the first one here but you need to go to \
+                   OCaml forge to edit the later.")];
+
+           h2 [pcdata (s_ "OCaml forge information")];
+
+           table
+             (tr
+                (td [pcdata (s_ "Name")])
+                [td [pcdata accnt.accnt_name]])
+             [tr
+                (td [pcdata (s_ "Role")])
+                [td [pcdata (string_of_role ctxt.role)]]
+             ];
+
+           p [a (manage_account_ext sp) sp
+                [pcdata (s_ "Edit settings on OCaml forge")] ()];
+
+           h2 [pcdata (s_ "Local information")];
+         ])
 
 let my_account_handler = 
   Defer.register
@@ -54,29 +92,35 @@ let my_account_handler =
            Browse.a_browse_pkg_ver sp ("ocaml-fileutils", "0.4.1")])
 
        (* Display events list *)
-       >>=
-       (fun events ->
-          page_template sp (s_ "My account") Account.box
-            [h2 [pcdata (s_ "My account")];
+       >>= fun events ->
+       auth_template 
+         ~sp 
+         ~title:(OneTitle (s_ "My account"))
+         ~div_id:"my_account"
+         ()
+       >>= fun (_, tmpl, accnt) ->
+       tmpl
+         [
+          p [pcdata (Printf.sprintf (f_ "Hello %s!") accnt.accnt_name)];
+          table
+            (tr 
+               (th [pcdata (s_ "Date")])
+               [th [pcdata (s_ "Type")];
+                th [pcdata (s_ "Description")];
+                th [pcdata (s_ "Link")]])
+            (List.map 
+               (fun (date, log_lvl, descr, lnk) ->
+                  tr
+                    (td [pcdata (Printer.Calendar.to_string date)])
+                    [td [pcdata (string_of_log_level log_lvl)];
+                     td [pcdata descr];
+                     td [lnk]])
+               events);
 
-             table
-               (tr 
-                  (th [pcdata (s_ "Date")])
-                  [th [pcdata (s_ "Type")];
-                   th [pcdata (s_ "Description")];
-                   th [pcdata (s_ "Link")]])
-               (List.map 
-                  (fun (date, log_lvl, descr, lnk) ->
-                     tr
-                       (td [pcdata (Printer.Calendar.to_string date)])
-                       [td [pcdata (string_of_log_level log_lvl)];
-                        td [pcdata descr];
-                        td [lnk]])
-                  events);
-
-             p [a (Account.account_settings ()) sp 
-                  [pcdata (s_ "Account settings")] ()];
-            ]))
+          p [a (account_settings ()) sp 
+               [pcdata (s_ "Account settings")] ()];
+         ])
 
 let init () =
-  my_account_handler ()
+  my_account_handler ();
+  ignore (account_settings ())

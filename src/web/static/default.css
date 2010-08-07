@@ -39,15 +39,23 @@ h3 { color: #555; font-size; medium;}
   padding-right: 20em;
 }
 
-#header h1
+#header #title
 {
+  font-weight: bold;
+  font-size: xx-large;
+  padding-left: 70px;
 	padding-top: 0;
 }
 
-#header h1 a 
+#header #title a 
 {
-  padding-left: 70px;
+  color: black;
   text-decoration: none;
+}
+
+#header #title a:hover
+{
+  text-decoration: underline;
 }
 
 #header #subtitle
@@ -243,3 +251,7 @@ h3 { color: #555; font-size; medium;}
   font-weight: bold;
 }
 
+.error {
+  font-size: larger;
+  color: red;
+}

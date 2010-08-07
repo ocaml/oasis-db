@@ -70,6 +70,7 @@ Library "oasis-db-ocsigen"
            Account,
            Template,
            MyAccount,
+           NewAccount,
            Browse,
            SQL,
            Dist,
