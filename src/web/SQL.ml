@@ -16,12 +16,7 @@ open Lwt
 type db_t = (string, bool) Hashtbl.t PGOCaml.t
 
 let connect () =
-    PGOCaml.connect 
-      ~database:"account_ext" 
-      ~user:"account_ext_3rdparty"
-      ~password:"iV9Goo3w"
-      ~host:"localhost"
-      ()
+    PGOCaml.connect ()
 
 let pool = Lwt_pool.create 16 connect
 

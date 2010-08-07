@@ -138,16 +138,19 @@ let service_uri ~sp service =
       suff
 
 let account_ext = 
-  new_external_service
-    ~prefix:"http://localhost"
-    ~path:["~gildor"; "account-ext.php"]
-    ~get_params:(string "action" ** 
-                 string "redirect") 
-    ~post_params:unit
-    ()
+  if ODBConf.dev then
+    AccountStub.main
+  else
+    Defer.new_external_service
+      ~prefix:"http://localhost"
+      ~path:["~gildor"; "account-ext.php"]
+      ~get_params:(string "action" ** 
+                   opt (string "redirect"))
+      ~post_params:unit
+      ()
 
 let mk_account sp action =
-  preapply account_ext (action, self_uri ~sp)
+  preapply (account_ext ()) (action, Some (self_uri ~sp))
 
 let logout_ext sp =
   mk_account sp "logout"
@@ -157,9 +160,9 @@ let my_account =
 
 let login_ext sp =
   preapply 
-    account_ext 
+    (account_ext ()) 
     ("login", 
-     service_uri ~sp (my_account ()))
+     Some (service_uri ~sp (my_account ())))
 
 let new_account_ext sp =
   mk_account sp "new"

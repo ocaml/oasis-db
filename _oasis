@@ -66,6 +66,7 @@ Library "oasis-db-ocsigen"
   CompiledObject: Best
   Build$: flag(oasis_db_ocsigen)
   Modules: Index,
+           AccountStub,
            Account,
            Template,
            MyAccount,

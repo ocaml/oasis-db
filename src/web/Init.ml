@@ -14,6 +14,7 @@ let run () =
     ODBMain.run ~ctxt 
   in
     Template.init ();
+    AccountStub.init ();
     Account.init ();
     MyAccount.init ();
     Browse.init ();

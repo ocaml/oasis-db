@@ -24,6 +24,12 @@ let register service f =
   mk
     (fun () -> Eliom_predefmod.Xhtml.register (service ()) f)
 
+let new_external_service ~prefix ~path ~get_params ~post_params () =
+  mk 
+    (fun () ->
+       Eliom_services.new_external_service 
+         ~prefix ~path ~get_params ~post_params ())
+
 module Files =
 struct 
   let register_new_service ~path ~get_params f =
@@ -46,4 +52,19 @@ struct
       (fun () ->
          Eliom_predefmod.Redirection.register_new_service
            ~path ~get_params f)
+end
+
+module Any =
+struct
+  let register_new_service ~path ~get_params f = 
+    mk 
+      (fun () ->
+         Eliom_predefmod.Any.register_new_service
+           ~path ~get_params f)
+
+  let register_new_post_service ~post_params ~fallback f = 
+    mk
+      (fun () ->
+         Eliom_predefmod.Any.register_new_post_service 
+           ~post_params ~fallback:(fallback ()) f)
 end
