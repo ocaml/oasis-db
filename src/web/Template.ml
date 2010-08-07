@@ -89,6 +89,17 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
              div ~a:[a_id "account"] account_box;
 
              div ~a:[a_id "menu"]
+             (*
+               [Eliom_tools.menu
+                  ~id:"menu"
+                  (home (), [pcdata (s_ "Home")])
+                  [
+                    browse (),     [pcdata (s_ "Browse")];
+                    upload (),     [pcdata (s_ "Upload")];
+                    contribute (), [pcdata (s_ "Contribute")];
+                  ]
+                  ~sp ()];
+              *)
                [ul
                   (li [a (home ()) sp       [pcdata (s_ "Home")] ()])
                   [li [a (browse ()) sp     [pcdata (s_ "Browse")] ()];
