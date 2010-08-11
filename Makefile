@@ -101,7 +101,17 @@ db-create:
 	./src/sql/install.sh
 
 # Sync dev
-DEV_SYNC_DEST=ssh.ocamlcore.org:/home/groups/oasis/oasis-server-dev/
+DEV_HOST=ssh.ocamlcore.org
+DEV_DIR=/home/groups/oasis/oasis-server-dev/
+DEV_SYNC_DEST=$(DEV_HOST):$(DEV_DIR)
 dev-sync: build
-	rsync -av _build/src/web/oasis-server $(DEV_SYNC_DEST)/oasis-server 
-	rsync -av etc src/web/static src/web/mkd $(DEV_SYNC_DEST)
+	ssh $(DEV_HOST) "cd $(DEV_DIR) && ./src/tools/oasis-server-stop.sh || true"
+	rsync -av Makefile src etc _build/src/web/oasis-server $(DEV_SYNC_DEST)
+	ssh $(DEV_HOST) "cd $(DEV_DIR) && ./src/tools/oasis-server-start.sh"
+
+dev-stop: 
+	./src/tools/oasis-server-stop.sh || true
+
+dev-restart:
+	./src/tools/oasis-server-stop.sh || true
+	./src/tools/oasis-server-start.sh
