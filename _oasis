@@ -1,6 +1,6 @@
 OASISFormat: 0.1
 Name:        oasis-db
-Version:     0.1.0
+Version:     0.1.0~alpha1
 Authors:     Sylvain Le Gall
 Copyrights:  (C) 2010 OCamlCore SARL 
 Homepage:    http://oasis.forge.ocamlcore.org/
@@ -14,6 +14,10 @@ Synopsis: Database and web interface of OASIS packages
 
 Description:
   OASIS-DB is a database of OCaml packages using OASIS.
+
+Flag dev
+  Description: Create a dev mode webserver
+  Default: true
 
 Flag gettext
   Description: Use ocaml-gettext for i18n

@@ -1,4 +1,4 @@
 
 let version = "$(pkg_version)"
 
-let dev = "$(dev)"
+let dev = $(dev)
