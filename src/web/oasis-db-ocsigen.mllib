@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 90baa5925db8516d8e9392a8de546004)
+# DO NOT EDIT (digest: 238e4c05f17248bd735cbdd20dd1c13a)
 Index
 AccountStub
 Account
@@ -8,6 +8,7 @@ MyAccount
 NewAccount
 Browse
 SQL
+Log
 Dist
 Upload
 Mkd

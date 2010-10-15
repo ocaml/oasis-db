@@ -162,13 +162,15 @@ let logout_ext sp =
   mk_account sp "logout"
 
 let my_account =
-  Defer.new_service ["my_account"] unit
+  Defer.new_service 
+    ["my_account"] 
+    (opt (int64 "log_offset"))
 
 let login_ext sp =
   preapply 
     (account_ext ()) 
     ("login", 
-     Some (service_uri ~sp (my_account ())))
+     Some (service_uri ~sp (preapply (my_account ()) None)))
 
 let new_account_ext sp =
   mk_account sp "new"
@@ -196,7 +198,7 @@ let box ?role sp =
         return 
           [ul 
              (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
-             [li [a (my_account ()) sp  [pcdata (s_ "My account")] ()]]]
+             [li [a (my_account ()) sp  [pcdata (s_ "My account")] None]]]
      | Anon ->
          return 
            [ul

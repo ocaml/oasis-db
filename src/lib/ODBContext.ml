@@ -16,22 +16,37 @@ type t =
   }
 
 
-let default storage_dir = 
-  {
-    section          = Section.make "oasis-db";
-    logger           = !default;
-    tar              = "tar";
-    unzip            = "unzip";
-    storage_dir      = storage_dir;
-    dist_dir         = FilePath.concat storage_dir "dist";
-    incoming_dir     = FilePath.concat storage_dir "incoming";
-    tmp_dir          = FilePath.concat storage_dir "tmp";
-    min_running_time = 300.0;
-  }
+let default ?logger storage_dir = 
+  let logger =
+    match logger with 
+      | Some l -> l
+      | None -> !Lwt_log.default
+  in
+    {
+      section          = Section.make "oasis-db";
+      logger           = logger;
+      tar              = "tar";
+      unzip            = "unzip";
+      storage_dir      = storage_dir;
+      dist_dir         = FilePath.concat storage_dir "dist";
+      incoming_dir     = FilePath.concat storage_dir "incoming";
+      tmp_dir          = FilePath.concat storage_dir "tmp";
+      min_running_time = 300.0;
+    }
 
 let to_oasis ctxt =
-  (* TODO: redirect context to logger *)
-  !OASISContext.default
+  let printf lvl str = 
+    let level = 
+      match lvl with
+        | `Debug -> Debug
+        | `Info  -> Info 
+        | `Warning -> Warning
+        | `Error -> Error
+    in
+      Lwt.ignore_result (log ~logger:ctxt.logger ~level str)
+  in
+    {!OASISContext.default with 
+         OASISContext.printf = printf}
 
 let sub ctxt nm =
   {ctxt with 

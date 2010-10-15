@@ -224,11 +224,11 @@ h3 { color: #555; font-size; medium;}
   width: 100%;
 }
 
-#browse tr.odd {
+tr.odd {
   background: silver;
 }
 
-#browse tr.even {
+tr.even {
   background: white;
 }
  
@@ -254,4 +254,55 @@ h3 { color: #555; font-size; medium;}
 .error {
   font-size: larger;
   color: red;
+}
+
+/* My account */
+
+#my_account .log_error {
+  color: red;
+}
+
+#my_account .log_warning {
+  color: green;
+}
+
+#my_account .log_info {
+  color: blue;
+}
+
+#my_account table {
+  width: 100%;
+}
+
+#my_account table, tr, td {
+  border-collapse: collapse;
+}
+
+#my_account td {
+/*  border: 1px solid black;*/
+}
+
+#my_account th {
+  background: #EAEAEA;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+}
+
+#my_account th.day {
+  text-align: left;
+}
+
+#my_account th.hour {
+  text-align: center;
+  font-weight: normal;
+  color: black;
+  width: 4em;
+}
+
+#my_account .navigate {
+  text-align: right;
+}
+
+#my_account .navigate span {
+  margin-left: 1em;
 }

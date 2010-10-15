@@ -188,8 +188,15 @@ let action_no_userid sp _ redirect_opt act =
           in
             Eliom_predefmod.Xhtml.send sp (template [f])
 
-      | "lost_password" ->
-          dflt "Lost password"
+      | "new" ->
+          dflt "This page should display account creation of \
+                http://forge.ocamlcore.org, but this is just a stub for test. \
+                Use one of the fake account already created (no password required)."
+
+      | "lost_passwd" ->
+          dflt
+            "This page should display lost password form of \
+            http://forge.ocamlcore.org, but this is just a stub for test."
 
       | str ->
           dflt (Printf.sprintf "Unknown action: %s" str)
@@ -224,7 +231,10 @@ let action_userid sp db user_id token redirect_opt =
         begin
           Eliom_predefmod.Xhtml.send
             ~sp
-            (template [p [pcdata "Manage form"]])
+            (template 
+               [p 
+                  [pcdata "This page should display account as found on \
+                     http://forge.ocamlcore.org, but this is just a stub for test."]])
         end
 
     | act ->

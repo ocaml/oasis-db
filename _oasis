@@ -1,10 +1,10 @@
-OASISFormat: 0.1
+OASISFormat: 0.2
 Name:        oasis-db
-Version:     0.1.0~alpha1
+Version:     0.1.0~alpha2
 Authors:     Sylvain Le Gall
 Copyrights:  (C) 2010 OCamlCore SARL 
 Homepage:    http://oasis.forge.ocamlcore.org/
-Plugins:     DevFiles (0.1.0), StdFiles (0.1.0), META (0.1.0)
+Plugins:     DevFiles (0.2), StdFiles (0.2), META (0.2)
 License:     LGPL-2.1 with OCaml linking exception
 LicenseFile: COPYING.txt
 FilesAB:     src/lib/ODBConf.ml.ab
@@ -77,6 +77,7 @@ Library "oasis-db-ocsigen"
            NewAccount,
            Browse,
            SQL,
+           Log,
            Dist,
            Upload,
            Mkd,

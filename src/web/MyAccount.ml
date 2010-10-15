@@ -11,17 +11,7 @@ open Lwt
 open Template
 open Context
 open Account
-
-type log_level =
-  | Error
-  | Warning
-  | Info
-
-let string_of_log_level =
-  function
-    | Error   -> s_ "Error"
-    | Warning -> s_ "Warning"
-    | Info    -> s_ "Info"
+open Lwt_log
 
 let account_settings = 
   Defer.register_new_service
@@ -62,34 +52,16 @@ let account_settings =
 let my_account_handler = 
   Defer.register
     Account.my_account
-    (fun sp () () ->
+    (fun sp log_offset_opt () ->
+       let log_per_page = 20L in
+       let log_offset = 
+         match log_offset_opt with 
+           | Some n -> n 
+           | None -> 0L 
+       in
 
        (* Compute events list *)
-       (return
-          [Calendar.make 2010 07 08 17 00 01,
-           Error,
-           "Cannot parse '_oasis' file of ocamlnet-3.0.tar.gz",
-           Browse.a_edit_info sp ("ocamlnet", "3.0");
-           
-           Calendar.make 2010 07 08 18 15 01,
-           Error,
-           "Cannot parse '_oasis' file of sexplib310-3.4.tar.bz2",
-           Browse.a_edit_info sp ("sexplib310", "3.4");
-
-           Calendar.make 2010 07 08 18 15 01,
-           Warning,
-           "ocaml-gettext version 0.3.1 uses outdated OASISFormat v0.1",
-           Browse.a_edit_info sp ("ocaml-gettext", "0.3.1");
-
-           Calendar.make 2010 07 05 18 15 01,
-           Info,
-           "New upstream ocaml-gettext version 0.3.1",
-           Browse.a_browse_pkg_ver sp ("ocaml-gettext", "0.3.1");
-
-           Calendar.make 2010 07 07 18 15 01,
-           Info,
-           "New upstream ocaml-fileutils version 0.4.1",
-           Browse.a_browse_pkg_ver sp ("ocaml-fileutils", "0.4.1")])
+       Log.get Log.All Log.LevelAndDate log_offset log_per_page
 
        (* Display events list *)
        >>= fun events ->
@@ -99,27 +71,111 @@ let my_account_handler =
          ~div_id:"my_account"
          ()
        >>= fun (_, tmpl, accnt) ->
-       tmpl
-         [
-          p [pcdata (Printf.sprintf (f_ "Hello %s!") accnt.accnt_name)];
-          table
-            (tr 
-               (th [pcdata (s_ "Date")])
-               [th [pcdata (s_ "Type")];
-                th [pcdata (s_ "Description")];
-                th [pcdata (s_ "Link")]])
-            (List.map 
-               (fun (date, log_lvl, descr, lnk) ->
-                  tr
-                    (td [pcdata (Printer.Calendar.to_string date)])
-                    [td [pcdata (string_of_log_level log_lvl)];
-                     td [pcdata descr];
-                     td [lnk]])
-               events);
+       let user_tz = 
+         Time_Zone.current ()
+       in
 
-          p [a (account_settings ()) sp 
-               [pcdata (s_ "Account settings")] ()];
-         ])
+       let log_level =
+         function
+           | Debug    -> s_ "D", "log_debug" 
+           | Info     -> s_ "I", "log_info"
+           | Notice   -> s_ "N", "log_notice"
+           | Warning  -> s_ "W", "log_warning"
+           | Error    -> s_ "E", "log_error" 
+           | Fatal    -> s_ "F", "log_fatal"
+       in
+
+       let rec mk_lst odd prv_user_date = 
+         function 
+           | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
+               let user_date = 
+                 Calendar.convert date tz user_tz
+               in
+               let same_day =
+                 match prv_user_date with 
+                   | Some prv_user_date ->
+                       List.fold_left 
+                         (fun acc f -> acc && f prv_user_date = f user_date)
+                         true
+                         [Calendar.day_of_year; Calendar.year]
+                   | None ->
+                       false
+               in
+                 if same_day then
+                   begin
+                     let shrt_lvl, class_lvl =
+                       log_level log_lvl
+                     in
+                       (tr
+                          ~a:[a_class [if odd then "odd" else "even"; class_lvl]]
+                          (th
+                             ~a:[a_class ["hour"]]
+                             [pcdata (Printer.Calendar.sprint (s_ "%R") user_date)])
+                          [td [pcdata shrt_lvl];
+                           td [pcdata descr];
+                           td []])
+                       ::
+                       mk_lst (not odd) (Some user_date) tl
+                   end
+                 else
+                   begin
+                     (tr 
+                        (th 
+                           ~a:[a_colspan 4; a_class ["day"]]
+                           [pcdata (Printer.Calendar.sprint (s_ "%F") user_date)])
+                        [])
+                     ::
+                     mk_lst true (Some user_date) lst
+                   end
+
+           | [] ->
+               []
+       in
+
+       let navigation_box = 
+         let mk_item cond offset txt = 
+           if cond then 
+             span ~a:[a_class ["enabled"]]
+               [a 
+                  (my_account ()) sp [pcdata txt] 
+                  (Some (max 0L offset))]
+           else
+             span ~a:[a_class ["disabled"]] 
+               [pcdata txt]
+         in
+
+           [
+             mk_item 
+               (log_offset > 0L)
+               (Int64.sub log_offset log_per_page)
+               (s_ "Previous");
+
+             mk_item
+               (Int64.of_int (List.length events) = log_per_page)
+               (Int64.add log_offset log_per_page)
+               (s_ "Next");
+           ]
+       in
+
+         tmpl
+           [
+            p [pcdata (Printf.sprintf (f_ "Hello %s!") accnt.accnt_name)];
+
+            div ~a:[a_class ["navigate"; "top"]] navigation_box;
+
+            table
+              (tr 
+                 (th [pcdata (s_ "Date")])
+                 [th [pcdata ""];
+                  th [pcdata (s_ "Description")];
+                  th [pcdata (s_ "Link")]])
+              (mk_lst true None events);
+
+            div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
+
+            p [a (account_settings ()) sp 
+                 [pcdata (s_ "Account settings")] ()];
+           ])
 
 let init () =
   my_account_handler ();

@@ -24,14 +24,14 @@
 export PGDATABASE PGUSER PGPASSWORD PGHOST
 
 LWT_LOG=* -> info
-LWT_LOG=* -> debug
+#LWT_LOG=* -> debug
 export LWT_LOG
 
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
 
-#default: test
 default: build
+#default: test
 #TESTFLAGS      += -long 
 #TESTFLAGS      += -verbose
 #TESTFLAGS      += -only-test OASIS:4:Basic:1
