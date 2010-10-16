@@ -198,7 +198,6 @@ let mk_version_page ~sp fver =
             >>= 
             ODBOASIS.from_file 
               ~ctxt:ctxt.odb
-              ~ignore_plugins:true
             >>= fun pkg ->
             return (Some pkg))
          (fun e ->
@@ -411,7 +410,6 @@ let browse_handler =
                 >>= 
                 ODBOASIS.from_file 
                   ~ctxt:ctxt.odb
-                  ~ignore_plugins:true
                 >>= fun oasis ->
                 return (pkg, ver, Some oasis))
              (fun e ->

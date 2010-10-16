@@ -229,7 +229,7 @@ open OASISTypes
 (** Extract data from OASIS file *)
 let oasis ~ctxt fn an dn = 
   let oasis_extract fn _ =
-    ODBOASIS.from_file ~ctxt ~ignore_plugins:true fn
+    ODBOASIS.from_file ~ctxt fn
     >>= fun pkg ->
     return 
       (Some fn,
