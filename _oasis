@@ -57,7 +57,8 @@ Library "oasis-db"
                 oasis, oasis.builtin-plugins,
                 sexplib,
                 calendar,
-                inotify
+                inotify,
+                fileutils
   
 Flag oasis_db_ocsigen
   Description: Build ocsigen module for OASIS-DB. It requires postgresql running.

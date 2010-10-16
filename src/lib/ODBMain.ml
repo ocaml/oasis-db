@@ -40,7 +40,7 @@ let run =
              (List.map
                 (catch_exn ~ctxt)
                 [
-                  "ODBStorage.run",  ODBStorage.run;
+                  "ODBStorage.run",  ODBStorage.init;
                   "ODBIncoming.run", ODBIncoming.run;
                 ])
          with e ->

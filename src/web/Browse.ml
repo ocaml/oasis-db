@@ -172,9 +172,9 @@ let mk_version_page ~sp fver =
        (* Versions (current, all and latest) *)
        fver () 
        >>= fun ver ->
-       ODBStorage.versions ver.pkg 
+       ODBStorage.Ver.elements ver.pkg 
        >>= fun ver_lst ->
-       ODBStorage.version_latest ver.pkg
+       ODBStorage.Ver.latest ver.pkg
        >>= fun ver_latest ->
 
        (* Backup download link *)
@@ -185,16 +185,16 @@ let mk_version_page ~sp fver =
                (Printf.sprintf 
                   (f_ "%s (backup)") 
                   (FilePath.basename fn))])
-         ODBStorage.Tarball
+         `Tarball
        >>= fun (a_backup, fn_backup) ->
 
        (* Load OASIS file *)
        catch 
          (fun () ->
-            ODBStorage.version_filename 
+            ODBStorage.Ver.filename 
               ver.pkg 
               (OASISVersion.string_of_version ver.ver)
-              ODBStorage.OASIS
+              `OASIS
             >>= 
             ODBOASIS.from_file 
               ~ctxt:ctxt.odb
@@ -361,7 +361,7 @@ let browse_pkg_ver_handler =
     browse_pkg_ver
     (fun sp (pkg, ver) () ->
        mk_version_page ~sp 
-         (fun () -> ODBStorage.version pkg ver))
+         (fun () -> ODBStorage.Ver.find pkg ver))
 
 let browse_pkg =
   Defer.register_new_service 
@@ -369,7 +369,7 @@ let browse_pkg =
     ~get_params:(string "pkg")
     (fun sp pkg () ->
        mk_version_page ~sp
-         (fun () -> ODBStorage.version_latest pkg))
+         (fun () -> ODBStorage.Ver.latest pkg))
 
 
 let edit_info =
@@ -396,18 +396,18 @@ let browse_handler =
     (fun sp () () ->
       Context.get ~sp () 
       >>= fun ctxt ->
-      ODBStorage.packages () 
+      ODBStorage.Pkg.elements () 
       >>= 
       Lwt_list.map_s
         (fun pkg ->
-           ODBStorage.version_latest pkg 
+           ODBStorage.Ver.latest pkg 
            >>= fun ver ->
            catch 
              (fun () ->
-                ODBStorage.version_filename 
+                ODBStorage.Ver.filename 
                   ver.pkg 
                   (OASISVersion.string_of_version ver.ver)
-                  ODBStorage.OASIS
+                  `OASIS
                 >>= 
                 ODBOASIS.from_file 
                   ~ctxt:ctxt.odb

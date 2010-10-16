@@ -36,18 +36,18 @@ let info () =
     20
   in
 
-  ODBStorage.packages () 
+  ODBStorage.Pkg.elements () 
   >>= fun pkg_lst -> 
   Lwt_list.fold_left_s
     (fun t pkg ->
-      ODBStorage.versions pkg
+      ODBStorage.Ver.elements pkg
       >>= fun ver_lst ->
-      ODBStorage.version_latest pkg
+      ODBStorage.Ver.latest pkg
       >>= fun ver_latest ->
-      ODBStorage.version_filename 
+      ODBStorage.Ver.filename 
         pkg 
         (OASISVersion.string_of_version ver_latest.ver)
-        ODBStorage.OASIS
+        `OASIS
       >>= fun oasis_fn ->
 
       (* Try to find a date older *)

@@ -77,8 +77,10 @@ let move_to_storage ~ctxt ut pkg ver ord tarball_fn sexp_fn oasis_fn =
              publink       = ut.publink;
            }
          in
-           ODBStorage.add_version ~ctxt ver tarball_fn oasis_fn
-           >>= fun () ->
+           ODBStorage.Ver.create ~ctxt ver tarball_fn oasis_fn 
+           >>= 
+           ODBStorage.Ver.move ~ctxt
+           >>= fun _ ->
            ODBFileUtil.rm ~ctxt all_files)
 
       (fun e ->

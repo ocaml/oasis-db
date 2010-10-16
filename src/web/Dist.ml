@@ -37,7 +37,7 @@ let a_dist ~sp ~ctxt ver fcontent fn =
   * maximum information in ver (i.e. sexp.blackbox +
   * add information when loading
   *)
- ODBStorage.version_filename 
+ ODBStorage.Ver.filename 
    ver.pkg 
    (OASISVersion.string_of_version ver.ver) 
    fn

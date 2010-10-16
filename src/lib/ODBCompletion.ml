@@ -282,7 +282,7 @@ let order ~ctxt a_pkg a_ver =
       begin
         catch 
           (fun () ->
-            ODBStorage.versions pkg_s
+            ODBStorage.Ver.elements pkg_s
             >>= fun lst ->
             (* Try to insert this version between two. If version = latest -> sure
              * otherwise -> unsure.
