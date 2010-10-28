@@ -23,8 +23,8 @@
 -include Makefile.secret 
 export PGDATABASE PGUSER PGPASSWORD PGHOST
 
-LWT_LOG=* -> info
-#LWT_LOG=* -> debug
+#LWT_LOG=* -> info
+LWT_LOG=* -> debug
 export LWT_LOG
 
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display

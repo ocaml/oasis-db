@@ -12,8 +12,10 @@ open ODBVer
 open ODBContext
 open Context
 
+(* TODO: register temporary file *)
+
 let dist = 
-  Defer.Files.register_new_service 
+  Eliom_predefmod.Files.register_new_service 
     ~path:["dist"]
     ~get_params:(suffix (all_suffix "path"))
     (fun sp lst () ->
@@ -30,6 +32,8 @@ let dist =
              Eliom_common.Eliom_404
          else
            return (FilePath.make_absolute (FileUtil.pwd ()) fn))
+
+(* TODO: Is this funtction used ? *)
 
 let a_dist ~sp ~ctxt ver fcontent fn = 
   (* TODO: avoid too much ODBStorage lookup, by embeding
@@ -56,8 +60,5 @@ let a_dist ~sp ~ctxt ver fcontent fn =
      *)
     ExtString.String.nsplit fn "/"
   in
-    return (Eliom_predefmod.Xhtml.a (dist ()) sp (fcontent fn) lst, fn)
+    return (Eliom_predefmod.Xhtml.a dist sp (fcontent fn) lst, fn)
 
-
-let init () = 
-  ignore (dist ())

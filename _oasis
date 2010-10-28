@@ -68,9 +68,10 @@ Library "oasis-db-ocsigen"
   FindlibParent: oasis-db
   FindlibName: ocsigen
   Path: src/web
-  CompiledObject: Best
+  CompiledObject: Byte
   Build$: flag(oasis_db_ocsigen)
-  Modules: Index,
+  Modules: Common,
+           Index,
            AccountStub,
            Account,
            Template,
@@ -83,7 +84,6 @@ Library "oasis-db-ocsigen"
            Upload,
            Mkd,
            Context,
-           Defer,
            Task,
            Init
   BuildDepends: oasis-db, 
@@ -94,21 +94,6 @@ Library "oasis-db-ocsigen"
                 calendar,
                 markdown, markdown.html
 
-Executable "oasis-server"
-  Path: src/web
-  CompiledObject: Native
-  Build$: flag(oasis_db_ocsigen)
-  MainIs: Main.ml
-  BuildDepends: oasis-db.ocsigen, 
-                threads, 
-                ocsigen.ext.staticmod,
-                ocsigen.ext.ocsipersist-sqlite,
-                ocsigen.ext.eliom,
-                ocsigen.ext.staticmod,
-                ocsigen.server,
-                ocsigen.commandline
-
-  
 Executable FakeIncoming
   Path: test
   MainIs: FakeIncoming.ml

@@ -9,7 +9,7 @@ open ODBGettext
 open Template
 
 let new_account_handler = 
-  Defer.register
+  register
     Account.new_account
     (fun sp () () ->
        unauth_template 
@@ -47,6 +47,3 @@ let new_account_handler =
            p [a (Account.lost_passwd_ext sp) sp
                 [pcdata (s_ "Reset your password on OCaml forge")] ()];
          ])
-
-let init () = 
-  new_account_handler ()

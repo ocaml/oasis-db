@@ -62,7 +62,7 @@ let template ctnt =
     (body ctnt)
         
 let default_redirect =
-  Defer.register_new_service
+  register_new_service
     ~path:["account_ext_noredirect"]
     ~get_params:(string "message")
     (fun sp message () ->
@@ -82,7 +82,7 @@ let redirect ~sp ?cookies msg =
           ~sp
           ~options:`Temporary
           ?cookies
-          (preapply (default_redirect ()) msg)
+          (preapply default_redirect msg)
 
 let users = 
   [
@@ -94,11 +94,11 @@ let users =
   ]
 
 let missing_params =
-  Defer.Redirection.register_new_service
+  Eliom_predefmod.Redirection.register_new_service
     ~path:["account_ext"]
     ~get_params:unit
     (fun sp () () ->
-       return (preapply (default_redirect ()) "Missing parameters"))
+       return (preapply default_redirect "Missing parameters"))
 
 let mk_cookie token = 
   Set 
@@ -109,7 +109,7 @@ let mk_cookie token =
      false)
 
 let login = 
-  Defer.Any.register_new_post_service
+  Eliom_predefmod.Any.register_new_post_service
     ~post_params:(int32 "user_id" ** string "action" ** opt (string "redirect"))
     ~fallback:missing_params
     (fun sp () (user_id, (action, redirect_opt)) -> 
@@ -154,7 +154,7 @@ let action_no_userid sp _ redirect_opt act =
           let f = 
             post_form
               ~sp
-              ~service:(login ())
+              ~service:login
               (fun (user_id_nm, (action_nm, redirect_opt_nm)) ->
                  [p
                     [string_input ~input_type:`Hidden ~name:action_nm ~value:act ();
@@ -243,7 +243,7 @@ let action_userid sp db user_id token redirect_opt =
         end
 
 let main =
-  Defer.Any.register_new_service
+  Eliom_predefmod.Any.register_new_service
     ~path:["account_ext"]
     ~get_params:(string "action" ** opt (string "redirect"))
     (fun sp (action, redirect_opt) () ->
@@ -259,9 +259,3 @@ let main =
                 | None -> 
                     action_no_userid sp db redirect_opt action
             end))
-
-let init () = 
-  ignore (main ());
-  ignore (default_redirect ());
-  ignore (missing_params ());
-  ignore (login ())

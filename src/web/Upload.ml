@@ -17,6 +17,7 @@ open Eliom_predefmod.Xhtml
 open Template
 open Account
 open Context
+open Common
 
 (* TODO: use session data + a state stored in session data *)
 
@@ -114,7 +115,7 @@ let upload_template ~sp ?extra_headers ctnt =
  *)
 
 let upload_step3_no_post = 
-  Defer.register_new_service 
+  register_new_service 
     ~path:["upload_step3"]
     ~get_params:(int "id")
     (fun sp id _ ->
@@ -343,14 +344,14 @@ let upload_preview_box ~ctxt ~sp t =
 exception PageNoPost 
 
 let upload_action_redirect_no_post =
-  Defer.register_new_service
+  register_new_service
     ~path:["upload_action"]
     ~get_params:unit
     (fun _ _ _ ->
        fail PageNoPost)
 
 let upload_action_redirect =
-  Defer.Redirection.register_new_post_service 
+  Eliom_predefmod.Redirection.register_new_post_service 
     ~fallback:upload_action_redirect_no_post
     ~post_params:(string "action" ** int "id")
     (fun sp id (action, id) ->
@@ -371,7 +372,7 @@ let upload_action_redirect =
            | "cancel" ->
                ODBFileUtil.rm ~ctxt:ctxt.odb ~recurse:true [t.temp_dir]
                >>= fun () ->
-               return (upload ())
+               return upload 
            | "confirm" ->
                load_ver ~ctxt t
                >>= 
@@ -396,9 +397,9 @@ let upload_action_redirect =
                        >>= fun _ ->
                        return 
                          (preapply 
-                            (Browse.browse_pkg_ver ()) 
-                            (ver.ODBVer.pkg, 
-                             OASISVersion.string_of_version ver.ODBVer.ver))
+                            browse
+                            (Some ver.ODBVer.pkg, 
+                             Some (OASISVersion.string_of_version ver.ODBVer.ver)))
                    | None ->
                        (* TODO: redirect to upload page *)
                        fail (Failure (s_ "Invalid version"))
@@ -410,7 +411,7 @@ let upload_action_redirect =
 let upload_action_box ~ctxt ~sp id t = 
   return
     (post_form 
-       ~service:(upload_action_redirect ())
+       ~service:upload_action_redirect
        ~sp
        (fun (action, id') ->
           [p 
@@ -552,7 +553,7 @@ let upload_content ~ctxt ~sp id =
            content)
 
 let upload_step2 =
-  Defer.register_new_service
+  register_new_service
     ~path:["upload_step2"]
     ~get_params:(int "id")
     (fun sp id _ ->
@@ -567,14 +568,14 @@ let upload_step2 =
  *)
 
 let upload_step1_no_post = 
-  Defer.Redirection.register_new_service
+  Eliom_predefmod.Redirection.register_new_service
     ~path:["upload_step1"]
     ~get_params:unit
     (fun _ _ _ ->
        fail (Failure (s_ "Missing post parameters")))
 
 let upload_step1 = 
-  Defer.Redirection.register_new_post_service
+  Eliom_predefmod.Redirection.register_new_post_service
     ~post_params:(string "publink" ** file "tarball")
     ~fallback:upload_step1_no_post
     (fun sp _ (publink, tarball_fd)->
@@ -602,7 +603,7 @@ let upload_step1 =
              tarball_fn tarball publink 
          in
 
-           return (preapply (upload_step2 ()) id)
+           return (preapply upload_step2 id)
        end)
 
 (* 
@@ -611,39 +612,25 @@ let upload_step1 =
  *
  *)
 
-let upload_handler =
-  Defer.register 
-    upload 
-    (fun sp () () ->
-       let f = 
-         post_form 
-           ~service:(upload_step1 ())
-           ~sp
-           (fun (publink, tarball) ->
-              [p [pcdata (s_ "Tarball: ");
-                  file_input 
-                    ~a:[a_accept "application/x-bzip2;\
-                                  application/zip;\
-                                  application/x-gzip"]
-                    ~name:tarball ();
-                  br ();
-                  pcdata (s_ "Public link: ");
-                  string_input ~input_type:`Text ~name:publink ~value:"" ();
-                  br ();
-                  string_input ~input_type:`Submit ~value:(s_ "Upload") ()
-              ]])
-           ()
-       in
-         upload_template ~sp [f])
-
-let init () = 
-  upload_handler ();
-(*   ignore (upload_step4 ()); *)
-  ignore (upload_step3_no_post ());
-(*   ignore (upload_step3 ()); *)
-  ignore (upload_action_redirect ());
-  ignore (upload_action_redirect ());
-  ignore (upload_step2 ());
-  ignore (upload_step1_no_post ());
-  ignore (upload_step1 ())
+let upload_handler sp () () =
+  let f = 
+    post_form 
+      ~service:upload_step1 
+      ~sp
+      (fun (publink, tarball) ->
+         [p [pcdata (s_ "Tarball: ");
+             file_input 
+               ~a:[a_accept "application/x-bzip2;\
+                             application/zip;\
+                             application/x-gzip"]
+               ~name:tarball ();
+             br ();
+             pcdata (s_ "Public link: ");
+             string_input ~input_type:`Text ~name:publink ~value:"" ();
+             br ();
+             string_input ~input_type:`Submit ~value:(s_ "Upload") ()
+         ]])
+      ()
+  in
+    upload_template ~sp [f]
 

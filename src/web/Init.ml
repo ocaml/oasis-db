@@ -1,8 +1,13 @@
 
 open Lwt
 open ODBGettext
+open Types
+open Eliom_services
+open Eliom_parameters
+open Eliom_predefmod
+open Common
 
-let run () = 
+let () =
   let ctxt = 
     Context.get_odb ()
   in
@@ -11,17 +16,20 @@ let run () =
       (f_ "OASIS-DB v%s started")
       ODBConf.version
     >>= 
+    (* TODO: wait for completion *)
     ODBMain.run ~ctxt 
   in
-    AccountStub.init ();
-    Account.init ();
-    Template.init ();
-    MyAccount.init ();
-    NewAccount.init ();
-    Browse.init ();
-    Dist.init ();
-    Upload.init ();
-    Index.init ()
+    Xhtml.register home Index.home_handler;
+    Xhtml.register browse Browse.browse_handler;
+    Xhtml.register upload Upload.upload_handler;
+    Xhtml.register contribute Index.contribute_handler;
+    Xhtml.register about Index.about_handler;
+    () 
 
-let register =
-  Eliom_services.register_eliom_module "oasis-db-ocsigen" run
+let default = 
+  (* Default = home *)
+  Redirection.register_new_service
+    ~path:[""]
+    ~get_params:unit
+    (fun sp () () ->
+       return home)

@@ -8,13 +8,7 @@ open Eliom_predefmod.Xhtml
 open ODBGettext
 open Context
 open Account
-
-(* Main services *)
-let home       = Defer.new_service ["home"] unit
-let browse     = Defer.new_service ["browse"] unit
-let upload     = Defer.new_service ["upload"] unit
-let contribute = Defer.new_service ["contribute"] unit 
-let about      = Defer.new_service ["about"] unit
+open Common
 
 let mk_static_uri sp path =
   make_uri
@@ -82,7 +76,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
          [div ~a:[a_id "top"]
             [div ~a:[a_id "header"]
                [div ~a:[a_id "title"]
-                  [a (home ()) sp [pcdata "OASIS DB"] ()];
+                  [a home sp [pcdata "OASIS DB"] ()];
                 div ~a:[a_id "subtitle"]
                   [pcdata (s_ "an OCaml packages archive")]];
              
@@ -101,10 +95,10 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                   ~sp ()];
               *)
                [ul
-                  (li [a (home ()) sp       [pcdata (s_ "Home")] ()])
-                  [li [a (browse ()) sp     [pcdata (s_ "Browse")] ()];
-                   li [a (upload ()) sp     [pcdata (s_ "Upload")] ()];
-                   li [a (contribute ()) sp [pcdata (s_ "Contribute")] ()]]];
+                  (li [a home sp       [pcdata (s_ "Home")] ()])
+                  [li [a browse_all sp [pcdata (s_ "Browse")] ()];
+                   li [a upload sp     [pcdata (s_ "Upload")] ()];
+                   li [a contribute sp [pcdata (s_ "Contribute")] ()]]];
 
              if ODBConf.dev then
                div ~a:[a_id "dev_warning"]
@@ -148,7 +142,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                      janest_logo]);
 
                  (div ~a:[a_class ["links"]]
-                    [a (about ()) sp [pcdata (s_ "About this website")] ()]);
+                    [a about sp [pcdata (s_ "About this website")] ()]);
                ]]])
 
 let unauth_template ~sp ?extra_headers ~title ~div_id () =
@@ -175,14 +169,7 @@ let auth_template ~sp ?extra_headers ~title ~div_id () =
           fail PageRequiresAuth
   end
 
-let init () =
-  
-  let () = 
-    List.iter 
-      (fun f -> ignore (f ()))
-      [home; browse; upload; contribute; about]
-  in
-
+let () =
   let error_message s = 
     [p ~a:[a_class ["error"]] [pcdata s]]
   in

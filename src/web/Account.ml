@@ -152,7 +152,7 @@ let account_ext =
   if ODBConf.dev then
     AccountStub.main
   else
-    Defer.new_external_service
+    new_external_service
       ~prefix:"http://localhost"
       ~path:["~gildor"; "account-ext.php"]
       ~get_params:(string "action" ** 
@@ -161,21 +161,22 @@ let account_ext =
       ()
 
 let mk_account sp action =
-  preapply (account_ext ()) (action, Some (self_uri ~sp))
+  preapply account_ext (action, Some (self_uri ~sp))
 
 let logout_ext sp =
   mk_account sp "logout"
 
 let my_account =
-  Defer.new_service 
-    ["my_account"] 
-    (opt (int64 "log_offset"))
+  new_service 
+    ~path:["my_account"] 
+    ~get_params:(opt (int64 "log_offset"))
+    ()
 
 let login_ext sp =
   preapply 
-    (account_ext ()) 
+    account_ext 
     ("login", 
-     Some (service_uri ~sp (preapply (my_account ()) None)))
+     Some (service_uri ~sp (preapply my_account None)))
 
 let new_account_ext sp =
   mk_account sp "new"
@@ -187,7 +188,10 @@ let lost_passwd_ext sp =
   mk_account sp "lost_passwd"
 
 let new_account = 
-  Defer.new_service ["new_account"] unit 
+  new_service 
+    ~path:["new_account"] 
+    ~get_params:unit 
+    ()
 
 let box ?role sp = 
   begin
@@ -203,13 +207,9 @@ let box ?role sp =
         return 
           [ul 
              (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
-             [li [a (my_account ()) sp  [pcdata (s_ "My account")] None]]]
+             [li [a my_account sp  [pcdata (s_ "My account")] None]]]
      | Anon ->
          return 
            [ul
               (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
-              [li [a (new_account ()) sp [pcdata (s_ "New account")] ()]]])
-
-let init () = 
-  ignore (my_account ());
-  ignore (new_account ());
+              [li [a new_account sp [pcdata (s_ "New account")] ()]]])

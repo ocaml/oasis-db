@@ -2,13 +2,13 @@
 open Inotify
 
 let () =
-  let fn, args =
+  let fn, prog, args =
     match Array.to_list Sys.argv with 
-      | _ :: fn :: args ->
-          fn, args
+      | _ :: fn :: prog :: args ->
+          fn, prog, args
       | _ ->
           failwith 
-            "Bad command line, should be 'inrestart prog args*'"
+            "Bad command line, should be 'inrestart fn prog args*'"
   in
 
   let fn_bak =
@@ -43,7 +43,7 @@ let () =
   in
 
   let cmdline = 
-    String.concat " " (fn_bak :: args)
+    String.concat " " (prog :: args)
   in
 
   let run () = 
@@ -52,8 +52,8 @@ let () =
     Unix.chmod fn_bak 0o700;
     Printf.printf "Running '%s'.\n%!" cmdline;
     Unix.create_process 
-      fn_bak
-      (Array.of_list (fn_bak :: args)) 
+      prog
+      (Array.of_list (prog :: args)) 
       Unix.stdin
       Unix.stdout
       Unix.stderr

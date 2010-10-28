@@ -11,6 +11,7 @@ open OASISTypes
 open ODBGettext
 open Context
 open Template
+open Common
 
 module BuildDepends =
 struct 
@@ -38,11 +39,6 @@ struct
       MapString.add nm ver_opt t
 
 end
-
-let browse_pkg_ver = 
-  Defer.new_service 
-    ["browse"] 
-    (string "pkg" ** string "ver")
 
 let non_zero_lst id nm lst =
   let len =
@@ -276,10 +272,10 @@ let mk_version_page' ~ctxt ~sp ver backup_link oasis_fn =
                mk_pcdata cur_ver
              else
                a
-                 (browse_pkg_ver ())
+                 browse
                  sp
                  [mk_pcdata cur_ver]
-                 (cur_ver.pkg, sov cur_ver.ver)
+                 (Some cur_ver.pkg, Some (sov cur_ver.ver))
            in
              hd :: acc)
         []
@@ -464,10 +460,10 @@ let mk_version_page ~sp fver =
                     mk_pcdata cur_ver
                   else
                     a
-                      (browse_pkg_ver ())
+                      browse
                       sp
                       [mk_pcdata cur_ver]
-                      (cur_ver.pkg, sov cur_ver.ver)
+                      (Some cur_ver.pkg, Some (sov cur_ver.ver))
                 in
                   hd :: acc)
              []
@@ -556,24 +552,62 @@ let mk_version_page ~sp fver =
        | e ->
            fail e)
 
-let browse_pkg_ver_handler =
-  Defer.register 
-    browse_pkg_ver
-    (fun sp (pkg, ver) () ->
-       mk_version_page ~sp 
-         (fun () -> ODBStorage.Ver.find pkg ver))
+let browse_all ~ctxt ~sp () = 
+  ODBStorage.Pkg.elements () 
+  >>= 
+  Lwt_list.map_s
+    (fun pkg ->
+       ODBStorage.Ver.latest pkg 
+       >>= fun ver ->
+       catch 
+         (fun () ->
+            ODBStorage.Ver.filename 
+              ver.pkg 
+              (OASISVersion.string_of_version ver.ver)
+              `OASIS
+            >>= 
+            ODBOASIS.from_file 
+              ~ctxt:ctxt.odb
+            >>= fun oasis ->
+            return (pkg, ver, Some oasis))
+         (fun e ->
+            return (pkg, ver, None)))
+  >>= fun pkg_lst ->
+  unauth_template 
+    ~sp 
+    ~title:(BrowserAndPageTitle (s_ "Browse", s_ "Packages by category"))
+    ~div_id:"browse"
+    ()
+  >>= fun (_, tmpl) ->
+  tmpl
+    [
+      (* TODO: category list + group by category *)
+      begin
+        match pkg_lst with 
+        | hd :: tl ->
+            begin
+              let to_li (pkg, _, oasis_opt) = 
+                li 
+                  [a browse sp [pcdata pkg] (Some pkg, None);
+                   
+                   match oasis_opt with 
+                     | Some oasis ->
+                         pcdata 
+                           (Printf.sprintf (f_ ": %s")
+                              oasis.synopsis)
+                     | None ->
+                         pcdata ""]
+              in
+                ul (to_li hd) (List.map to_li tl)
+            end
+        | [] ->
+            pcdata ""
+      end
+    ]
 
-let browse_pkg =
-  Defer.register_new_service 
-    ~path:["browse"]
-    ~get_params:(string "pkg")
-    (fun sp pkg () ->
-       mk_version_page ~sp
-         (fun () -> ODBStorage.Ver.latest pkg))
-
-
+(*
 let edit_info =
-  Defer.register_new_service
+  register_new_service
     ~path:["edit_info"]
     ~get_params:(suffix (string "pkg" ** string "ver"))
     (fun sp (pkg, ver) () ->
@@ -583,77 +617,28 @@ let edit_info =
          auth_template ~sp ~title:(OneTitle ttl) ~div_id:"edit_info" ()
          >>= fun (_, tmpl, _) ->
            tmpl [])
+ *)
 
-let a_edit_info sp (pkg,ver) = 
-  a (edit_info ()) sp [pcdata (s_ "Edit version")] (pkg, ver)
+let browse_handler sp (pkg_opt, ver_opt) () =
+  Context.get ~sp () 
+  >>= fun ctxt ->
+  begin
+    match pkg_opt, ver_opt with 
+      | Some pkg, Some ver ->
+          mk_version_page ~sp 
+            (fun () -> ODBStorage.Ver.find pkg ver)
 
-let a_browse_pkg_ver sp (pkg, ver) =
-  a (browse_pkg_ver ()) sp [pcdata (s_ "Browse version")] (pkg, ver)
+      | Some pkg, None ->
+          mk_version_page ~sp
+            (fun () -> ODBStorage.Ver.latest pkg)
 
-let browse_handler = 
-  Defer.register
-    browse
-    (fun sp () () ->
-      Context.get ~sp () 
-      >>= fun ctxt ->
-      ODBStorage.Pkg.elements () 
-      >>= 
-      Lwt_list.map_s
-        (fun pkg ->
-           ODBStorage.Ver.latest pkg 
-           >>= fun ver ->
-           catch 
-             (fun () ->
-                ODBStorage.Ver.filename 
-                  ver.pkg 
-                  (OASISVersion.string_of_version ver.ver)
-                  `OASIS
-                >>= 
-                ODBOASIS.from_file 
-                  ~ctxt:ctxt.odb
-                >>= fun oasis ->
-                return (pkg, ver, Some oasis))
-             (fun e ->
-                return (pkg, ver, None)))
-      >>= fun pkg_lst ->
-      unauth_template 
-        ~sp 
-        ~title:(BrowserAndPageTitle (s_ "Browse", s_ "Packages by category"))
-        ~div_id:"browse"
-        ()
-      >>= fun (_, tmpl) ->
-      tmpl
-        [
-          (* TODO: category list + group by category *)
-          
-          begin
-            match pkg_lst with 
-            | hd :: tl ->
-                begin
-                  let to_li (pkg, _, oasis_opt) = 
-                    li 
-                      [a (browse_pkg ()) sp [pcdata pkg] pkg;
-                       
-                       match oasis_opt with 
-                         | Some oasis ->
-                             pcdata 
-                               (Printf.sprintf (f_ ": %s")
-                                  oasis.synopsis)
-                         | None ->
-                             pcdata ""]
-                  in
-                    ul (to_li hd) (List.map to_li tl)
-                end
-            | [] ->
-                pcdata ""
-          end
-        ])
+      | None, None ->
+          browse_all ~ctxt ~sp ()
 
-let init () = 
-  browse_pkg_ver_handler ();
-  browse_handler ();
-  ignore (browse_pkg_ver ());
-  ignore (browse_pkg ());
-  ignore (edit_info ());
+      | None, Some _ ->
+          fail Eliom_common.Eliom_404
+  end
 
+let init server = 
+  ()
 

@@ -14,7 +14,7 @@ open Account
 open Lwt_log
 
 let account_settings = 
-  Defer.register_new_service
+  register_new_service
     ~path:["account"; "settings"]
     ~get_params:unit
     (fun sp () () -> 
@@ -50,7 +50,7 @@ let account_settings =
          ])
 
 let my_account_handler = 
-  Defer.register
+  register
     Account.my_account
     (fun sp log_offset_opt () ->
        let log_per_page = 20L in
@@ -127,7 +127,7 @@ let my_account_handler =
            if cond then 
              span ~a:[a_class ["enabled"]]
                [a 
-                  (my_account ()) sp [pcdata txt] 
+                  my_account sp [pcdata txt] 
                   (Some (max 0L offset))]
            else
              span ~a:[a_class ["disabled"]] 
@@ -163,10 +163,6 @@ let my_account_handler =
 
             div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
 
-            p [a (account_settings ()) sp 
+            p [a account_settings sp 
                  [pcdata (s_ "Account settings")] ()];
            ])
-
-let init () =
-  my_account_handler ();
-  ignore (account_settings ())
