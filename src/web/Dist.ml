@@ -31,33 +31,32 @@ let dist =
          else
            return (FilePath.make_absolute (FileUtil.pwd ()) fn))
 
-
 let a_dist ~sp ~ctxt ver fcontent fn = 
- (* TODO: avoid too much ODBStorage lookup, by embeding
-  * maximum information in ver (i.e. sexp.blackbox +
-  * add information when loading
-  *)
- ODBStorage.Ver.filename 
-   ver.pkg 
-   (OASISVersion.string_of_version ver.ver) 
-   fn
- >>= fun fn ->
- let fn =
-   let pwd =
-     FileUtil.pwd ()
-   in
-     FilePath.make_relative 
-       (FilePath.make_absolute pwd ctxt.odb.dist_dir)
-       (FilePath.make_absolute pwd fn)
- in
-
- let lst = 
-   (* TODO: create something in FilePath to handle 
-    * this 
-    *)
-   ExtString.String.nsplit fn "/"
- in
-   return (Eliom_predefmod.Xhtml.a (dist ()) sp (fcontent fn) lst, fn)
+  (* TODO: avoid too much ODBStorage lookup, by embeding
+   * maximum information in ver (i.e. sexp.blackbox +
+   * add information when loading
+   *)
+  ODBStorage.Ver.filename 
+    ver.pkg 
+    (OASISVersion.string_of_version ver.ver) 
+    fn
+  >>= fun fn ->
+  let fn =
+    let pwd =
+      FileUtil.pwd ()
+    in
+      FilePath.make_relative 
+        (FilePath.make_absolute pwd ctxt.odb.dist_dir)
+        (FilePath.make_absolute pwd fn)
+  in
+ 
+  let lst = 
+    (* TODO: create something in FilePath to handle 
+     * this 
+     *)
+    ExtString.String.nsplit fn "/"
+  in
+    return (Eliom_predefmod.Xhtml.a (dist ()) sp (fcontent fn) lst, fn)
 
 
 let init () = 

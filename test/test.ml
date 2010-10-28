@@ -26,8 +26,10 @@ let ctxt =
                       (FilePath.make_filename ["test"; "data"; "storage"]);
   }
 
+(*
 let _ = 
   run_test_tt_main
   ("OASIS-DB">:::
     [TestIncoming.tests ctxt])
   
+ *)

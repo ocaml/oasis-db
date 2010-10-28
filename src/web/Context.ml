@@ -6,6 +6,9 @@ type context =
     {
       odb:   ODBContext.t;
       role:  Account.t;
+
+      upload_delay: float; 
+      (* Delay for upload (wait for completion and refresh) *)   
     }
 
 let get_odb () = 
@@ -61,5 +64,18 @@ let get ~sp () =
     {
       odb  = get_odb ();
       role = role;
+
+      (* TODO: load configuration *)
+      upload_delay = 5.0;
     }
 
+exception NeedLogin
+
+let get_user ~sp () = 
+  get ~sp () 
+  >>= fun ctxt -> 
+    match ctxt.role with 
+      | Account.User accnt | Account.Admin accnt ->
+          return (ctxt, accnt)
+      | Account.Anon ->
+          fail NeedLogin

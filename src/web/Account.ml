@@ -23,6 +23,11 @@ type t =
   | User of account 
   | Admin of account
 
+let name_of_role =
+  function
+    | Anon -> "anonymous"
+    | User t | Admin t -> t.accnt_name
+
 let string_of_role =
   function
     | Anon  -> s_ "anonymous"

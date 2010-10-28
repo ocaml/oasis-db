@@ -395,31 +395,25 @@ struct
            >>= fun () ->
            fail e)
 
-  (** Create a version out of the dist_dir
+  (** Initialize a directory containing a version 
+      out of the dist_dir
     *)
-  let create ~ctxt ver tarball_fn oasis_fn = 
-    ODBFileUtil.temp_dir ~ctxt "oasis-db" "-pre-ver.dir"
-    >>= fun dn ->
-    ODBFileUtil.cp ~ctxt [tarball_fn] dn
-    >>= fun () ->
+  let init ~ctxt ver dn = 
     begin
-      match oasis_fn with
-        | Some fn -> 
-            begin
-              let cp_to = 
-                ODBFileUtil.cp ~ctxt [fn] 
-              in
-                cp_to (Filename.concat dn "_oasis")
-                >>= fun () ->
-                cp_to (Filename.concat dn "_oasis.pristine")
-            end
-        | None -> 
-            return ()
+      let oasis_fn = 
+        Filename.concat dn "_oasis"
+      in
+      let oasis_pristine_fn = 
+        oasis_fn ^ ".pristine"
+      in
+        if Sys.file_exists oasis_fn &&
+           not (Sys.file_exists oasis_pristine_fn) then
+          ODBFileUtil.cp ~ctxt [oasis_fn] oasis_pristine_fn
+        else
+          return ()
     end
     >>= fun () ->
     ODBVer.to_file ~ctxt (storage_filename dn) ver
-    >>= fun () ->
-    return dn 
 
   (** Return the directory name of a version 
     *)

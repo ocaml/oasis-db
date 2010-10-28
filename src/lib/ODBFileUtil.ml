@@ -252,3 +252,7 @@ let cp ~ctxt lst tgt =
                     tgt))
 
 
+let mv ~ctxt lst tgt =
+  (* TODO: convert to Lwt *)
+  FileUtil.mv lst tgt;
+  return ()

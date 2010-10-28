@@ -7,6 +7,7 @@ open ODBContext
 open ODBVer
 open CalendarLib
 
+(*
 let default_timeout = 1.0
 
 let wait_create ~is_file ?(timeout=default_timeout) topfn = 
@@ -435,3 +436,4 @@ let tests ctxt =
     assert_equal 
       (WSIGNALED Sys.sigterm)
       (clean_exit ()))
+  *)

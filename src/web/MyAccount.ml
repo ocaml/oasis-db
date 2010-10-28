@@ -75,16 +75,6 @@ let my_account_handler =
          Time_Zone.current ()
        in
 
-       let log_level =
-         function
-           | Debug    -> s_ "D", "log_debug" 
-           | Info     -> s_ "I", "log_info"
-           | Notice   -> s_ "N", "log_notice"
-           | Warning  -> s_ "W", "log_warning"
-           | Error    -> s_ "E", "log_error" 
-           | Fatal    -> s_ "F", "log_fatal"
-       in
-
        let rec mk_lst odd prv_user_date = 
          function 
            | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
@@ -104,7 +94,7 @@ let my_account_handler =
                  if same_day then
                    begin
                      let shrt_lvl, class_lvl =
-                       log_level log_lvl
+                       Log.html_log_level log_lvl
                      in
                        (tr
                           ~a:[a_class [if odd then "odd" else "even"; class_lvl]]

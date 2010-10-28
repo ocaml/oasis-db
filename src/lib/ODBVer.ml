@@ -7,6 +7,7 @@
 open Lwt
 open ODBTypes
 open ODBGettext
+open ODBMessage
 
 TYPE_CONV_PATH "ODBVer"
 
@@ -68,3 +69,33 @@ let compare t1 t2 =
         OASISVersion.version_compare t1.ver t2.ver
     | n ->
         n
+
+let check ~ctxt t =
+  List.for_all
+    (fun e -> e)
+    [
+      if t.pkg = "" then
+        begin
+(*           error ~ctxt "Empty package name"; *)
+          false
+        end
+      else
+        true;
+
+      if OASISVersion.string_of_version t.ver = "" then
+        begin
+(*           error ~ctxt "Empty version name"; *)
+          false
+        end
+      else
+        true;
+
+      if t.tarball = "" then 
+        begin
+          (* TODO: check that tarball exist *)
+(*           error ~ctxt "Empty tarball name"; *)
+          false
+        end
+      else
+        true;
+    ]

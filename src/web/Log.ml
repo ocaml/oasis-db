@@ -7,6 +7,7 @@ open Lwt
 open Lwt_log
 open Sexplib
 open SQL
+open ODBGettext
 
 TYPE_CONV_PATH "Log"
 
@@ -83,3 +84,13 @@ let get what order offset limit =
                "")
              lst))
 
+
+(** Return short symbol and CSS style *)
+let html_log_level =
+  function
+    | Debug    -> s_ "D", "log_debug" 
+    | Info     -> s_ "I", "log_info"
+    | Notice   -> s_ "N", "log_notice"
+    | Warning  -> s_ "W", "log_warning"
+    | Error    -> s_ "E", "log_error" 
+    | Fatal    -> s_ "F", "log_fatal"

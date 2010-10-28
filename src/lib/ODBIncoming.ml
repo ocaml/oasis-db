@@ -13,6 +13,7 @@ open Lwt
 
 TYPE_CONV_PATH "ODBIncoming"
 
+(*
 type upload_t =
   {
     publink:       url sexp_option;
@@ -397,3 +398,4 @@ let check_step3 ~ctxt tarball =
 
     (fun () -> 
        return Step3_NotYet)
+  *)

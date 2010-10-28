@@ -84,6 +84,7 @@ Library "oasis-db-ocsigen"
            Mkd,
            Context,
            Defer,
+           Task,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

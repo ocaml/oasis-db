@@ -15,10 +15,34 @@ let new_service path params =
   mk
     (fun () -> new_service path params ())
 
+let new_post_coservice ~post_params ~fallback f = 
+  mk
+    (fun () ->
+       new_post_coservice
+         ~post_params 
+         ~fallback:(fallback ())
+         f)
+
 let register_new_service ~path ~get_params f = 
   mk
     (fun () -> 
        Eliom_predefmod.Xhtml.register_new_service ~path ~get_params f)
+
+let register_new_post_service ~post_params ~fallback f = 
+  mk
+    (fun () ->
+       Eliom_predefmod.Xhtml.register_new_post_service 
+         ~post_params 
+         ~fallback:(fallback ()) 
+         f)
+
+let register_new_post_coservice ~post_params ~fallback f = 
+  mk
+    (fun () ->
+       Eliom_predefmod.Xhtml.register_new_post_coservice 
+         ~post_params 
+         ~fallback:(fallback ()) 
+         f)
 
 let register service f = 
   mk
@@ -67,4 +91,26 @@ struct
       (fun () ->
          Eliom_predefmod.Any.register_new_post_service 
            ~post_params ~fallback:(fallback ()) f)
+end
+
+module Action =
+struct 
+  let register_new_post_coservice ~post_params ~fallback f = 
+    mk
+      (fun () ->
+         Eliom_predefmod.Action.register_new_post_coservice
+           ~post_params 
+           ~fallback:(fallback ())
+           f)
+
+  let register_new_post_coservice' ~post_params f = 
+    mk
+      (fun () ->
+         Eliom_predefmod.Action.register_new_post_coservice'
+           ~post_params 
+           f)
+
+  let register service f =  
+    mk
+      (fun () -> Eliom_predefmod.Action.register (service ()) f)
 end
