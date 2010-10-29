@@ -387,7 +387,7 @@ let upload_action_redirect =
                          (preapply 
                             browse
                             (Some ver.ODBVer.pkg, 
-                             Some (OASISVersion.string_of_version ver.ODBVer.ver)))
+                             Some ver.ODBVer.ver))
                    | None ->
                        (* TODO: redirect to upload page *)
                        fail (Failure (s_ "Invalid version"))

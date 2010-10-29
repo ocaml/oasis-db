@@ -3,11 +3,24 @@ open Eliom_services
 open Eliom_parameters
 open XHTML.M
 
+module ExtParams = 
+struct
+
+  open Eliom_parameters
+
+  let version = 
+    user_type
+      ~of_string:OASISVersion.version_of_string
+      ~to_string:OASISVersion.string_of_version
+
+end
+
 exception Timeout of string
 exception RequiresAuth
 
 let home       = new_service ["home"] unit ()
-let browse     = new_service ["browse"] (opt (string "pkg") ** opt (string "ver")) () 
+let browse     = new_service ["browse"] (opt (string "pkg") ** 
+                                         opt (ExtParams.version "ver")) () 
 let upload     = new_service ["upload"] unit ()
 let contribute = new_service ["contribute"] unit ()
 let about      = new_service ["about"] unit ()
@@ -35,5 +48,4 @@ let odd_even_table ?caption ?columns hd tl =
       (addto_class1 "odd" hd)
       (set_class false tl)
         
-
 

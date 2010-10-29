@@ -253,7 +253,7 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
                  browse
                  sp
                  [mk_pcdata cur_ver]
-                 (Some cur_ver.pkg, Some (sov cur_ver.ver))
+                 (Some cur_ver.pkg, Some cur_ver.ver)
            in
              hd :: acc)
         []
@@ -446,7 +446,8 @@ let browse_handler sp (pkg_opt, ver_opt) () =
     match pkg_opt, ver_opt with 
       | Some pkg, Some ver ->
           browse_version_page ~ctxt ~sp 
-            (fun () -> ODBStorage.Ver.find pkg ver)
+            (fun () -> ODBStorage.Ver.find pkg 
+                         (OASISVersion.string_of_version ver))
 
       | Some pkg, None ->
           browse_version_page ~ctxt ~sp

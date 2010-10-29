@@ -134,9 +134,6 @@ let home_handler sp () () =
              | hd :: tl ->
                  begin
                    let to_li ver =
-                     let pkg = 
-                       ver.pkg 
-                     in
                      let date =
                        CalendarLib.Printer.Calendar.to_string 
                          ver.upload_date
@@ -152,8 +149,8 @@ let home_handler sp () () =
                             [pcdata 
                                (Printf.sprintf 
                                   (f_ "%s v%s (%s)")
-                                  pkg ver_s date)]
-                            (Some pkg, Some ver_s)]
+                                  ver.pkg ver_s date)]
+                            (Some ver.pkg, Some ver.ver)]
                    in
                      ul (to_li hd) (List.map to_li tl)
                  end
