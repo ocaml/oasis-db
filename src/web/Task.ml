@@ -70,13 +70,16 @@ let wait t ~ctxt id timeout =
         (* Try to get result from the thread
          * or return None
          *)
+      let timeout_thrd = 
+        Lwt_unix.timeout timeout
+      in
+
         catch 
           (fun () ->
-             Lwt_unix.with_timeout
-               timeout
-               (fun () -> t.thrd)
-             >|= 
-             fun res -> Some res)
+             choose [timeout_thrd; t.thrd]
+             >|= fun res -> 
+               Lwt.cancel timeout_thrd;
+               Some res)
           (function
              | Lwt_unix.Timeout ->
                  return None
@@ -91,7 +94,7 @@ let wait t ~ctxt id timeout =
     with Not_found ->
       fail (NoTask id)
 
-(* TODO: consider moving this to Context *)
+(* TODO: consider moving this to Log *)
 
 (** Share the log queue with another context *)
 let set_logger t ctxt = 

@@ -85,6 +85,7 @@ Library "oasis-db-ocsigen"
            Mkd,
            Context,
            Task,
+           Error,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

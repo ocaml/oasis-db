@@ -2,6 +2,8 @@
 open Eliom_services
 open Eliom_parameters
 
+exception Timeout of string
+exception RequiresAuth
 
 let home       = new_service ["home"] unit ()
 let browse     = new_service ["browse"] (opt (string "pkg") ** opt (string "ver")) () 

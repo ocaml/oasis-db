@@ -20,8 +20,6 @@ type title =
   | OneTitle of string 
   | BrowserAndPageTitle of string * string 
 
-exception PageRequiresAuth
-
 let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt = 
   let mk_static_uri path =
     mk_static_uri sp path
@@ -166,64 +164,6 @@ let auth_template ~sp ?extra_headers ~title ~div_id () =
       | User accnt | Admin accnt ->
           return (ctxt, tmpl, accnt) 
       | Anon ->
-          fail PageRequiresAuth
+          fail RequiresAuth
   end
 
-let () =
-  let error_message s = 
-    [p ~a:[a_class ["error"]] [pcdata s]]
-  in
-
-  let error_template ?code ~sp lst = 
-    catch 
-      (fun () -> 
-         Account.box sp)
-      (fun e ->
-         return 
-           (error_message
-              (Printf.sprintf 
-                 (f_ "Cannot get account box: %s")
-                 (ODBMessage.string_of_exception e))))
-    >>= fun account_box ->
-    Eliom_predefmod.Xhtml.send ?code ~sp
-      (template_skeleton
-         ~sp 
-         ~title:(OneTitle (s_ "Error"))
-         ~div_id:"error_page"
-         account_box
-         lst)
-  in
-
-  let backtrace acc =
-    if Printexc.backtrace_status () then 
-      p [pcdata (Printexc.get_backtrace ())] :: acc
-    else
-      acc
-  in
-
-  Eliom_services.set_exn_handler
-    (fun sp e -> 
-       match e with
-         | Eliom_common.Eliom_404 as e ->
-             raise e
-
-         | Eliom_common.Eliom_Wrong_parameter ->
-             error_template ~sp 
-               (error_message 
-                  (s_ "Wrong parameters"))
-
-         | PageRequiresAuth ->
-             error_template ~sp 
-               (error_message 
-                  (s_ "You need to be logged in to see this page."))
-
-         | Failure str ->
-             error_template ~sp 
-               (backtrace 
-                  (error_message str))
-
-         | e -> 
-             error_template ~sp
-               (backtrace 
-                  (error_message
-                     (Printexc.to_string e))))

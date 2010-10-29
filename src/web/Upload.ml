@@ -84,15 +84,20 @@ let upload_task ~ctxt upload_method tarball_fn tarball publink =
               return ct 
       end)
 
-    >|= fun ct ->
-      {
-        temp_dir      = tmp_dn;
-        tarball       = Filename.basename tarball_fn;
-        publink       = publink;
-        completion    = ct;
-        upload_date   = upload_date;
-        upload_method = upload_method;
-      }
+    >>= fun ct ->
+      return
+        {
+          temp_dir      = tmp_dn;
+          tarball       = Filename.basename tarball_fn;
+          publink       = publink;
+          completion    = ct;
+          upload_date   = upload_date;
+          upload_method = upload_method;
+        }
+    >>= fun res ->
+    Lwt_unix.sleep 10.0
+    >>= fun () ->
+    return res
 
   in
     Task.add uploads f ~ctxt ()
@@ -472,85 +477,70 @@ let upload_content ~ctxt ~sp id =
 
     Task.wait uploads ~ctxt id ctxt.upload_delay
     >>= fun (task, delay, res) ->
+    return (Task.set_logger task ctxt)
+    >>= fun ctxt ->
     begin
       match res with 
-        | Some t ->
-            begin
-              if not (Sys.file_exists (ODBStorage.storage_filename t.temp_dir)) then
-                (* TODO: the test above is really not precise *)
-                (* We should init ASAP i.e. maybe when we can generate a valid ver *)
-                try 
-                  let ver = 
-                    mk_ver t 
-                  in
-                    ODBStorage.Ver.init
-                      ~ctxt:ctxt.odb 
-                      ver 
-                      t.temp_dir
-                with _ ->
-                  return ()
-             else
-               return ()
+        | None ->
+            fail 
+              (Timeout 
+                 (Printf.sprintf 
+                    (f_ "The tarball is not yet processed. \
+                         This page will be refreshed in a few seconds.")))
+                  (* TODO: allow to cancel upload *)
 
-            end
-        | _ ->
-            return ()
+        | Some t ->
+            return t
+    end
+    >>= fun t ->
+    begin
+      if not (Sys.file_exists (ODBStorage.storage_filename t.temp_dir)) then
+        (* TODO: the test above is really not precise *)
+        (* TODO: add this in the upload task *)
+        (* We should init ASAP i.e. maybe when we can generate a valid ver *)
+        try 
+          let ver = 
+            mk_ver t 
+          in
+            ODBStorage.Ver.init
+              ~ctxt:ctxt.odb 
+              ver 
+              t.temp_dir
+        with _ ->
+          return ()
+     else
+       return ()
     end
     >>= fun () ->
-      let ctxt = 
-        Task.set_logger task ctxt
-      in
-      let extra_headers, content = 
-        match res with 
-          | None ->
-               Some [meta 
-                       ~a:[a_http_equiv "refresh"] 
-                       ~content:(string_of_int 
-                                   (max 1 (int_of_float ctxt.upload_delay)))
-                       ()],
-               return 
-                 [p 
-                    [pcdata 
-                       (Printf.sprintf
-                          (f_ "The tarball is not yet processed, \
-                               wait %.3fs seconds.")
-                          ctxt.upload_delay)]
-                    (* TODO: cancel upload *)
-                 ]
-
-          | Some t ->
-              None,
-              upload_preview_box ~ctxt ~sp t
-              >>= fun preview_box ->
-              upload_completion_box ~ctxt ~sp t
-              >>= fun completion_box ->
-              upload_action_box ~ctxt ~sp id t 
-              >|= fun action_box ->
-              [h3 [pcdata "Results"];
-               if delay >= 0.0 then 
-                 (* TODO: the test above is really not precise *)
-                 p                   
-                   [pcdata 
-                      (Printf.sprintf
-                         (f_ "The tarball '%s' has been processed in %.3fs, please \
-                              check and complete the result.")
-                         t.tarball delay)]
-               else
-                 pcdata "";
-
-               completion_box;
-              ]
-              @
-              preview_box
-              @
-              [action_box]
-      in
-        content 
-        >>= fun content -> 
-        tmpl ?extra_headers 
-          (html_log task
-           :: 
-           content)
+    upload_preview_box ~ctxt ~sp t
+    >>= fun preview_box ->
+    upload_completion_box ~ctxt ~sp t
+    >>= fun completion_box ->
+    upload_action_box ~ctxt ~sp id t 
+    >>= fun action_box ->
+    begin
+      return 
+        ([h3 [pcdata "Results"];
+          if delay >= 0.0 then 
+            (* TODO: the test above is really not precise *)
+            p                   
+              [pcdata 
+                 (Printf.sprintf
+                    (f_ "The tarball '%s' has been processed in %.3fs, please \
+                         check and complete the result.")
+                    t.tarball delay)]
+          else
+              pcdata "";
+          
+          completion_box;
+        ]
+        @
+         preview_box
+        @
+         [action_box])
+    end
+    >>= fun content -> 
+    tmpl (html_log task :: content)
 
 let upload_step2 =
   register_new_service
