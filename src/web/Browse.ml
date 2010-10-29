@@ -215,26 +215,21 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
     OASISVersion.string_of_version
   in
 
-  (* Field generation: odd and even lines *)
-  let field clss (id, nm, vl) =
+  (* Field generation: remove fields not set *)
+  let field (id, nm, vl) =
     (tr
-       ~a:[a_id id;
-           a_class [clss]]
+       ~a:[a_id id]
        (th [pcdata nm]) 
        [td vl])
   in
-  let rec gen_fields clss next_fields =
+  let rec gen_fields =
     function
       | Some e :: tl ->
-          field clss e :: next_fields tl
+          field e :: gen_fields tl
       | None :: tl ->
-          gen_fields clss next_fields tl
+          gen_fields tl
       | [] ->
           []
-  and odd_fields lst = 
-    gen_fields "odd" even_fields lst 
-  and even_fields lst =
-    gen_fields "even" odd_fields lst
   in
 
   (* Field for versions number and their links to 
@@ -289,11 +284,10 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
          | None -> 
              pcdata "");
 
-      table 
+      odd_even_table 
         (field 
-           "odd" 
            ("versions", (s_ "Versions: "), versions_field))
-        (even_fields
+        (gen_fields
            (extra_fields
             @
             [

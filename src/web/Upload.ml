@@ -423,26 +423,20 @@ let upload_action_box ~ctxt ~sp id t =
 let upload_content ~ctxt ~sp id = 
 
   let html_log task = 
-    let _, lst = 
+    let lst = 
       Queue.fold
-        (fun (odd, acc) (sct, lvl, msg) ->
+        (fun acc (sct, lvl, msg) ->
            let short_nm, css_style = 
              Log.html_log_level lvl 
            in
-           let css_class = 
-             [
-               (if odd then "odd" else "even");
-               css_style
-             ]
-           in
            let line =
              tr
-               ~a:[a_class css_class]
+               ~a:[a_class [css_style]]
                (td [pcdata short_nm])
                [td [pcdata msg]]
            in
-             not odd, line :: acc)
-        (true, [])
+             line :: acc)
+        []
         (Task.get_logger task)
     in
       match lst with 
@@ -450,7 +444,7 @@ let upload_content ~ctxt ~sp id =
           div 
             ~a:[a_class ["log"]]
             [h3 [pcdata (s_ "Log")];
-             table hd tl]
+             odd_even_table hd tl]
         | [] ->
             pcdata ""
   in

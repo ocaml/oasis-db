@@ -72,7 +72,7 @@ let my_account_handler =
            Time_Zone.current ()
          in
 
-         let rec mk_lst odd prv_user_date = 
+         let rec mk_lst prv_user_date = 
            function 
              | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
                  let user_date = 
@@ -94,7 +94,7 @@ let my_account_handler =
                          Log.html_log_level log_lvl
                        in
                          (tr
-                            ~a:[a_class [if odd then "odd" else "even"; class_lvl]]
+                            ~a:[a_class [class_lvl]]
                             (th
                                ~a:[a_class ["hour"]]
                                [pcdata (Printer.Calendar.sprint (s_ "%R") user_date)])
@@ -102,7 +102,7 @@ let my_account_handler =
                              td [pcdata descr];
                              td []])
                          ::
-                         mk_lst (not odd) (Some user_date) tl
+                         mk_lst (Some user_date) tl
                      end
                    else
                      begin
@@ -112,7 +112,7 @@ let my_account_handler =
                              [pcdata (Printer.Calendar.sprint (s_ "%F") user_date)])
                           [])
                        ::
-                       mk_lst true (Some user_date) lst
+                       mk_lst (Some user_date) lst
                      end
 
              | [] ->
@@ -154,13 +154,13 @@ let my_account_handler =
 
               div ~a:[a_class ["navigate"; "top"]] navigation_box;
 
-              table
+              Common.odd_even_table
                 (tr 
                    (th [pcdata (s_ "Date")])
                    [th [pcdata ""];
                     th [pcdata (s_ "Description")];
                     th [pcdata (s_ "Link")]])
-                (mk_lst true None events);
+                (mk_lst None events);
 
               div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
 
