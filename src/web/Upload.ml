@@ -96,7 +96,7 @@ let upload_task ~ctxt upload_method tarball_fn tarball publink =
         }
     >>= fun res ->
       if Conf.debug then
-        Lwt_unix.sleep 10.0
+        Lwt_unix.sleep 7.0
         >>= fun () ->
         return res
       else

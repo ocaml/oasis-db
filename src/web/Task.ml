@@ -9,9 +9,10 @@ open Lwt_log
 
 type 'a t =
     {
-      creator: Account.t;
-      thrd:    'a Lwt.t;
-      log:     (section * level * string) Queue.t;
+      creator:    Account.t;
+      start_time: float;
+      thrd:       ('a * float) Lwt.t;
+      log:        (section * level * string) Queue.t;
     }
 
 type id = int
@@ -47,11 +48,17 @@ let add t f ~ctxt e =
                   Lwt_log.broadcast 
                     [queue_logger; ctxt.odb.logger]}}
   in
+  let thrd =
+    f ~ctxt e
+    >|= fun res ->
+    res, Unix.gettimeofday ()
+  in
   let e =
     {
-      creator = ctxt.role;
-      thrd    = f ~ctxt e;
-      log     = log;
+      start_time = Unix.gettimeofday ();
+      creator    = ctxt.role;
+      thrd       = thrd;
+      log        = log;
     }
   in
     incr last_id;
@@ -59,40 +66,35 @@ let add t f ~ctxt e =
     !last_id
 
 let wait t ~ctxt id timeout timeout_msg =
-  let start_time = 
-    Unix.gettimeofday () 
-  in
+  try 
+    let t = 
+      Hashtbl.find t id 
+    in
+      (* Try to get result from the thread
+       * or return None
+       *)
+    let timeout_thrd = 
+      Lwt_unix.timeout timeout
+    in
 
-    try 
-      let t = 
-        Hashtbl.find t id 
-      in
-        (* Try to get result from the thread
-         * or return None
-         *)
-      let timeout_thrd = 
-        Lwt_unix.timeout timeout
-      in
+      catch 
+        (fun () ->
+           choose [timeout_thrd; t.thrd]
+           >|= fun res -> 
+           Lwt.cancel timeout_thrd;
+           res)
+        (function
+           | Lwt_unix.Timeout ->
+               fail (Common.Timeout timeout_msg)
+           | e ->
+               fail e)
+      >|= fun (e, end_time) -> 
+      t,
+      end_time -. t.start_time, (* delay *)
+      e (* result *)
 
-        catch 
-          (fun () ->
-             choose [timeout_thrd; t.thrd]
-             >|= fun res -> 
-               Lwt.cancel timeout_thrd;
-               res)
-          (function
-             | Lwt_unix.Timeout ->
-                 fail (Common.Timeout timeout_msg)
-             | e ->
-                 fail e)
-        >|= 
-        (fun e -> 
-           t,
-           Unix.gettimeofday () -. start_time, (* delay *)
-           e) (* result *)
-
-    with Not_found ->
-      fail (NoTask id)
+  with Not_found ->
+    fail (NoTask id)
 
 (* TODO: consider moving this to Log *)
 
