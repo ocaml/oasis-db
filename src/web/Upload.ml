@@ -95,9 +95,12 @@ let upload_task ~ctxt upload_method tarball_fn tarball publink =
           upload_method = upload_method;
         }
     >>= fun res ->
-    Lwt_unix.sleep 10.0
-    >>= fun () ->
-    return res
+      if Conf.debug then
+        Lwt_unix.sleep 10.0
+        >>= fun () ->
+        return res
+      else
+        return res
 
   in
     Task.add uploads f ~ctxt ()

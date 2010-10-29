@@ -86,6 +86,7 @@ Library "oasis-db-ocsigen"
            Context,
            Task,
            Error,
+           Conf,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
