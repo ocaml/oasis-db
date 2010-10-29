@@ -15,6 +15,7 @@ type what =
   | Package  of string
   | Version  of string * string
   | Incoming of string (* tarball *)
+  | Auth
   | Other with sexp  
 
 type replay =  

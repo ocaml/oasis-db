@@ -48,52 +48,53 @@ let get ~sp () =
       | Some i -> i
       | None -> assert(false)
   in
-   catch 
-     (fun () ->
-        let cookies =
-          Eliom_sessions.get_cookies sp
-        in
-          begin
-            try 
-              return 
-                 (Netencoding.Url.decode
-                    (Ocsigen_lib.String_Table.find 
-                       "account_ext_token"
-                       cookies))
-             with Not_found ->
-               fail 
-                 (Failure (s_ "Forge cookie not found"))
-          end
+   let cookies =
+     Eliom_sessions.get_cookies sp
+   in
+    try 
+      let token = 
+        Netencoding.Url.decode
+          (Ocsigen_lib.String_Table.find 
+             "account_ext_token"
+             cookies)
+      in
+        catch 
+          (fun () ->
+             Lwt_pool.use SQL.pool
+               (fun db -> 
+                  PGSQL(db) 
+                    "SELECT user_id, realname FROM account_ext \
+                       WHERE token = $token")
 
-        >>= fun token ->
-          Lwt_pool.use SQL.pool
-            (fun db -> 
-               PGSQL(db) 
-                 "SELECT user_id, realname FROM account_ext \
-                     WHERE token = $token")
+             >>= 
+             (function
+                | e :: _ -> 
+                    return e
+                | [] -> 
+                    fail 
+                      (Failure 
+                         (Printf.sprintf 
+                            (f_ "Cannot found token '%s' in DB")
+                            token)))
 
-        >>= 
-        (function
-           | e :: _ -> 
-               return e
-           | [] -> 
-               fail (Failure (s_ "Cannot found token in DB")))
+             >|= fun (user_id, realname) ->
+               User
+                 {
+                   accnt_id   = the user_id;
+                   accnt_name = the realname;
+                 })
 
-        >>= 
-        (fun (user_id, realname) ->
-           return
-             (User
-                {
-                  accnt_id   = the user_id;
-                  accnt_name = the realname;
-                }))
-     )
+          (function
+             | Failure msg ->
+                 Log.add Lwt_log.Notice Log.Auth "Account" ("",[]) [msg]
+                 >>= fun () ->
+                 return Anon
+             | e ->
+                 fail e)
+
+    with Not_found ->
+      return Anon
      
-     (function
-        | Failure msg ->
-            return Anon
-        | e ->
-            fail e)
 
 let self_uri ~sp = 
   let proto =

@@ -121,9 +121,12 @@ let login =
                 String.make 30 '\000'
               in
                 for i = 0 to (String.length str) - 1 do
-                  str.[i] <- Char.chr(Random.int 256)
+                  str.[i] <- Char.chr((Random.int 127) + 1)
                 done;
-                Netencoding.Base64.encode str
+                str
+            in
+            let token_url =
+              Netencoding.Url.encode token
             in
               PGSQL(db)
                 "DELETE FROM account_ext WHERE user_id = $user_id"
@@ -141,7 +144,7 @@ let login =
               >>= fun () -> 
               redirect 
                 ~sp 
-                ~cookies:[mk_cookie token]
+                ~cookies:[mk_cookie token_url]
                 "You are now logged in." 
                 redirect_opt))
 
