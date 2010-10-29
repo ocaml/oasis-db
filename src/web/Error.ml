@@ -67,11 +67,13 @@ let () =
                ~extra_headers:
                [meta
                   ~a:[a_http_equiv "refresh"] 
-                  ~content:"5"
-                  ()] (* TODO: general conf *)
+                  ~content:(string_of_int (int_of_float Conf.timeout_delay))
+                  ()]
                (error_message 
-                  (* TODO: general conf + better HTML formatting *)
-                  (msg^" This page will be refreshed in a few seconds."))
+                  (* TODO: better HTML formatting *)
+                  (Printf.sprintf
+                     (f_ "%s This page will be refreshed in a %.0f seconds.")
+                     msg Conf.timeout_delay))
 
          | Failure str ->
              error_template ~sp 
