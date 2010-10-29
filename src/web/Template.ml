@@ -143,27 +143,11 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                     [a about sp [pcdata (s_ "About this website")] ()]);
                ]]])
 
-let unauth_template ~sp ?extra_headers ~title ~div_id () =
-  Context.get ~sp () 
-  >>= fun ctxt ->
-  (Account.box ~role:ctxt.role sp)
-  >>= fun account_box ->
-  return 
-    (ctxt, 
-     fun ctnt -> 
-       return 
-         (template_skeleton 
-            ~sp ?extra_headers ~title ~div_id 
-            account_box ctnt))
-
-let auth_template ~sp ?extra_headers ~title ~div_id () = 
-  unauth_template ~sp ?extra_headers ~title ~div_id () 
-  >>= fun (ctxt, tmpl) ->
-  begin
-    match ctxt.role with 
-      | User accnt | Admin accnt ->
-          return (ctxt, tmpl, accnt) 
-      | Anon ->
-          fail RequiresAuth
-  end
-
+let template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
+  let account_box = 
+    Account.box ctxt.role sp
+  in
+    template_skeleton 
+      ~sp ?extra_headers ~title ~div_id 
+      account_box 
+      ctnt

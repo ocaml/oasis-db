@@ -12,13 +12,13 @@ let new_account_handler =
   register
     Account.new_account
     (fun sp () () ->
-       unauth_template 
+       Context.get ~sp () 
+       >|= fun ctxt ->
+       template 
+         ~ctxt
          ~sp 
          ~title:(OneTitle (s_ "New account"))
          ~div_id:"new_account"
-         ()
-       >>= fun (_, tmpl) ->
-       tmpl
          [
            p [pcdata 
                 (s_ 

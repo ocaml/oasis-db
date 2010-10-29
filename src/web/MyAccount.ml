@@ -18,13 +18,13 @@ let account_settings =
     ~path:["account"; "settings"]
     ~get_params:unit
     (fun sp () () -> 
-       auth_template 
+       Context.get_user ~sp () 
+       >|= fun (ctxt, accnt) ->
+       template 
+         ~ctxt
          ~sp 
          ~title:(OneTitle (s_ "Account settings"))
          ~div_id:"account_settings"
-         () 
-       >>= fun (ctxt, tmpl, accnt) ->
-       tmpl
          [
            p [pcdata 
                 (s_ "OASIS-DB use two kinds of information: the one stored \
@@ -60,109 +60,111 @@ let my_account_handler =
            | None -> 0L 
        in
 
+       Context.get_user ~sp () 
+       >>= fun (ctxt, accnt) ->
        (* Compute events list *)
        Log.get Log.All Log.LevelAndDate log_offset log_per_page
 
        (* Display events list *)
-       >>= fun events ->
-       auth_template 
-         ~sp 
-         ~title:(OneTitle (s_ "My account"))
-         ~div_id:"my_account"
-         ()
-       >>= fun (_, tmpl, accnt) ->
-       let user_tz = 
-         Time_Zone.current ()
-       in
-
-       let rec mk_lst odd prv_user_date = 
-         function 
-           | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
-               let user_date = 
-                 Calendar.convert date tz user_tz
-               in
-               let same_day =
-                 match prv_user_date with 
-                   | Some prv_user_date ->
-                       List.fold_left 
-                         (fun acc f -> acc && f prv_user_date = f user_date)
-                         true
-                         [Calendar.day_of_year; Calendar.year]
-                   | None ->
-                       false
-               in
-                 if same_day then
-                   begin
-                     let shrt_lvl, class_lvl =
-                       Log.html_log_level log_lvl
-                     in
-                       (tr
-                          ~a:[a_class [if odd then "odd" else "even"; class_lvl]]
-                          (th
-                             ~a:[a_class ["hour"]]
-                             [pcdata (Printer.Calendar.sprint (s_ "%R") user_date)])
-                          [td [pcdata shrt_lvl];
-                           td [pcdata descr];
-                           td []])
-                       ::
-                       mk_lst (not odd) (Some user_date) tl
-                   end
-                 else
-                   begin
-                     (tr 
-                        (th 
-                           ~a:[a_colspan 4; a_class ["day"]]
-                           [pcdata (Printer.Calendar.sprint (s_ "%F") user_date)])
-                        [])
-                     ::
-                     mk_lst true (Some user_date) lst
-                   end
-
-           | [] ->
-               []
-       in
-
-       let navigation_box = 
-         let mk_item cond offset txt = 
-           if cond then 
-             span ~a:[a_class ["enabled"]]
-               [a 
-                  my_account sp [pcdata txt] 
-                  (Some (max 0L offset))]
-           else
-             span ~a:[a_class ["disabled"]] 
-               [pcdata txt]
+       >|= fun events ->
+       begin
+         let user_tz = 
+           Time_Zone.current ()
          in
 
-           [
-             mk_item 
-               (log_offset > 0L)
-               (Int64.sub log_offset log_per_page)
-               (s_ "Previous");
+         let rec mk_lst odd prv_user_date = 
+           function 
+             | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
+                 let user_date = 
+                   Calendar.convert date tz user_tz
+                 in
+                 let same_day =
+                   match prv_user_date with 
+                     | Some prv_user_date ->
+                         List.fold_left 
+                           (fun acc f -> acc && f prv_user_date = f user_date)
+                           true
+                           [Calendar.day_of_year; Calendar.year]
+                     | None ->
+                         false
+                 in
+                   if same_day then
+                     begin
+                       let shrt_lvl, class_lvl =
+                         Log.html_log_level log_lvl
+                       in
+                         (tr
+                            ~a:[a_class [if odd then "odd" else "even"; class_lvl]]
+                            (th
+                               ~a:[a_class ["hour"]]
+                               [pcdata (Printer.Calendar.sprint (s_ "%R") user_date)])
+                            [td [pcdata shrt_lvl];
+                             td [pcdata descr];
+                             td []])
+                         ::
+                         mk_lst (not odd) (Some user_date) tl
+                     end
+                   else
+                     begin
+                       (tr 
+                          (th 
+                             ~a:[a_colspan 4; a_class ["day"]]
+                             [pcdata (Printer.Calendar.sprint (s_ "%F") user_date)])
+                          [])
+                       ::
+                       mk_lst true (Some user_date) lst
+                     end
 
-             mk_item
-               (Int64.of_int (List.length events) = log_per_page)
-               (Int64.add log_offset log_per_page)
-               (s_ "Next");
-           ]
-       in
+             | [] ->
+                 []
+         in
 
-         tmpl
-           [
-            p [pcdata (Printf.sprintf (f_ "Hello %s!") accnt.accnt_name)];
+         let navigation_box = 
+           let mk_item cond offset txt = 
+             if cond then 
+               span ~a:[a_class ["enabled"]]
+                 [a 
+                    my_account sp [pcdata txt] 
+                    (Some (max 0L offset))]
+             else
+               span ~a:[a_class ["disabled"]] 
+                 [pcdata txt]
+           in
 
-            div ~a:[a_class ["navigate"; "top"]] navigation_box;
+             [
+               mk_item 
+                 (log_offset > 0L)
+                 (Int64.sub log_offset log_per_page)
+                 (s_ "Previous");
 
-            table
-              (tr 
-                 (th [pcdata (s_ "Date")])
-                 [th [pcdata ""];
-                  th [pcdata (s_ "Description")];
-                  th [pcdata (s_ "Link")]])
-              (mk_lst true None events);
+               mk_item
+                 (Int64.of_int (List.length events) = log_per_page)
+                 (Int64.add log_offset log_per_page)
+                 (s_ "Next");
+             ]
+         in
 
-            div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
+           template 
+             ~ctxt
+             ~sp 
+             ~title:(OneTitle (s_ "My account"))
+             ~div_id:"my_account"
+             [
+              p [pcdata (Printf.sprintf (f_ "Hello %s!") accnt.accnt_name)];
 
-            p [a account_settings sp 
-                 [pcdata (s_ "Account settings")] ()];
-           ])
+              div ~a:[a_class ["navigate"; "top"]] navigation_box;
+
+              table
+                (tr 
+                   (th [pcdata (s_ "Date")])
+                   [th [pcdata ""];
+                    th [pcdata (s_ "Description")];
+                    th [pcdata (s_ "Link")]])
+                (mk_lst true None events);
+
+              div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
+
+              p [a account_settings sp 
+                   [pcdata (s_ "Account settings")] ()];
+             ]
+       end)

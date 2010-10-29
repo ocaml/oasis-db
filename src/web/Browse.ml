@@ -160,24 +160,7 @@ let oasis_fields pkg =
     ]
 
 
-(*
-  (* Backup download link *)
-  Dist.a_dist 
-    ~sp ~ctxt ver 
-    (fun fn -> 
-       [pcdata 
-          (Printf.sprintf 
-             (f_ "%s (backup)") 
-             (FilePath.basename fn))])
-    `Tarball
-
-   ODBStorage.Ver.filename 
-     ver.pkg 
-     (OASISVersion.string_of_version ver.ver)
-     `OASIS
- *)
-
-let mk_version_page' ~ctxt ~sp ver backup_link oasis_fn = 
+let version_page_box ~ctxt ~sp ver backup_link oasis_fn = 
   (catch 
      (fun () ->
         ODBStorage.Ver.elements ver.pkg)
@@ -211,7 +194,7 @@ let mk_version_page' ~ctxt ~sp ver backup_link oasis_fn =
     (fun e ->
        return None)
 
-  >>= fun pkg_opt ->
+  >|= fun pkg_opt ->
 
   (* End of data gathering, really create the page *)
   let synopsis, description, extra_fields = 
@@ -292,260 +275,105 @@ let mk_version_page' ~ctxt ~sp ver backup_link oasis_fn =
       add_comma (List.rev lst)
   in
 
-  (* Page titles *)
-  let browser_ttl =
-    Printf.sprintf (f_ "%s v%s") ver.pkg (sov ver.ver)
-  in
-  let page_ttl = 
-    match synopsis with 
-      | Some s -> Printf.sprintf (f_ "%s: %s") ver.pkg s
-      | None   -> ver.pkg
-  in
+    pkg_opt,
+    [
+      (match description with 
+         | Some txt -> 
+             div 
+               ~a:[a_id "description"]
+               (MarkdownHTML.to_html
+                  ~render_link:(fun _ -> i [pcdata "link removed"])
+                  ~render_img:(fun _ -> i [pcdata "image removed"])
+                  ~render_pre:(fun ~kind s -> pre [pcdata s])
+                  (Markdown.parse_text txt))
+         | None -> 
+             pcdata "");
 
-    (* The page itself *)
-    unauth_template ~sp 
-      ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
-      ~div_id:"browse" 
-      ()
-    >|= fun _ ->
-(*
-    tmpl
- *)
-      [
-        (match description with 
-           | Some txt -> 
-               div 
-                 ~a:[a_id "description"]
-                 (MarkdownHTML.to_html
-                    ~render_link:(fun _ -> i [pcdata "link removed"])
-                    ~render_img:(fun _ -> i [pcdata "image removed"])
-                    ~render_pre:(fun ~kind s -> pre [pcdata s])
-                    (Markdown.parse_text txt))
-           | None -> 
-               pcdata "");
+      table 
+        (field 
+           "odd" 
+           ("versions", (s_ "Versions: "), versions_field))
+        (even_fields
+           (extra_fields
+            @
+            [
+              Some 
+                ("upload_date",
+                 s_ "Upload date: ",
+                 [pcdata (Printer.Calendar.to_string ver.upload_date)]);
 
-        table 
-          (field 
-             "odd" 
-             ("versions", (s_ "Versions: "), versions_field))
-          (even_fields
-             (extra_fields
-              @
-              [
-                Some 
-                  ("upload_date",
-                   s_ "Upload date: ",
-                   [pcdata (Printer.Calendar.to_string ver.upload_date)]);
+              Some 
+                ("upload_method",
+                 s_ "Upload method: ",
+                 [pcdata (string_of_upload_method ver.upload_method)]);
 
-                Some 
-                  ("upload_method",
-                   s_ "Upload method: ",
-                   [pcdata (string_of_upload_method ver.upload_method)]);
+              Some 
+                ("downloads",
+                 s_ "Downloads: ",
+                 begin
+                   match ver.publink with 
+                     | Some url ->
+                         [
+                           (XHTML.M.a 
+                              ~a:[a_href (uri_of_string url)]
+                              [b 
+                                 [pcdata 
+                                    (FilePath.basename fn_backup)]]);
+                           a_backup
+                         ]
+                     | None ->
+                         [a_backup]
+                 end);
+            ]))]
 
-                Some 
-                  ("downloads",
-                   s_ "Downloads: ",
-                   begin
-                     match ver.publink with 
-                       | Some url ->
-                           [
-                             (XHTML.M.a 
-                                ~a:[a_href (uri_of_string url)]
-                                [b 
-                                   [pcdata 
-                                      (FilePath.basename fn_backup)]]);
-                             a_backup
-                           ]
-                       | None ->
-                           [a_backup]
-                   end);
-              ]))]
-
-let mk_version_page ~sp fver = 
-  Context.get ~sp () 
-  >>= fun ctxt ->
+let browse_version_page ~ctxt ~sp fver = 
   catch 
     (fun () -> 
-       (* Versions (current, all and latest) *)
        fver () 
        >>= fun ver ->
-       ODBStorage.Ver.elements ver.pkg 
-       >>= fun ver_lst ->
-       ODBStorage.Ver.latest ver.pkg
-       >>= fun ver_latest ->
-
-       (* Backup download link *)
-       Dist.a_dist 
-         ~sp ~ctxt ver 
-         (fun fn -> 
-            [pcdata 
-               (Printf.sprintf 
-                  (f_ "%s (backup)") 
-                  (FilePath.basename fn))])
-         `Tarball
-       >>= fun (a_backup, fn_backup) ->
-
-       (* Load OASIS file *)
-       catch 
-         (fun () ->
-            ODBStorage.Ver.filename 
-              ver.pkg 
-              (OASISVersion.string_of_version ver.ver)
-              `OASIS
-            >>= 
-            ODBOASIS.from_file 
-              ~ctxt:ctxt.odb
-            >>= fun pkg ->
-            return (Some pkg))
-         (fun e ->
-            return None)
-       >>= fun pkg_opt ->
-
-       (* End of data gathering, really create the page *)
-       let synopsis, description, extra_fields = 
-         match pkg_opt with 
-           | Some pkg ->
-               Some pkg.synopsis,
-               pkg.description,
-               oasis_fields pkg
-
-           | None -> 
-               None,
-               (* TODO: link to create an oasis file *)
-               Some (s_ "This version doesn't have an _oasis file."),
-               []
-       in
-
-       let sov = 
-         OASISVersion.string_of_version
-       in
-
-       (* Field generation: odd and even lines *)
-       let field clss (id, nm, vl) =
-         (tr
-            ~a:[a_id id;
-                a_class [clss]]
-            (th [pcdata nm]) 
-            [td vl])
-       in
-       let rec gen_fields clss next_fields =
-         function
-           | Some e :: tl ->
-               field clss e :: next_fields tl
-           | None :: tl ->
-               gen_fields clss next_fields tl
-           | [] ->
-               []
-       and odd_fields lst = 
-         gen_fields "odd" even_fields lst 
-       and even_fields lst =
-         gen_fields "even" odd_fields lst
-       in
-
-       (* Field for versions number and their links to 
-        * version's page
-        *)
-       let versions_field =
-         let mk_pcdata ver = 
-           if ver = ver_latest then
-             b [pcdata ((sov ver.ver)^"*")]
-           else
-             pcdata (sov ver.ver)
+       begin
+         let backup_link () = 
+           (* Backup download link *)
+           Dist.a_dist 
+             ~sp ~ctxt ver 
+             (fun fn -> 
+                [pcdata 
+                   (Printf.sprintf 
+                      (f_ "%s (backup)") 
+                      (FilePath.basename fn))])
+             `Tarball
          in
-         let lst =
-           List.fold_left
-             (fun acc cur_ver ->
-                let hd = 
-                  if cur_ver = ver then
-                    mk_pcdata cur_ver
-                  else
-                    a
-                      browse
-                      sp
-                      [mk_pcdata cur_ver]
-                      (Some cur_ver.pkg, Some (sov cur_ver.ver))
-                in
-                  hd :: acc)
-             []
-             ver_lst
+         let oasis_fn = 
+           ODBStorage.Ver.filename 
+             ver.pkg 
+             (OASISVersion.string_of_version ver.ver)
+             `OASIS
          in
-         let rec add_comma =
-           function
-             | e1 :: e2 :: tl ->
-                 e1 :: pcdata (s_ ", ") :: add_comma (e2 :: tl)
-             | _ :: [] 
-             | [] as lst ->
-                 lst
+           version_page_box ~ctxt ~sp
+             ver backup_link oasis_fn
+       end
+       >|= fun (oasis_pkg, content) ->
+       begin
+         (* Page titles *)
+         let browser_ttl =
+           Printf.sprintf (f_ "%s v%s") 
+             ver.pkg 
+             (OASISVersion.string_of_version ver.ver)
          in
-           add_comma (List.rev lst)
-       in
-
-       (* Page titles *)
-       let browser_ttl =
-         Printf.sprintf (f_ "%s v%s") ver.pkg (sov ver.ver)
-       in
-       let page_ttl = 
-         match synopsis with 
-           | Some s -> Printf.sprintf (f_ "%s: %s") ver.pkg s
-           | None   -> ver.pkg
-       in
-
-         (* The page itself *)
-         unauth_template ~sp 
-           ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
-           ~div_id:"browse" 
-           ()
-         >>= fun (_, tmpl) ->
-         tmpl
-           [
-             (match description with 
-                | Some txt -> 
-                    div 
-                      ~a:[a_id "description"]
-                      (MarkdownHTML.to_html
-                         ~render_link:(fun _ -> i [pcdata "link removed"])
-                         ~render_img:(fun _ -> i [pcdata "image removed"])
-                         ~render_pre:(fun ~kind s -> pre [pcdata s])
-                         (Markdown.parse_text txt))
-                | None -> 
-                    pcdata "");
- 
-             table 
-               (field 
-                  "odd" 
-                  ("versions", (s_ "Versions: "), versions_field))
-               (even_fields
-                  (extra_fields
-                   @
-                   [
-                     Some 
-                       ("upload_date",
-                        s_ "Upload date: ",
-                        [pcdata (Printer.Calendar.to_string ver.upload_date)]);
- 
-                     Some 
-                       ("upload_method",
-                        s_ "Upload method: ",
-                        [pcdata (string_of_upload_method ver.upload_method)]);
- 
-                     Some 
-                       ("downloads",
-                        s_ "Downloads: ",
-                        begin
-                          match ver.publink with 
-                            | Some url ->
-                                [
-                                  (XHTML.M.a 
-                                     ~a:[a_href (uri_of_string url)]
-                                     [b 
-                                        [pcdata 
-                                           (FilePath.basename fn_backup)]]);
-                                  a_backup
-                                ]
-                            | None ->
-                                [a_backup]
-                        end);
-                   ]))])
+         let page_ttl = 
+           match oasis_pkg with 
+             | Some {synopsis = s} -> 
+                 Printf.sprintf (f_ "%s: %s") ver.pkg s
+             | None -> 
+                 ver.pkg
+         in
+           template 
+             ~ctxt
+             ~sp 
+             ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
+             ~div_id:"browse" 
+             content
+       end)
     (function
        | Not_found ->
            fail Eliom_common.Eliom_404
@@ -572,14 +400,12 @@ let browse_all ~ctxt ~sp () =
             return (pkg, ver, Some oasis))
          (fun e ->
             return (pkg, ver, None)))
-  >>= fun pkg_lst ->
-  unauth_template 
+  >|= fun pkg_lst ->
+  template 
+    ~ctxt
     ~sp 
     ~title:(BrowserAndPageTitle (s_ "Browse", s_ "Packages by category"))
     ~div_id:"browse"
-    ()
-  >>= fun (_, tmpl) ->
-  tmpl
     [
       (* TODO: category list + group by category *)
       begin
@@ -625,11 +451,11 @@ let browse_handler sp (pkg_opt, ver_opt) () =
   begin
     match pkg_opt, ver_opt with 
       | Some pkg, Some ver ->
-          mk_version_page ~sp 
+          browse_version_page ~ctxt ~sp 
             (fun () -> ODBStorage.Ver.find pkg ver)
 
       | Some pkg, None ->
-          mk_version_page ~sp
+          browse_version_page ~ctxt ~sp
             (fun () -> ODBStorage.Ver.latest pkg)
 
       | None, None ->

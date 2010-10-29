@@ -193,23 +193,13 @@ let new_account =
     ~get_params:unit 
     ()
 
-let box ?role sp = 
-  begin
-    match role with 
-      | Some role ->
-          return role
-      | None ->
-          (get ~sp ())
-  end
-  >>=
-  (function 
+let box role sp = 
+  match role with 
     | User _ | Admin _->
-        return 
-          [ul 
-             (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
-             [li [a my_account sp  [pcdata (s_ "My account")] None]]]
-     | Anon ->
-         return 
-           [ul
-              (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
-              [li [a new_account sp [pcdata (s_ "New account")] ()]]])
+        [ul 
+           (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
+           [li [a my_account sp  [pcdata (s_ "My account")] None]]]
+    | Anon ->
+        [ul
+           (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
+           [li [a new_account sp [pcdata (s_ "New account")] ()]]]

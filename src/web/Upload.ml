@@ -102,31 +102,14 @@ let upload_task ~ctxt upload_method tarball_fn tarball publink =
   in
     Task.add uploads f ~ctxt ()
 
-let upload_template ~sp ?extra_headers ctnt = 
-  auth_template
+let upload_template ~ctxt ~sp ?extra_headers ctnt = 
+  template
+    ~ctxt
     ~sp
     ~title:(OneTitle (s_ "Upload"))
     ~div_id:"upload"
     ?extra_headers
-    ()
-  >>= fun (_, tmpl, _) ->
-  tmpl ctnt
-
-(*
- *
- * Step 3: Move the uploaded tarball and its data to storage 
- * or cancel upload.
- *
- *)
-
-let upload_step3_no_post = 
-  register_new_service 
-    ~path:["upload_step3"]
-    ~get_params:(int "id")
-    (fun sp id _ ->
-       Context.get_user ~sp ()
-       >>= fun (ctxt, _) ->
-       upload_template ~sp [p [pcdata "nothing"]])
+    ctnt
 
 (* 
  *  
@@ -320,7 +303,7 @@ let upload_preview_box ~ctxt ~sp t =
   function 
     | Some ver ->
         begin
-          Browse.mk_version_page' ~ctxt ~sp
+          Browse.version_page_box ~ctxt ~sp
             ver 
             (fun () ->
                return 
@@ -331,7 +314,7 @@ let upload_preview_box ~ctxt ~sp t =
                   "toto.tar.gz") (* TODO: real name *))
             (* TODO: replace by ODBStorage.Ver.... *)
             (return (Filename.concat t.temp_dir "_oasis"))
-          >|= fun content ->
+          >|= fun (_, content) ->
             (h3 [pcdata (s_ "Preview")])
             ::
             content
@@ -362,16 +345,13 @@ let upload_action_redirect =
     (fun sp id (action, id) ->
        Context.get_user ~sp () 
        >>= fun (ctxt, _) ->
-       Task.wait uploads ~ctxt id ctxt.upload_delay
-       >>= fun (task, delay, res) ->
-       begin
-         match res with
-           | Some t ->
-               return (t, Task.set_logger task ctxt)
-           | None ->
-               fail (Failure "Timeout")
-       end
-       >>= fun (t, ctxt) ->
+       Task.wait uploads ~ctxt id 
+         ctxt.upload_delay
+         (Printf.sprintf 
+            (f_ "Tarball not yet moved to storage."))
+       >>= fun (task, delay, t) ->
+       return (Task.set_logger task ctxt)
+       >>= fun ctxt ->
        begin
          match action with 
            | "cancel" ->
@@ -438,9 +418,6 @@ let upload_action_box ~ctxt ~sp id t =
        ())
 
 let upload_content ~ctxt ~sp id = 
-  let tmpl ?extra_headers = 
-    upload_template ~sp ?extra_headers
-  in
 
   let html_log task = 
     let _, lst = 
@@ -475,24 +452,14 @@ let upload_content ~ctxt ~sp id =
             pcdata ""
   in
 
-    Task.wait uploads ~ctxt id ctxt.upload_delay
-    >>= fun (task, delay, res) ->
+    Task.wait uploads ~ctxt id 
+      ctxt.upload_delay
+      (Printf.sprintf
+         (f_ "The tarball is not yet processed."))
+         (* TODO: allow to cancel upload *)
+    >>= fun (task, delay, t) ->
     return (Task.set_logger task ctxt)
     >>= fun ctxt ->
-    begin
-      match res with 
-        | None ->
-            fail 
-              (Timeout 
-                 (Printf.sprintf 
-                    (f_ "The tarball is not yet processed. \
-                         This page will be refreshed in a few seconds.")))
-                  (* TODO: allow to cancel upload *)
-
-        | Some t ->
-            return t
-    end
-    >>= fun t ->
     begin
       if not (Sys.file_exists (ODBStorage.storage_filename t.temp_dir)) then
         (* TODO: the test above is really not precise *)
@@ -539,8 +506,9 @@ let upload_content ~ctxt ~sp id =
         @
          [action_box])
     end
-    >>= fun content -> 
-    tmpl (html_log task :: content)
+    >|= fun content -> 
+    upload_template ~ctxt ~sp
+      (html_log task :: content)
 
 let upload_step2 =
   register_new_service
@@ -622,5 +590,7 @@ let upload_handler sp () () =
          ]])
       ()
   in
-    upload_template ~sp [f]
+    Context.get_user ~sp ()
+    >|= fun (ctxt, _) ->
+    upload_template ~ctxt ~sp [f]
 

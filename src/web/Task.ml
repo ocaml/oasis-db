@@ -58,7 +58,7 @@ let add t f ~ctxt e =
     Hashtbl.add t !last_id e;
     !last_id
 
-let wait t ~ctxt id timeout =
+let wait t ~ctxt id timeout timeout_msg =
   let start_time = 
     Unix.gettimeofday () 
   in
@@ -79,10 +79,10 @@ let wait t ~ctxt id timeout =
              choose [timeout_thrd; t.thrd]
              >|= fun res -> 
                Lwt.cancel timeout_thrd;
-               Some res)
+               res)
           (function
              | Lwt_unix.Timeout ->
-                 return None
+                 fail (Common.Timeout timeout_msg)
              | e ->
                  fail e)
         >|= 

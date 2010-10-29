@@ -69,8 +69,6 @@ let get ~sp () =
       upload_delay = 5.0;
     }
 
-exception NeedLogin
-
 let get_user ~sp () = 
   get ~sp () 
   >>= fun ctxt -> 
@@ -78,4 +76,4 @@ let get_user ~sp () =
       | Account.User accnt | Account.Admin accnt ->
           return (ctxt, accnt)
       | Account.Anon ->
-          fail NeedLogin
+          fail Common.RequiresAuth

@@ -18,7 +18,9 @@ let () =
   let error_template ?extra_headers ?code ~sp lst = 
     catch 
       (fun () -> 
-         Account.box sp)
+         Context.get ~sp () 
+         >|= fun ctxt ->
+         Account.box ctxt.Context.role sp)
       (fun e ->
          return 
            (error_message
@@ -60,13 +62,16 @@ let () =
                   (s_ "You need to be logged in to see this page."))
 
          | Timeout msg ->
+             (* TODO: error code *)
              error_template ~sp
                ~extra_headers:
                [meta
                   ~a:[a_http_equiv "refresh"] 
                   ~content:"5"
                   ()] (* TODO: general conf *)
-               (error_message msg)
+               (error_message 
+                  (* TODO: general conf + better HTML formatting *)
+                  (msg^" This page will be refreshed in a few seconds."))
 
          | Failure str ->
              error_template ~sp 
