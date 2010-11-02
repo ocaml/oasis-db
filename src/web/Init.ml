@@ -1,7 +1,6 @@
 
 open Lwt
 open ODBGettext
-open Types
 open Eliom_services
 open Eliom_parameters
 open Eliom_predefmod

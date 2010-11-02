@@ -420,34 +420,93 @@ let upload_action_box ~ctxt ~sp id t =
              ]])
        ())
 
+let log_settings = 
+  Eliom_sessions.create_volatile_table ()
+
+let log_debug ~sp () = 
+  let sessdat = 
+    Eliom_sessions.get_volatile_session_data
+      ~table:log_settings 
+      ~sp ()
+  in
+    match sessdat with
+      | Eliom_sessions.Data debug ->
+          debug
+
+      | Eliom_sessions.Data_session_expired
+      | Eliom_sessions.No_data ->
+          false
+
+let log_debug_switch_action =
+  Eliom_predefmod.Action.register_new_coservice'
+    ~name:"log_debug_switch"
+    ~get_params:(bool "debug")
+    (fun sp debug _ ->
+       Eliom_sessions.set_volatile_session_data
+         ~table:log_settings
+         ~sp
+         debug;
+       return ())
+
+
+let log_box ~ctxt ~sp task = 
+
+  let debug =
+    log_debug ~sp ()
+  in
+
+  let debug_switch =
+    let text = 
+      if debug then
+        s_ "Hide debug log"
+      else
+        s_ "Show debug log"
+    in
+      p [a log_debug_switch_action sp [pcdata text] (not debug)]
+  in
+
+  let lst = 
+    Queue.fold
+      (fun acc (sct, lvl, msg) ->
+         if debug || lvl > Lwt_log.Debug then
+           begin
+             let short_nm, css_style = 
+               Log.html_log_level lvl 
+             in
+             let line =
+               tr
+                 ~a:[a_class [css_style]]
+                 (td [pcdata short_nm])
+                 [td [pcdata msg]]
+             in
+               line :: acc
+           end
+         else
+           begin
+             acc
+           end)
+      []
+      (Task.get_logger task)
+  in
+  let log =
+    match lst with 
+      | hd :: tl ->
+           odd_even_table hd tl
+      | [] ->
+          pcdata (s_ "(no log)")
+  in
+  let box = 
+    div 
+      ~a:[a_class ["log"]]
+      [h3 [pcdata (s_ "Log")];
+       debug_switch;
+       log]
+  in
+    return box
+
+
 let upload_content ~ctxt ~sp id = 
 
-  let html_log task = 
-    let lst = 
-      Queue.fold
-        (fun acc (sct, lvl, msg) ->
-           let short_nm, css_style = 
-             Log.html_log_level lvl 
-           in
-           let line =
-             tr
-               ~a:[a_class [css_style]]
-               (td [pcdata short_nm])
-               [td [pcdata msg]]
-           in
-             line :: acc)
-        []
-        (Task.get_logger task)
-    in
-      match lst with 
-        | hd :: tl ->
-          div 
-            ~a:[a_class ["log"]]
-            [h3 [pcdata (s_ "Log")];
-             odd_even_table hd tl]
-        | [] ->
-            pcdata ""
-  in
 
     Task.wait uploads ~ctxt id 
       ctxt.upload_delay
@@ -482,9 +541,13 @@ let upload_content ~ctxt ~sp id =
     >>= fun completion_box ->
     upload_action_box ~ctxt ~sp id t 
     >>= fun action_box ->
+    log_box ~ctxt ~sp task
+    >>= fun log_box ->
     begin
       return 
-        ([h3 [pcdata "Results"];
+        ([log_box]
+         @
+         [h3 [pcdata "Results"];
           if delay >= 0.0 then 
             (* TODO: the test above is really not precise *)
             p                   
@@ -495,17 +558,16 @@ let upload_content ~ctxt ~sp id =
                     t.tarball delay)]
           else
               pcdata "";
-          
+
           completion_box;
-        ]
-        @
+         ]
+         @
          preview_box
-        @
+         @
          [action_box])
     end
-    >|= fun content -> 
+    >|=
     upload_template ~ctxt ~sp
-      (html_log task :: content)
 
 let upload_step2 =
   register_new_service
