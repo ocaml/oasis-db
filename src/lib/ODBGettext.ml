@@ -12,7 +12,10 @@ let s_ s =
   s
 
 let sn_ s p n =
-  p
+  if n = 1 then 
+    s
+  else
+    p
 
 IFDEF HAS_GETTEXT THEN
 include

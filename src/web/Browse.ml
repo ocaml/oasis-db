@@ -49,6 +49,22 @@ let non_zero_lst id nm lst =
     else
       None
 
+let rec html_flatten sep =
+  function
+    | e1 :: (_ :: _) as tl ->
+        e1 @ (sep :: (html_flatten sep tl))
+    | [e] ->
+        e
+    | [] ->
+        []
+
+let rec html_concat sep =
+  function
+    | e1 :: (_ :: _) as tl ->
+        e1 :: sep :: (html_concat sep tl)
+    | [_] | [] as lst ->
+        lst
+
 let oasis_fields pkg =
   (* TODO: tool dependencies which includes test/doc, for dependencies
    * and provides.
@@ -109,13 +125,190 @@ let oasis_fields pkg =
       (OASISLibrary.findlib_name_map pkg)
       []
   in
+
+  let src_repos = 
+    let one_source_repo cs repo = 
+      let a_location = 
+        XHTML.M.a 
+          ~a:[a_href (uri_of_string repo.src_repo_location)]
+          [pcdata repo.src_repo_location]
+      in
+
+      let the err f = 
+        function 
+          | Some e ->
+              f e
+          | None ->
+              span ~a:[a_class ["error"]] err
+      in
+
+      let vcs_get = 
+        match repo.src_repo_type with 
+          | Darcs ->
+              begin
+                let tag_opts = 
+                  match repo.src_repo_tag with 
+                    | Some tag ->
+                        Printf.sprintf "-t '%s'"
+                          (Pcre.quote tag)
+                    | None ->
+                        ""
+                in
+                  [pcdata (Printf.sprintf "darcs get %s" tag_opts); 
+                   a_location]
+              end
+
+          | Git ->
+              begin
+                let branch_opt = 
+                  match repo.src_repo_branch with 
+                    | Some b -> Printf.sprintf "-b %s" b
+                    | None   -> ""
+                in
+
+                let command = 
+                  [pcdata ("git clone "^branch_opt); a_location]
+                in
+
+                  match repo.src_repo_tag with 
+                    | Some tag ->
+                        begin
+                          let dn = 
+                            OASISUnixPath.basename repo.src_repo_location
+                          in
+                          let dn = 
+                            if ExtString.String.ends_with dn ".git" then
+                              String.sub dn 0 ((String.length dn) - (String.length ".git"))
+                            else
+                              dn
+                          in
+                            command @
+                            [pcdata 
+                               (Printf.sprintf 
+                                  " && cd %s && git checkout %s"
+                                  dn tag)]
+                        end
+                    | None ->
+                        command
+              end
+
+          | Svn ->
+              begin
+                let a_location = 
+                  match repo.src_repo_subdir with
+                    | Some dn ->
+                        let url = 
+                          OASISUnixPath.concat repo.src_repo_location dn
+                        in
+                          XHTML.M.a
+                            ~a:[a_href (uri_of_string url)]
+                            [pcdata url]
+                    | None ->
+                        a_location
+                in
+                  [pcdata "svn checkout "; a_location]
+              end
+
+          | Cvs ->
+              begin
+                let tag_branch_opt = 
+                  match repo.src_repo_branch, repo.src_repo_tag with 
+                    | Some t, None 
+                    | None, Some t ->
+                        "-r "^t
+                    | Some _, Some t ->
+                        (* TODO: error *)
+                        "-r "^t
+                    | None, None ->
+                        ""
+                in
+                  [pcdata "cvs checkout -d "; a_location; 
+                   pcdata " "; 
+                   pcdata tag_branch_opt;
+                   the 
+                     [pcdata (s_ "No CVS module defined")]
+                     pcdata repo.src_repo_module]
+              end
+
+          | Hg ->
+              begin
+                let tag_branch_opt = 
+                  match repo.src_repo_branch, repo.src_repo_tag with 
+                    | Some t, None 
+                    | None, Some t ->
+                        "-u "^t
+                    | Some _, Some t ->
+                        (* TODO: error *)
+                        "-u "^t
+                    | None, None ->
+                        ""
+                in
+                  [pcdata ("hg clone "^tag_branch_opt); a_location]
+              end
+
+          | Bzr ->
+              begin
+                let tag_opt = 
+                  match repo.src_repo_tag with 
+                    | Some t -> "-r tag:"^t
+                    | None   -> ""
+                in
+                  
+                  [pcdata ("bzr branch "^tag_opt); a_location]
+              end
+
+          | Arch (* TODO *)
+          | Monotone (* TODO *)
+          | OtherVCS _ ->
+              [pcdata "Unsupported VCS"]
+      in
+
+      let vcs_get =
+        match repo.src_repo_browser with 
+          | Some url ->
+              vcs_get 
+              @ 
+              [pcdata (s_ " (");
+               XHTML.M.a
+                 ~a:[a_href (uri_of_string url)]
+                 [pcdata (s_ "browse")];
+               pcdata (s_ ")")]
+          | None ->
+              vcs_get
+      in
+
+        (cs.cs_name, vcs_get) 
+    in
+
+    let lst = 
+      List.fold_left 
+        (fun acc ->
+           function
+             | SrcRepo (cs, repo) ->
+                 (one_source_repo cs repo) :: acc
+
+             | Library _ | Executable _ | Flag _ | Test _ | Doc _ ->
+                 acc)
+        []
+        pkg.sections
+    in
+      match lst with 
+        | [_, html] ->
+            [html]
+        | lst ->
+            List.rev_map 
+              (fun (nm, html) ->
+                 (pcdata (Printf.sprintf (f_ "(%s) ") nm)) :: html)
+              lst
+  in
+
     [
       begin
         match pkg.homepage with
           | Some url ->
               Some 
                 ("homepage",
-                 s_ "Homepage",
+                 s_ "Homepage: ",
                  [XHTML.M.a 
                     ~a:[a_href (uri_of_string url)]
                     [pcdata url]])
@@ -153,10 +346,18 @@ let oasis_fields pkg =
         (sn_ "Category: " "Categories: ")
         pkg.categories;
 
-      (* TODO: VCS 
-       * s_ "Source repository: ",
-       * ...;
-       *)
+      begin
+        match src_repos with 
+          | [] -> None
+          | lst ->
+              Some
+                ("source_repositories",
+                 sn_ 
+                   "Source repository: " 
+                   "Source repositories: " 
+                   (List.length lst),
+                 html_flatten (pcdata "; ") lst)
+      end;
     ]
 
 
@@ -270,6 +471,19 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
       add_comma (List.rev lst)
   in
 
+  let downloads =
+    match ver.publink with 
+      | Some url ->
+          [
+            XHTML.M.a 
+              ~a:[a_href (uri_of_string url)]
+              [b [pcdata (FilePath.basename fn_backup)]];
+              a_backup
+          ]
+      | None ->
+          [a_backup]
+  in
+
     pkg_opt,
     [
       (match description with 
@@ -303,21 +517,8 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
 
               Some 
                 ("downloads",
-                 s_ "Downloads: ",
-                 begin
-                   match ver.publink with 
-                     | Some url ->
-                         [
-                           (XHTML.M.a 
-                              ~a:[a_href (uri_of_string url)]
-                              [b 
-                                 [pcdata 
-                                    (FilePath.basename fn_backup)]]);
-                           a_backup
-                         ]
-                     | None ->
-                         [a_backup]
-                 end);
+                 sn_ "Download: " "Downloads: " (List.length downloads),
+                 html_concat (pcdata (s_ ", ")) downloads);
             ]))]
 
 let browse_version_page ~ctxt ~sp fver = 
