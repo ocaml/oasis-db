@@ -19,12 +19,12 @@ struct
 
   include MapString
 
-  let add nm ver1_opt t = 
-    let ver2_opt =
+  let add nm ver1_opt optional1 t = 
+    let ver2_opt, optional2 =
       try 
         MapString.find nm t
       with Not_found ->
-        None
+        None, true
     in
     let ver_opt = 
       match ver1_opt, ver2_opt with
@@ -36,7 +36,10 @@ struct
         | ver_opt, None ->
             ver_opt
     in
-      MapString.add nm ver_opt t
+    let optional =
+      optional1 && optional2
+    in
+      MapString.add nm (ver_opt, optional) t
 
 end
 
@@ -51,7 +54,7 @@ let non_zero_lst id nm lst =
 
 let rec html_flatten sep =
   function
-    | e1 :: (_ :: _) as tl ->
+    | e1 :: ((_ :: _) as tl) ->
         e1 @ (sep :: (html_flatten sep tl))
     | [e] ->
         e
@@ -60,7 +63,7 @@ let rec html_flatten sep =
 
 let rec html_concat sep =
   function
-    | e1 :: (_ :: _) as tl ->
+    | e1 :: ((_ :: _) as tl) ->
         e1 :: sep :: (html_concat sep tl)
     | [_] | [] as lst ->
         lst
@@ -78,16 +81,24 @@ let oasis_fields pkg =
              | Executable (_, bs, _)
              | Library (_, bs, _) ->
                  begin
-                   List.fold_left
-                     (fun acc ->
-                        function
-                          | FindlibPackage (nm, ver_opt) ->
-                              BuildDepends.add nm ver_opt acc
- 
-                          | InternalLibrary _ ->
-                              acc)
-                     acc
-                     bs.bs_build_depends
+                   let optional =
+                     (* If the build is optional, the dependencies
+                      * are optional as well 
+                      *)
+                     match bs.bs_build with 
+                       | [OASISExpr.EBool true, true] -> false
+                       | _ -> true
+                   in
+                     List.fold_left
+                       (fun acc ->
+                          function
+                            | FindlibPackage (nm, ver_opt) ->
+                                BuildDepends.add nm ver_opt optional acc
+   
+                            | InternalLibrary _ ->
+                                acc)
+                       acc
+                       bs.bs_build_depends
                  end
                    
              | Flag _ | Test _ | Doc _ | SrcRepo _ ->
@@ -96,15 +107,19 @@ let oasis_fields pkg =
         pkg.sections
     in
       BuildDepends.fold
-        (fun nm ver_opt acc ->
+        (fun nm e acc ->
+           let scmp = OASISVersion.string_of_comparator in
+           let spf  fmt = Printf.sprintf fmt in
            let hd = 
-             match ver_opt with 
-               | Some cmp ->
-                   Printf.sprintf (f_ "%s (%s)")
-                     nm
-                     (OASISVersion.string_of_comparator cmp)
-               | None ->
+             match e with 
+               | Some cmp, false ->
+                   spf (f_ "%s (%s)") nm (scmp cmp)
+               | Some cmp, true ->
+                   spf (f_ "%s (%s, optional)") nm (scmp cmp) 
+               | None, false ->
                    nm
+               | None, true ->
+                   spf (f_ "%s (optional)") nm
            in
              hd :: acc)
         deps
