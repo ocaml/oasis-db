@@ -17,6 +17,9 @@ let sn_ s p n =
   else
     p
 
+let ns_ s = 
+  s
+
 IFDEF HAS_GETTEXT THEN
 include
   Gettext.Library

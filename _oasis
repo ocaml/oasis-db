@@ -87,6 +87,7 @@ Library "oasis-db-ocsigen"
            Task,
            Error,
            Conf,
+           Feeds,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
@@ -94,7 +95,8 @@ Library "oasis-db-ocsigen"
                 netstring, 
                 threads, 
                 calendar,
-                markdown, markdown.html
+                markdown, markdown.html,
+                cameleon.rss
 
 Executable FakeIncoming
   Path: test
