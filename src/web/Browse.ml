@@ -8,49 +8,11 @@ open Eliom_predefmod.Xhtml
 open CalendarLib
 open ODBVer
 open OASISTypes
+open OASISVersion
 open ODBGettext
 open Context
 open Template
 open Common
-
-module BuildDepends =
-struct 
-  module MapString = Map.Make(String)
-
-  include MapString
-
-  let add nm ver1_opt optional1 t = 
-    let ver2_opt, optional2 =
-      try 
-        MapString.find nm t
-      with Not_found ->
-        None, true
-    in
-    let ver_opt = 
-      match ver1_opt, ver2_opt with
-        | Some cmp1, Some cmp2 ->
-            Some 
-              (OASISVersion.comparator_reduce
-                 (OASISVersion.VAnd (cmp1, cmp2)))
-        | None, ver_opt
-        | ver_opt, None ->
-            ver_opt
-    in
-    let optional =
-      optional1 && optional2
-    in
-      MapString.add nm (ver_opt, optional) t
-
-end
-
-let non_zero_lst id nm lst =
-  let len =
-    List.length lst 
-  in
-    if len > 0 then
-      Some (id, nm len, [pcdata (String.concat (s_ ", ") lst)])
-    else
-      None
 
 let rec html_flatten sep =
   function
@@ -68,50 +30,34 @@ let rec html_concat sep =
     | [_] | [] as lst ->
         lst
 
-let oasis_fields pkg =
-  (* TODO: tool dependencies which includes test/doc, for dependencies
-   * and provides.
-   * TODO: link to packages that depends/provides 
+let non_zero_lst_html id nm lst = 
+  let len =
+    List.length lst 
+  in
+    if len > 0 then
+      Some (id, nm len, html_concat (pcdata (s_ ", ")) lst)
+    else
+      None
+
+let non_zero_lst id nm lst =
+  non_zero_lst_html id nm (List.map pcdata lst)
+
+let oasis_fields ~ctxt ~sp pkg =
+  (* TODO: link to packages that rev-depends
    *)
-  let dependencies =
-    let deps = 
-      List.fold_left
-        (fun acc ->
-           function
-             | Executable (_, bs, _)
-             | Library (_, bs, _) ->
-                 begin
-                   let optional =
-                     (* If the build is optional, the dependencies
-                      * are optional as well 
-                      *)
-                     match bs.bs_build with 
-                       | [OASISExpr.EBool true, true] -> false
-                       | _ -> true
-                   in
-                     List.fold_left
-                       (fun acc ->
-                          function
-                            | FindlibPackage (nm, ver_opt) ->
-                                BuildDepends.add nm ver_opt optional acc
-   
-                            | InternalLibrary _ ->
-                                acc)
-                       acc
-                       bs.bs_build_depends
-                 end
-                   
-             | Flag _ | Test _ | Doc _ | SrcRepo _ ->
-                 acc)
-        BuildDepends.empty
-        pkg.sections
-    in
-      BuildDepends.fold
+
+  (* Compute dependencies *)
+  ODBDeps.solve ~ctxt:ctxt.odb (ODBDeps.of_oasis_package pkg)
+  >|= fun deps ->
+
+  begin
+    let dependencies =
+      ODBDeps.fold
         (fun nm e acc ->
-           let scmp = OASISVersion.string_of_comparator in
+           let scmp = string_of_comparator in
            let spf  fmt = Printf.sprintf fmt in
-           let hd = 
-             match e with 
+           let txt = 
+             match e.ODBDeps.version_cmp, e.ODBDeps.optional with 
                | Some cmp, false ->
                    spf (f_ "%s (%s)") nm (scmp cmp)
                | Some cmp, true ->
@@ -121,259 +67,260 @@ let oasis_fields pkg =
                | None, true ->
                    spf (f_ "%s (optional)") nm
            in
+           let hd = 
+             match e.ODBDeps.package_version with 
+               | Some ver ->
+                   a 
+                     browse 
+                     sp 
+                     [pcdata txt]
+                     (Some ver.pkg, Some ver.ver)
+               | None ->
+                   pcdata txt 
+           in
              hd :: acc)
         deps
         []
-  in
- 
-  let provides =
-    OASISUtils.MapString.fold
-      (fun _ vl acc ->
-         let hd = 
-           match vl with 
-             | Some pre, nm -> 
-                 pre^"."^nm
-             | None, nm -> 
-                 nm
-         in
-           hd :: acc)
-      (OASISLibrary.findlib_name_map pkg)
-      []
-  in
-
-  let src_repos = 
-    let one_source_repo cs repo = 
-      let a_location = 
-        XHTML.M.a 
-          ~a:[a_href (uri_of_string repo.src_repo_location)]
-          [pcdata repo.src_repo_location]
-      in
-
-      let the err f = 
-        function 
-          | Some e ->
-              f e
-          | None ->
-              span ~a:[a_class ["error"]] err
-      in
-
-      let vcs_get = 
-        match repo.src_repo_type with 
-          | Darcs ->
-              begin
-                let tag_opts = 
-                  match repo.src_repo_tag with 
-                    | Some tag ->
-                        Printf.sprintf "-t '%s'"
-                          (Pcre.quote tag)
-                    | None ->
-                        ""
-                in
-                  [pcdata (Printf.sprintf "darcs get %s" tag_opts); 
-                   a_location]
-              end
-
-          | Git ->
-              begin
-                let branch_opt = 
-                  match repo.src_repo_branch with 
-                    | Some b -> Printf.sprintf "-b %s" b
-                    | None   -> ""
-                in
-
-                let command = 
-                  [pcdata ("git clone "^branch_opt); a_location]
-                in
-
-                  match repo.src_repo_tag with 
-                    | Some tag ->
-                        begin
-                          let dn = 
-                            OASISUnixPath.basename repo.src_repo_location
-                          in
-                          let dn = 
-                            if ExtString.String.ends_with dn ".git" then
-                              String.sub dn 0 ((String.length dn) - (String.length ".git"))
-                            else
-                              dn
-                          in
-                            command @
-                            [pcdata 
-                               (Printf.sprintf 
-                                  " && cd %s && git checkout %s"
-                                  dn tag)]
-                        end
-                    | None ->
-                        command
-              end
-
-          | Svn ->
-              begin
-                let a_location = 
-                  match repo.src_repo_subdir with
-                    | Some dn ->
-                        let url = 
-                          OASISUnixPath.concat repo.src_repo_location dn
-                        in
-                          XHTML.M.a
-                            ~a:[a_href (uri_of_string url)]
-                            [pcdata url]
-                    | None ->
-                        a_location
-                in
-                  [pcdata "svn checkout "; a_location]
-              end
-
-          | Cvs ->
-              begin
-                let tag_branch_opt = 
-                  match repo.src_repo_branch, repo.src_repo_tag with 
-                    | Some t, None 
-                    | None, Some t ->
-                        "-r "^t
-                    | Some _, Some t ->
-                        (* TODO: error *)
-                        "-r "^t
-                    | None, None ->
-                        ""
-                in
-                  [pcdata "cvs checkout -d "; a_location; 
-                   pcdata " "; 
-                   pcdata tag_branch_opt;
-                   the 
-                     [pcdata (s_ "No CVS module defined")]
-                     pcdata repo.src_repo_module]
-              end
-
-          | Hg ->
-              begin
-                let tag_branch_opt = 
-                  match repo.src_repo_branch, repo.src_repo_tag with 
-                    | Some t, None 
-                    | None, Some t ->
-                        "-u "^t
-                    | Some _, Some t ->
-                        (* TODO: error *)
-                        "-u "^t
-                    | None, None ->
-                        ""
-                in
-                  [pcdata ("hg clone "^tag_branch_opt); a_location]
-              end
-
-          | Bzr ->
-              begin
-                let tag_opt = 
-                  match repo.src_repo_tag with 
-                    | Some t -> "-r tag:"^t
-                    | None   -> ""
-                in
-                  
-                  [pcdata ("bzr branch "^tag_opt); a_location]
-              end
-
-          | Arch (* TODO *)
-          | Monotone (* TODO *)
-          | OtherVCS _ ->
-              [pcdata "Unsupported VCS"]
-      in
-
-      let vcs_get =
-        match repo.src_repo_browser with 
-          | Some url ->
-              vcs_get 
-              @ 
-              [pcdata (s_ " (");
-               XHTML.M.a
-                 ~a:[a_href (uri_of_string url)]
-                 [pcdata (s_ "browse")];
-               pcdata (s_ ")")]
-          | None ->
-              vcs_get
-      in
-
-        (cs.cs_name, vcs_get) 
+    in
+   
+    let provides =
+      ODBProvides.of_oasis_package pkg
     in
 
-    let lst = 
-      List.fold_left 
-        (fun acc ->
-           function
-             | SrcRepo (cs, repo) ->
-                 (one_source_repo cs repo) :: acc
+    let src_repos = 
+      let one_source_repo cs repo = 
+        let a_location = 
+          XHTML.M.a 
+            ~a:[a_href (uri_of_string repo.src_repo_location)]
+            [pcdata repo.src_repo_location]
+        in
 
-             | Library _ | Executable _ | Flag _ | Test _ | Doc _ ->
-                 acc)
-        []
-        pkg.sections
-    in
-      match lst with 
-        | [_, html] ->
-            [html]
-        | lst ->
-            List.rev_map 
-              (fun (nm, html) ->
-                 (pcdata (Printf.sprintf (f_ "(%s) ") nm)) :: html)
-              lst
-  in
+        let the err f = 
+          function 
+            | Some e ->
+                f e
+            | None ->
+                span ~a:[a_class ["error"]] err
+        in
 
-    [
-      begin
-        match pkg.homepage with
-          | Some url ->
-              Some 
-                ("homepage",
-                 s_ "Homepage: ",
-                 [XHTML.M.a 
-                    ~a:[a_href (uri_of_string url)]
-                    [pcdata url]])
-          | None ->
-              None
-      end;
-      
-      non_zero_lst
-        "dependencies"
-        (sn_ "Dependency: " "Dependencies: ")
-        dependencies;
+        let vcs_get = 
+          match repo.src_repo_type with 
+            | Darcs ->
+                begin
+                  let tag_opts = 
+                    match repo.src_repo_tag with 
+                      | Some tag ->
+                          Printf.sprintf "-t '%s'"
+                            (Pcre.quote tag)
+                      | None ->
+                          ""
+                  in
+                    [pcdata (Printf.sprintf "darcs get %s" tag_opts); 
+                     a_location]
+                end
 
-      non_zero_lst
-        "provides"
-        (sn_ "Provide: " "Provides: ")
-        provides;
+            | Git ->
+                begin
+                  let branch_opt = 
+                    match repo.src_repo_branch with 
+                      | Some b -> Printf.sprintf "-b %s" b
+                      | None   -> ""
+                  in
 
-      Some 
-        ("license",
-         s_ "License: ",
-         [pcdata (OASISLicense.to_string pkg.license)]);
+                  let command = 
+                    [pcdata ("git clone "^branch_opt); a_location]
+                  in
 
-      non_zero_lst
-        "authors"
-        (sn_ "Author: " "Authors: ") 
-        pkg.authors;
+                    match repo.src_repo_tag with 
+                      | Some tag ->
+                          begin
+                            let dn = 
+                              OASISUnixPath.basename repo.src_repo_location
+                            in
+                            let dn = 
+                              if ExtString.String.ends_with dn ".git" then
+                                String.sub dn 0 ((String.length dn) - (String.length ".git"))
+                              else
+                                dn
+                            in
+                              command @
+                              [pcdata 
+                                 (Printf.sprintf 
+                                    " && cd %s && git checkout %s"
+                                    dn tag)]
+                          end
+                      | None ->
+                          command
+                end
 
-      non_zero_lst
-        "maintainers"
-        (sn_ "Maintainer: " "Maintainers: ")
-        pkg.maintainers;
+            | Svn ->
+                begin
+                  let a_location = 
+                    match repo.src_repo_subdir with
+                      | Some dn ->
+                          let url = 
+                            OASISUnixPath.concat repo.src_repo_location dn
+                          in
+                            XHTML.M.a
+                              ~a:[a_href (uri_of_string url)]
+                              [pcdata url]
+                      | None ->
+                          a_location
+                  in
+                    [pcdata "svn checkout "; a_location]
+                end
 
-      non_zero_lst 
-        "categories"
-        (sn_ "Category: " "Categories: ")
-        pkg.categories;
+            | Cvs ->
+                begin
+                  let tag_branch_opt = 
+                    match repo.src_repo_branch, repo.src_repo_tag with 
+                      | Some t, None 
+                      | None, Some t ->
+                          "-r "^t
+                      | Some _, Some t ->
+                          (* TODO: error *)
+                          "-r "^t
+                      | None, None ->
+                          ""
+                  in
+                    [pcdata "cvs checkout -d "; a_location; 
+                     pcdata " "; 
+                     pcdata tag_branch_opt;
+                     the 
+                       [pcdata (s_ "No CVS module defined")]
+                       pcdata repo.src_repo_module]
+                end
 
-      begin
-        match src_repos with 
-          | [] -> None
+            | Hg ->
+                begin
+                  let tag_branch_opt = 
+                    match repo.src_repo_branch, repo.src_repo_tag with 
+                      | Some t, None 
+                      | None, Some t ->
+                          "-u "^t
+                      | Some _, Some t ->
+                          (* TODO: error *)
+                          "-u "^t
+                      | None, None ->
+                          ""
+                  in
+                    [pcdata ("hg clone "^tag_branch_opt); a_location]
+                end
+
+            | Bzr ->
+                begin
+                  let tag_opt = 
+                    match repo.src_repo_tag with 
+                      | Some t -> "-r tag:"^t
+                      | None   -> ""
+                  in
+                    
+                    [pcdata ("bzr branch "^tag_opt); a_location]
+                end
+
+            | Arch (* TODO *)
+            | Monotone (* TODO *)
+            | OtherVCS _ ->
+                [pcdata "Unsupported VCS"]
+        in
+
+        let vcs_get =
+          match repo.src_repo_browser with 
+            | Some url ->
+                vcs_get 
+                @ 
+                [pcdata (s_ " (");
+                 XHTML.M.a
+                   ~a:[a_href (uri_of_string url)]
+                   [pcdata (s_ "browse")];
+                 pcdata (s_ ")")]
+            | None ->
+                vcs_get
+        in
+
+          (cs.cs_name, vcs_get) 
+      in
+
+      let lst = 
+        List.fold_left 
+          (fun acc ->
+             function
+               | SrcRepo (cs, repo) ->
+                   (one_source_repo cs repo) :: acc
+
+               | Library _ | Executable _ | Flag _ | Test _ | Doc _ ->
+                   acc)
+          []
+          pkg.sections
+      in
+        match lst with 
+          | [_, html] ->
+              [html]
           | lst ->
-              Some
-                ("source_repositories",
-                 sn_ 
-                   "Source repository: " 
-                   "Source repositories: " 
-                   (List.length lst),
-                 html_flatten (pcdata "; ") lst)
-      end;
-    ]
+              List.rev_map 
+                (fun (nm, html) ->
+                   (pcdata (Printf.sprintf (f_ "(%s) ") nm)) :: html)
+                lst
+    in
+
+      [
+        begin
+          match pkg.homepage with
+            | Some url ->
+                Some 
+                  ("homepage",
+                   s_ "Homepage: ",
+                   [XHTML.M.a 
+                      ~a:[a_href (uri_of_string url)]
+                      [pcdata url]])
+            | None ->
+                None
+        end;
+        
+        non_zero_lst_html
+          "dependencies"
+          (sn_ "Dependency: " "Dependencies: ")
+          dependencies;
+
+        non_zero_lst
+          "provides"
+          (sn_ "Provide: " "Provides: ")
+          provides;
+
+        Some 
+          ("license",
+           s_ "License: ",
+           [pcdata (OASISLicense.to_string pkg.license)]);
+
+        non_zero_lst
+          "authors"
+          (sn_ "Author: " "Authors: ") 
+          pkg.authors;
+
+        non_zero_lst
+          "maintainers"
+          (sn_ "Maintainer: " "Maintainers: ")
+          pkg.maintainers;
+
+        non_zero_lst 
+          "categories"
+          (sn_ "Category: " "Categories: ")
+          pkg.categories;
+
+        begin
+          match src_repos with 
+            | [] -> None
+            | lst ->
+                Some
+                  ("source_repositories",
+                   sn_ 
+                     "Source repository: " 
+                     "Source repositories: " 
+                     (List.length lst),
+                   html_flatten (pcdata "; ") lst)
+        end;
+      ]
+  end
 
 
 let version_page_box ~ctxt ~sp ver backup_link oasis_fn = 
@@ -410,26 +357,25 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
     (fun e ->
        return None)
 
-  >|= fun pkg_opt ->
+  >>= fun pkg_opt ->
 
-  (* End of data gathering, really create the page *)
-  let synopsis, description, extra_fields = 
+  begin
     match pkg_opt with 
       | Some pkg ->
+          oasis_fields ~ctxt ~sp pkg
+          >|= fun extra_fields ->
           Some pkg.synopsis,
           pkg.description,
-          oasis_fields pkg
+          extra_fields
 
       | None -> 
-          None,
-          (* TODO: link to create an oasis file *)
-          Some (s_ "This version doesn't have an _oasis file."),
-          []
-  in
-
-  let sov = 
-    OASISVersion.string_of_version
-  in
+          return
+            (None,
+             Some (s_ "This version doesn't have an _oasis file."),
+             [])
+  end 
+  >|= fun (synopsis, description, extra_fields) ->
+  (* End of data gathering, really create the page *)
 
   (* Field generation: remove fields not set *)
   let field (id, nm, vl) =
@@ -454,9 +400,9 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
   let versions_field =
     let mk_pcdata ver = 
       if ver = ver_latest then
-        b [pcdata ((sov ver.ver)^"*")]
+        b [pcdata ((string_of_version ver.ver)^"*")]
       else
-        pcdata (sov ver.ver)
+        pcdata (string_of_version ver.ver)
     in
     let lst =
       List.fold_left
@@ -556,7 +502,7 @@ let browse_version_page ~ctxt ~sp fver =
          let oasis_fn = 
            ODBStorage.Ver.filename 
              ver.pkg 
-             (OASISVersion.string_of_version ver.ver)
+             (string_of_version ver.ver)
              `OASIS
          in
            version_page_box ~ctxt ~sp
@@ -568,7 +514,7 @@ let browse_version_page ~ctxt ~sp fver =
          let browser_ttl =
            Printf.sprintf (f_ "%s v%s") 
              ver.pkg 
-             (OASISVersion.string_of_version ver.ver)
+             (string_of_version ver.ver)
          in
          let page_ttl = 
            match oasis_pkg with 
@@ -601,7 +547,7 @@ let browse_all ~ctxt ~sp () =
          (fun () ->
             ODBStorage.Ver.filename 
               ver.pkg 
-              (OASISVersion.string_of_version ver.ver)
+              (string_of_version ver.ver)
               `OASIS
             >>= 
             ODBOASIS.from_file 
@@ -663,7 +609,7 @@ let browse_handler sp (pkg_opt, ver_opt) () =
       | Some pkg, Some ver ->
           browse_version_page ~ctxt ~sp 
             (fun () -> ODBStorage.Ver.find pkg 
-                         (OASISVersion.string_of_version ver))
+                         (string_of_version ver))
 
       | Some pkg, None ->
           browse_version_page ~ctxt ~sp

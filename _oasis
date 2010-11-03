@@ -50,6 +50,8 @@ Library "oasis-db"
            ODBMain,
            ODBRunner,
            ODBOASIS,
+           ODBProvides,
+           ODBDeps,
            LwtExt
   BuildDepends: lwt, lwt.unix,
                 unix, 
