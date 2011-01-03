@@ -33,3 +33,31 @@ let _ =
     [TestIncoming.tests ctxt])
   
  *)
+
+(*
+let list () = 
+  create API.
+
+let () = 
+ *)
+
+let base_url = "http://localhost:8080/api/" 
+let ctxt = ctxt.odb 
+
+let () = 
+  let lst = 
+    ODBREST.Pkg.list ~ctxt base_url ()
+  in
+  let lst' = 
+    List.map 
+      (fun pkg ->
+         pkg,
+         ODBREST.PkgVer.latest ~ctxt base_url pkg)
+      lst
+  in
+    List.iter
+      (fun (pkg, ver) -> 
+         Printf.printf "%s v%s\n" 
+           pkg 
+           (OASISVersion.string_of_version ver))
+      lst'

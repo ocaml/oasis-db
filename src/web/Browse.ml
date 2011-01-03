@@ -465,15 +465,7 @@ let version_page_box ~ctxt ~sp ver backup_link oasis_fn =
          | Some txt -> 
              div 
                ~a:[a_id "description"]
-               (MarkdownHTML.to_html
-                  ~render_link:
-                  (fun href -> 
-                     XHTML.M.a
-                       ~a:[a_href (uri_of_string href.Markdown.href_target)]
-                       [pcdata href.Markdown.href_desc])
-                  ~render_img:(fun _ -> i [pcdata "image removed"])
-                  ~render_pre:(fun ~kind s -> pre [pcdata s])
-                  (Markdown.parse_text txt))
+               (MarkdownExt.to_html txt)
          | None -> 
              pcdata "");
 

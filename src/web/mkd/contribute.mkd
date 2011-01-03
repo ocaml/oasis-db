@@ -34,3 +34,8 @@ Once you are logged in this website, you can edit any packages or versions:
 
 Goto [OASIS project website](http://oasis.forge.ocamlcore.org) for more
 information about the development of *OASIS-DB*.
+
+!! Use the REST API
+
+Have a look at [OASIS-DB API](../api/help). You can build your own application 
+using our REST API.

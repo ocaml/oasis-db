@@ -24,7 +24,7 @@ IFDEF HAS_GETTEXT THEN
 include
   Gettext.Library
     (struct
-       let textdomain   = "oasis-db"
+       let textdomain   = "rest"
        let codeset      = None
        let dir          = None
        let dependencies = Gettext.init

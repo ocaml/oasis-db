@@ -30,8 +30,8 @@ export LWT_LOG
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
 
-default: build
-#default: test
+#default: build
+default: test
 #TESTFLAGS      += -long 
 #TESTFLAGS      += -verbose
 #TESTFLAGS      += -only-test OASIS:4:Basic:1

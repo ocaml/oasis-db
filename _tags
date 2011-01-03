@@ -105,6 +105,8 @@
 
 "src/lib/ODBGettext.ml": syntax_camlp4o, pkg_camlp4.macro
 "src/lib/ODBGettext.ml": cond_pkg_gettext.base
+"src/rest/RESTGettext.ml": syntax_camlp4o, pkg_camlp4.macro
+"src/rest/RESTGettext.ml": cond_pkg_gettext.base
                 
 "src/lib/ODBTypes.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBPkg.ml": syntax_camlp4o, pkg_sexplib.syntax

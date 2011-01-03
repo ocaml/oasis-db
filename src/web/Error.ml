@@ -52,12 +52,12 @@ let () =
              raise e
 
          | Eliom_common.Eliom_Wrong_parameter ->
-             error_template ~sp 
+             error_template ~sp ~code:400
                (error_message 
                   (s_ "Wrong parameters"))
 
          | RequiresAuth ->
-             error_template ~sp 
+             error_template ~sp ~code:401
                (error_message 
                   (s_ "You need to be logged in to see this page."))
 
@@ -76,12 +76,12 @@ let () =
                      msg Conf.timeout_delay))
 
          | Failure str ->
-             error_template ~sp 
+             error_template ~sp ~code:500
                (backtrace 
                   (error_message str))
 
          | e -> 
-             error_template ~sp
+             error_template ~sp ~code:500
                (backtrace 
                   (error_message
                      (Printexc.to_string e))))

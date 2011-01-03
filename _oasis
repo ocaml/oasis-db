@@ -29,6 +29,40 @@ if flag(gettext)
   PostInstallCommand:   $make -C po install PODIR=$prefix/share/locale
   PostUninstallCommand: $make -C po install PODIR=$prefix/share/locale
 
+Library "rest"
+  Path: src/rest
+  CompiledObject: Best
+  Modules: REST,
+           RESTConv,
+           RESTParams
+  BuildDepends: yojson, 
+                sexplib, 
+                oasis, # For OASISVersion
+                lwt,
+                gettext
+  InternalModules: RESTGettext
+
+Library "rest-ocsigen"
+  FindlibParent: rest
+  FindlibName: ocsigen
+  Path: src/rest/ocsigen
+  Modules: RESTOcsigen
+  BuildDepends: rest,
+                ocsigen,
+                markdown, markdown.html,
+                threads
+
+Library "rest-curl"
+  FindlibParent: rest
+  FindlibName: curl
+  Path: src/rest/curl
+  Modules: RESTCurl
+  BuildDepends: rest,
+                threads,
+                extlib,
+                curl
+
+
 Library "oasis-db"
   Path: src/lib
   CompiledObject: Best
@@ -52,6 +86,7 @@ Library "oasis-db"
            ODBOASIS,
            ODBProvides,
            ODBDeps,
+           ODBREST,
            LwtExt
   BuildDepends: lwt, lwt.unix,
                 unix, 
@@ -60,7 +95,9 @@ Library "oasis-db"
                 sexplib,
                 calendar,
                 inotify,
-                fileutils
+                fileutils,
+                yojson,
+                rest, rest.curl
   
 Flag oasis_db_ocsigen
   Description: Build ocsigen module for OASIS-DB. It requires postgresql running.
@@ -90,6 +127,8 @@ Library "oasis-db-ocsigen"
            Error,
            Conf,
            Feeds,
+           API,
+           MarkdownExt,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
@@ -98,7 +137,9 @@ Library "oasis-db-ocsigen"
                 threads, 
                 calendar,
                 markdown, markdown.html,
-                cameleon.rss
+                cameleon.rss,
+                sexplib,
+                rest.ocsigen
 
 Executable FakeIncoming
   Path: test
