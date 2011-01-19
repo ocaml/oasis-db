@@ -4,7 +4,7 @@ open OUnit
 open Unix
 open FileUtil
 open ODBContext
-open ODBVer
+open ODBPkgVer
 open CalendarLib
 
 (*
@@ -210,7 +210,7 @@ let assert_ver_file ~ctxt ?(oasis=true) pkg ver =
   let ver =
     odb_run ctxt 
       (fun ~ctxt () -> 
-         ODBVer.from_file 
+         ODBPkgVer.from_file 
            ~ctxt 
            (mk_fn "storage.sexp"))
   in

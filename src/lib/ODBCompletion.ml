@@ -293,8 +293,8 @@ let order ~ctxt a_pkg a_ver =
             let rec find_position =
               function
                 | v1 :: ((v2 :: _) as tl) ->
-                    let ver1 = v1.ODBVer.ver in
-                    let ver2 = v2.ODBVer.ver in
+                    let ver1 = v1.ODBPkgVer.ver in
+                    let ver2 = v2.ODBPkgVer.ver in
 
                     if cmp ver1 ver = 0 || cmp ver2 ver = 0 then
                       begin
@@ -307,14 +307,14 @@ let order ~ctxt a_pkg a_ver =
                     else if cmp ver ver1 < 0 then
                       begin
                         let order = 
-                          v1.ODBVer.ord - 10
+                          v1.ODBPkgVer.ord - 10
                         in
                           return (Unsure (0.5, order))
                       end
                     else if cmp ver1 ver < 0 && cmp ver ver2 < 0 then
                       begin
                         let order = 
-                          (v1.ODBVer.ord + v2.ODBVer.ord) / 2
+                          (v1.ODBPkgVer.ord + v2.ODBPkgVer.ord) / 2
                         in
                           return (Unsure (0.5, order))
                       end
@@ -325,7 +325,7 @@ let order ~ctxt a_pkg a_ver =
 
                 | v1 :: [] ->
                     begin
-                      return (Sure (v1.ODBVer.ord + 10))
+                      return (Sure (v1.ODBPkgVer.ord + 10))
                     end
 
                 | [] ->

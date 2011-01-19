@@ -1,7 +1,7 @@
 
 open OASISVersion
 open OASISTypes
-open ODBVer
+open ODBPkgVer
 open OASISUtils
 open Lwt
 
@@ -9,7 +9,7 @@ type elem =
     {
       optional:        bool;
       version_cmp:     comparator option;
-      package_version: ODBVer.t option;
+      package_version: ODBPkgVer.t option;
     }
 
 type t = elem MapString.t
@@ -127,7 +127,7 @@ let solve ~ctxt t =
                in
                let lst =
                  (* Sort the result, latest version first *)
-                 List.sort (fun v1 v2 -> ~- (ODBVer.compare v1 v2)) lst
+                 List.sort (fun v1 v2 -> ~- (ODBPkgVer.compare v1 v2)) lst
                in
                  match lst with 
                    | ver :: _ ->

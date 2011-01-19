@@ -9,7 +9,7 @@ open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod
 open XHTML.M
-open ODBVer
+open ODBPkgVer
 open ODBContext
 open ODBGettext
 open Common

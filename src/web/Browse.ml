@@ -6,7 +6,7 @@ open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod.Xhtml
 open CalendarLib
-open ODBVer
+open ODBPkgVer
 open OASISTypes
 open OASISVersion
 open ODBGettext

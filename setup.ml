@@ -5220,7 +5220,7 @@ let setup_t =
                            "ODBProcess";
                            "ODBArchive";
                            "ODBPkg";
-                           "ODBVer";
+                           "ODBPkgVer";
                            "ODBStorage";
                            "ODBInotify";
                            "ODBCompletion";

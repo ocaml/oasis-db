@@ -5,7 +5,7 @@
 
 open ODBTypes
 open ODBGettext
-open ODBVer
+open ODBPkgVer
 open ODBIncoming
 open ODBCompletion
 open Lwt
@@ -38,7 +38,7 @@ type t =
       upload_date: date;
       (* Date of upload *)
 
-      upload_method: ODBVer.upload_method;
+      upload_method: ODBPkgVer.upload_method;
       (* Method of upload *)
     }
 
@@ -130,7 +130,7 @@ let mk_ver t =
           raise Not_found
   in
     {
-      ODBVer.pkg    = value_of_answer t.completion.pkg;
+      ODBPkgVer.pkg    = value_of_answer t.completion.pkg;
       ver           = value_of_answer t.completion.ver;
       ord           = value_of_answer t.completion.ord;
       tarball       = t.tarball;
@@ -142,7 +142,7 @@ let mk_ver t =
 let load_ver ~ctxt t = 
   catch 
     (fun () ->
-       ODBVer.from_file ~ctxt:ctxt.odb 
+       ODBPkgVer.from_file ~ctxt:ctxt.odb 
          (ODBStorage.storage_filename t.temp_dir)
        >|= fun ver -> Some ver)
     (fun _ ->
@@ -210,14 +210,14 @@ let upload_completion_box ~ctxt ~sp t =
            in
            let ver' =
              {ver with 
-                  ODBVer.pkg = pkg;
+                  ODBPkgVer.pkg = pkg;
                   ver        = OASISVersion.version_of_string version;
                   ord        = ord;
                   publink    = publink}
            in
              Printf.eprintf "pkg: %s; ver: %s\n%!" pkg version;
              if check ~ctxt:ctxt.odb ver' then 
-               ODBVer.to_file 
+               ODBPkgVer.to_file 
                  ~ctxt:ctxt.odb
                  (ODBStorage.storage_filename t.temp_dir)
                  ver'
@@ -251,7 +251,7 @@ let upload_completion_box ~ctxt ~sp t =
                 (List.flatten
                    [tmpl_field
                       (s_ "Tarball: ")
-                      (pcdata (get (fun v -> v.ODBVer.tarball) t.tarball));
+                      (pcdata (get (fun v -> v.ODBPkgVer.tarball) t.tarball));
                     tmpl_field
                       (s_ "Has _oasis file: ")
                       (pcdata 
@@ -265,7 +265,7 @@ let upload_completion_box ~ctxt ~sp t =
                       (string_input
                          ~input_type:`Text
                          ~name:publink
-                         ~value:(match get (fun v -> v.ODBVer.publink) t.publink with
+                         ~value:(match get (fun v -> v.ODBPkgVer.publink) t.publink with
                                    | Some lnk -> lnk
                                    | None -> "")
                          ());
@@ -275,21 +275,21 @@ let upload_completion_box ~ctxt ~sp t =
                       pkg 
                       (fun i -> i) 
                       ""
-                      (get (fun v -> Sure v.ODBVer.pkg) t.completion.pkg);
+                      (get (fun v -> Sure v.ODBPkgVer.pkg) t.completion.pkg);
 
                     string_field_answer
                       (s_ "Version: ") 
                       ver 
                       OASISVersion.string_of_version 
                       ""
-                      (get (fun v -> Sure v.ODBVer.ver) t.completion.ver);
+                      (get (fun v -> Sure v.ODBPkgVer.ver) t.completion.ver);
 
                     int_field_answer
                       (s_ "Order: ")
                       ord
                       (fun i -> i)
                       0
-                      (get (fun v -> Sure v.ODBVer.ord) t.completion.ord);
+                      (get (fun v -> Sure v.ODBPkgVer.ord) t.completion.ord);
 
                     [
                       string_input ~input_type:`Submit ~value:(s_ "Save") ();
@@ -367,14 +367,14 @@ let upload_action_redirect =
                begin
                  function
                    | Some ver ->
-                       ODBStorage.Pkg.mem ver.ODBVer.pkg
+                       ODBStorage.Pkg.mem ver.ODBPkgVer.pkg
                        >>= 
                        begin
                          function 
                            | true ->
                                return ()
                            | false ->
-                               ODBStorage.Pkg.create ~ctxt:ctxt.odb ver.ODBVer.pkg
+                               ODBStorage.Pkg.create ~ctxt:ctxt.odb ver.ODBPkgVer.pkg
                                >>= 
                                ODBStorage.Pkg.move ~ctxt:ctxt.odb
                                >>= fun _ ->
@@ -386,8 +386,8 @@ let upload_action_redirect =
                        return 
                          (preapply 
                             browse
-                            (Some ver.ODBVer.pkg, 
-                             Some ver.ODBVer.ver))
+                            (Some ver.ODBPkgVer.pkg, 
+                             Some ver.ODBPkgVer.ver))
                    | None ->
                        (* TODO: redirect to upload page *)
                        fail (Failure (s_ "Invalid version"))

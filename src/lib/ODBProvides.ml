@@ -1,6 +1,6 @@
 
 open OASISUtils
-open ODBVer
+open ODBPkgVer
 open Lwt
 
 (* TODO: tool dependencies which includes test/doc, for dependencies

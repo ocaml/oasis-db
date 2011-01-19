@@ -6,7 +6,7 @@ open ODBContext
 open ODBTypes
 open ODBInotify
 open ODBCompletion
-open ODBVer
+open ODBPkgVer
 open Sexplib.Sexp
 open Sexplib.Conv
 open Lwt
@@ -69,7 +69,7 @@ let move_to_storage ~ctxt ut pkg ver ord tarball_fn sexp_fn oasis_fn =
          in
          let ver = 
            {
-             ODBVer.pkg    = pkg;
+             ODBPkgVer.pkg    = pkg;
              ver           = ver;
              ord           = ord;
              tarball       = Filename.basename tarball_fn;

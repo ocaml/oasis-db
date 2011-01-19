@@ -75,7 +75,7 @@ module PkgVer =
 struct 
   open RESTParams
   open RESTConv
-  open ODBVer
+  open ODBPkgVer
 
   let section =
     {
@@ -88,8 +88,8 @@ struct
 
   let conv_t = 
     {
-      to_sexp = ODBVer.sexp_of_t;
-      of_sexp = ODBVer.t_of_sexp;
+      to_sexp = ODBPkgVer.sexp_of_t;
+      of_sexp = ODBPkgVer.t_of_sexp;
 
       to_json = 
         (fun t -> 
@@ -147,7 +147,7 @@ struct
       (fun pkg ->
          ODBStorage.Ver.elements pkg
          >|=
-         List.map (fun ver -> ver.ODBVer.ver))
+         List.map (fun ver -> ver.ODBPkgVer.ver))
       (list version)
 
   let list = 
@@ -171,7 +171,7 @@ struct
       (fun pkg ->
          (ODBStorage.Ver.latest pkg)
          >|= fun ver ->
-         ver.ODBVer.ver)
+         ver.ODBPkgVer.ver)
       version
 
   let latest = 

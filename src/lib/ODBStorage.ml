@@ -74,7 +74,7 @@ end
   *)
 type ver_t =
   {
-    ver: ODBVer.t;
+    ver: ODBPkgVer.t;
     ver_dir: dirname;
   }
 
@@ -267,7 +267,7 @@ struct
     >|= 
     List.rev_map (fun (_, t) -> t.ver) 
     >|=
-    List.sort ODBVer.compare
+    List.sort ODBPkgVer.compare
     
   (** Check the existence of a package's version
    *)
@@ -300,9 +300,9 @@ struct
     let storage_fn = 
       storage_filename dn 
     in
-      ODBVer.from_file ~ctxt storage_fn 
+      ODBPkgVer.from_file ~ctxt storage_fn 
       >>= fun ver ->
-      return (OASISVersion.string_of_version ver.ODBVer.ver)
+      return (OASISVersion.string_of_version ver.ODBPkgVer.ver)
       >>= fun ver_str ->
       get pkg_str 
       >>= fun vers ->
@@ -334,11 +334,11 @@ struct
               spf (f_ "Storage file '%s' defines version '%s' previously \
                        defined.") storage_fn ver_str;
 
-              ver.ODBVer.pkg <> pkg_str,
+              ver.ODBPkgVer.pkg <> pkg_str,
               true, 
               spf (f_ "Storage file '%s' belongs to package '%s' but \
                        is stored in package '%s'.")
-                storage_fn ver.ODBVer.pkg pkg_str;
+                storage_fn ver.ODBPkgVer.pkg pkg_str;
             ]
       end
       >>= fun () ->
@@ -363,21 +363,21 @@ struct
     let storage_fn =
       storage_filename dn 
     in
-      ODBVer.from_file ~ctxt storage_fn
+      ODBPkgVer.from_file ~ctxt storage_fn
       >>= fun ver ->
       catch 
         (fun () -> 
-           Pkg.dirname ver.ODBVer.pkg)
+           Pkg.dirname ver.ODBPkgVer.pkg)
         (function
            | Not_found as e -> 
-               error ~ctxt (f_ "Package '%s' doesn't exist") ver.ODBVer.pkg
+               error ~ctxt (f_ "Package '%s' doesn't exist") ver.ODBPkgVer.pkg
                >>= fun () ->
                fail e
            | e ->
                fail e)
       >>= fun pkg_dn ->
       begin
-        let ver_str = OASISVersion.string_of_version ver.ODBVer.ver in
+        let ver_str = OASISVersion.string_of_version ver.ODBPkgVer.ver in
         let tgt_dn  = Filename.concat pkg_dn ver_str in
           try 
             Sys.rename dn tgt_dn; 
@@ -388,7 +388,7 @@ struct
       >>= fun (ver_str, tgt_dn) ->
       catch 
         (fun () ->
-           add ~ctxt ver.ODBVer.pkg tgt_dn)
+           add ~ctxt ver.ODBPkgVer.pkg tgt_dn)
         (fun e ->
            (* We have a problem, restore directory *)
            begin
@@ -421,7 +421,7 @@ struct
           return ()
     end
     >>= fun () ->
-    ODBVer.to_file ~ctxt (storage_filename dn) ver
+    ODBPkgVer.to_file ~ctxt (storage_filename dn) ver
 
   (** Return the directory name of a version 
     *)
@@ -444,7 +444,7 @@ struct
         match fn with 
           | `OASIS -> "_oasis"
           | `OASISPristine -> "_oasis.pristine"
-          | `Tarball -> t.ver.ODBVer.tarball
+          | `Tarball -> t.ver.ODBPkgVer.tarball
           | `PluginData nm -> nm^".sexp"
           | `Other fn -> fn
       in

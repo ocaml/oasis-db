@@ -3,7 +3,7 @@ open Lwt
 open Eliom_parameters
 open Eliom_sessions
 open Eliom_services
-open ODBVer
+open ODBPkgVer
 open OASISVersion
 open CalendarLib
 open ODBGettext
@@ -14,7 +14,7 @@ type t =
   {
     num_packages: int;
     num_uploads:  int;
-    latest:       ODBVer.t list; 
+    latest:       ODBPkgVer.t list; 
     first_date:   Calendar.t;
     no_oasis:     int;
   }

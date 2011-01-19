@@ -63,7 +63,7 @@ let tests =
                 (fun sync ver ->
                    Lwt_list.fold_left_s 
                      (add_exists pkg_str 
-                        (OASISVersion.string_of_version ver.ODBVer.ver))
+                        (OASISVersion.string_of_version ver.ODBPkgVer.ver))
                      sync
                      [`OASIS; 
                       `OASISPristine; 

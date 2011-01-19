@@ -9,7 +9,7 @@ open ODBTypes
 open ODBGettext
 open ODBMessage
 
-TYPE_CONV_PATH "ODBVer"
+TYPE_CONV_PATH "ODBPkgVer"
 
 type upload_method = 
   | OCamlForge
