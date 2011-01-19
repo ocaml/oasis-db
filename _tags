@@ -113,6 +113,7 @@
 "src/lib/ODBVer.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBCompletion.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBIncoming.ml": syntax_camlp4o, pkg_sexplib.syntax
+"src/lib/ODBSync.ml": syntax_camlp4o, pkg_sexplib.syntax
 
 "src/web/Account.ml": syntax_camlp4o, pkg_pgocaml.syntax
 "src/web/AccountStub.ml": syntax_camlp4o, pkg_pgocaml.syntax

@@ -87,7 +87,8 @@ Library "oasis-db"
            ODBProvides,
            ODBDeps,
            ODBREST,
-           LwtExt
+           LwtExt,
+           ODBSync
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,

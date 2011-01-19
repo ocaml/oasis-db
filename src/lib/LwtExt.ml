@@ -32,6 +32,7 @@ struct
         end)
 
   let digest fn = 
+    (* TODO: big file *)
     with_file_content fn 
     >>= fun str ->
     return (Digest.string str)

@@ -238,6 +238,14 @@ struct
     >>= fun t ->
     return t.pkg_dir
 
+  let filename k fn =
+    dirname k 
+    >|= fun dn ->
+    begin
+      match fn with 
+        | `PluginData plg ->
+            Filename.concat dn (plg^".sexp")
+    end
 end
 
 module Ver = 

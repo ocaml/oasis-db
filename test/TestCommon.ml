@@ -198,6 +198,11 @@ let bracket_ocsigen conf pre_start f post_stop () =
             conf;
           Buffer.output_buffer chn buf;
           close_out chn;
+          if !verbose then
+            begin
+              Buffer.output_buffer Pervasives.stderr buf;
+              Pervasives.flush Pervasives.stderr
+            end;
           pre_start ocs
         in
 
@@ -210,6 +215,13 @@ let bracket_ocsigen conf pre_start f post_stop () =
                 :: 
                 (!ocsigen_args @ ["-c"; conf_fn])))
             Unix.stdin Unix.stdout Unix.stderr
+        in
+
+        let () = 
+          (* TODO: we should be able to be sure that everything is initialized
+           * here, without sleeping
+           *)
+          Unix.sleep 1
         in
 
           (* Test *)
