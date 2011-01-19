@@ -149,7 +149,7 @@ Executable FakeIncoming
 Executable test
   Path:   test
   MainIs: test.ml
-  BuildDepends: oUnit, fileutils, oasis-db
+  BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db
   
 Test main
   Command: $test
