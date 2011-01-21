@@ -29,6 +29,12 @@ if flag(gettext)
   PostInstallCommand:   $make -C po install PODIR=$prefix/share/locale
   PostUninstallCommand: $make -C po install PODIR=$prefix/share/locale
 
+Library "git"
+  Path: src/git
+  CompiledObject: Best
+  Modules: Git
+  BuildDepends: lwt, unix
+
 Library "rest"
   Path: src/rest
   CompiledObject: Best
@@ -150,7 +156,7 @@ Executable FakeIncoming
 Executable test
   Path:   test
   MainIs: test.ml
-  BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db
+  BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db, git
   
 Test main
   Command: $test

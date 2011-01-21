@@ -65,4 +65,5 @@ let _ :: _ | [] =
          (* TestIncoming.tests; *)
          TestAPI.tests;
          TestSync.tests;
+         TestGit.tests;
        ])

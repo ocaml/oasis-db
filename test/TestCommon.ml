@@ -1,5 +1,6 @@
 
 open ODBContext
+open OUnit
 
 let fake_incoming : string option ref = ref None
 let verbose = ref true
@@ -52,6 +53,19 @@ type ocsigen_t =
       ocs_command:  string;
       ocs_base_url: string;
     }
+
+let bracket_tmpdir f = 
+  bracket
+    (fun () ->
+       let dn =
+         Filename.temp_file "oasis-db-" ".dir"
+       in
+         FileUtil.rm [dn];
+         FileUtil.mkdir dn;
+         dn)
+    f
+    (fun dn ->
+       FileUtil.rm ~recurse:true [dn])
 
 let bracket_ocsigen conf pre_start f post_stop () =
 
