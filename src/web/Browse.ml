@@ -337,41 +337,27 @@ let oasis_fields ~ctxt ~sp pkg =
   end
 
 
-let version_page_box ~ctxt ~sp ver backup_link oasis_fn = 
+let version_page_box ~ctxt ~sp ver backup_link pkg_opt = 
   (catch 
      (fun () ->
-        ODBStorage.Ver.elements ver.pkg)
+        ODBStorage.Ver.elements ~extra:ver ver.pkg)
      (function 
         | Not_found ->
             return [ver]
         | e ->
             fail e))
   >>= fun ver_lst ->
-  (catch 
-     (fun () ->
-        ODBStorage.Ver.latest ver.pkg)
-     (function 
-        | Not_found ->
-            return ver
-        | e ->
-            fail e))
+  catch 
+    (fun () ->
+       ODBStorage.Ver.latest ~extra:ver ver.pkg)
+    (function 
+       | Not_found ->
+           return ver
+       | e ->
+           fail e)
   >>= fun ver_latest ->
   backup_link () 
   >>= fun (a_backup, fn_backup) ->
-
-  (* Load OASIS file *)
-  catch 
-    (fun () ->
-       oasis_fn
-       >>= 
-       ODBOASIS.from_file 
-         ~ctxt:ctxt.odb
-       >>= fun pkg ->
-       return (Some pkg))
-    (fun e ->
-       return None)
-
-  >>= fun pkg_opt ->
 
   begin
     match pkg_opt with 
@@ -515,8 +501,21 @@ let browse_version_page ~ctxt ~sp fver =
              (string_of_version ver.ver)
              `OASIS
          in
+           (* Load OASIS file *)
+           catch 
+             (fun () ->
+                oasis_fn
+                >>= 
+                ODBOASIS.from_file 
+                  ~ctxt:ctxt.odb
+                >>= fun pkg ->
+                return (Some pkg))
+             (fun e ->
+                return None)
+           >>= fun pkg_opt ->
+
            version_page_box ~ctxt ~sp
-             ver backup_link oasis_fn
+             ver backup_link pkg_opt
        end
        >|= fun (oasis_pkg, content) ->
        begin

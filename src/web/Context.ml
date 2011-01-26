@@ -9,6 +9,12 @@ type context =
 
       upload_delay: float; 
       (* Delay for upload (wait for completion and refresh) *)   
+
+      upload_commit_delay: float;
+      (* Delay for an upload's commit (final step of upload) *)
+
+      upload_cancel_delay: float;
+      (* Delay to cancel an upload *)
     }
 
 let get_odb () = 
@@ -67,6 +73,8 @@ let get ~sp () =
 
       (* TODO: load configuration *)
       upload_delay = 5.0;
+      upload_commit_delay = 5.0;
+      upload_cancel_delay = 5.0;
     }
 
 let get_user ~sp () = 

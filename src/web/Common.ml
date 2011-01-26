@@ -17,6 +17,7 @@ end
 
 exception Timeout of string
 exception RequiresAuth
+exception StateTransitionNotAllowed
 
 let home       = new_service ["home"] unit ()
 let browse     = new_service ["browse"] (opt (string "pkg") ** 

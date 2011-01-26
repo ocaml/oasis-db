@@ -204,6 +204,15 @@ let temp_dir ~ctxt pre suf =
   in
     temp_dir_aux start
 
+let with_temp_dir ~ctxt pre suf f = 
+  temp_dir ~ctxt pre suf 
+  >>= fun dn ->
+  (finalize
+     (fun () -> 
+        f dn)
+     (fun () ->
+        rm ~ctxt ~recurse:true [dn]))
+
 let cp ~ctxt lst tgt =
   let cp_one src tgt =
     debug ~ctxt

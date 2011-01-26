@@ -3,11 +3,10 @@
     @author Sylvain Le Gall
   *)
 
-open ODBTypes
 open ODBGettext
 open ODBPkgVer
-open ODBIncoming
 open ODBCompletion
+open ODBUpload
 open Lwt
 open XHTML.M
 open Eliom_services
@@ -15,96 +14,62 @@ open Eliom_parameters
 open Eliom_sessions
 open Eliom_predefmod.Xhtml
 open Template
-open Account
 open Context
 open Common
 
-(* TODO: use session data + a state stored in session data *)
-
+(** Internal state of the upload
+  *)
 type t = 
-    {
-      temp_dir: dirname;
-      (* Location of the temporary directory *)
+  | Begin of ([`Begin], ODBUpload.t) Task.t
+  | Edit of ODBUpload.t * LogBox.t
+  | Commit of ODBUpload.t * ([`Commit], ODBPkgVer.t) Task.t
+  | Cancel of ([`Cancel], unit) Task.t
 
-      tarball: filename;
-      (* File name of the tarball, inside the [temp_dir] *)
 
-      mutable publink: url option;
-      (* Public URL *)
+(** Table to store upload's states in session
+  *)
+let upload_data = 
+  create_volatile_table ()
 
-      completion: ODBCompletion.t;
-      (* Completion result *)
+(** Set a state for a session/upload 
+  *)
+let upload_data_set ~sp id t = 
+  let hsh = 
+    match get_volatile_session_data ~table:upload_data ~sp () with 
+      | Data hsh -> 
+          hsh
 
-      upload_date: date;
-      (* Date of upload *)
-
-      upload_method: ODBPkgVer.upload_method;
-      (* Method of upload *)
-    }
-
-let uploads = 
-  Task.create ()
-
-let upload_task ~ctxt upload_method tarball_fn tarball publink = 
-  let upload_date =
-    CalendarLib.Calendar.from_unixfloat
-      (Unix.stat tarball_fn).Unix.st_mtime
+      | Data_session_expired | No_data ->
+          let hsh = 
+            Hashtbl.create 2
+          in
+            set_volatile_session_data ~table:upload_data ~sp hsh;
+            hsh
   in
-  let f ~ctxt () = 
-    (* Create a temporary directory *)
-    ODBFileUtil.temp_dir ~ctxt:ctxt.odb "upload-" ".dir"
-    >>= fun tmp_dn ->
+    Hashtbl.replace hsh id t 
 
-    (* Move the uploaded tarball to temporary directory *)
-    begin
-      let tarball_tgt =
-        Filename.concat tmp_dn tarball
-      in
-        ODBFileUtil.mv ~ctxt:ctxt.odb tarball_fn tarball_tgt
-        >>= fun () ->
-        return tarball_tgt
-    end
+(** Unset a state for a session/upload 
+  *)
+let upload_data_unset ~sp id =
+  match get_volatile_session_data ~table:upload_data ~sp () with 
+    | Data hsh -> 
+        Hashtbl.remove hsh id
 
-    >>= fun tarball_fn ->
-    ODBArchive.uncompress_tmp_dir ~ctxt:ctxt.odb tarball_fn 
-    (fun fn an dn ->
-      ODBCompletion.run ~ctxt:ctxt.odb fn an dn 
-      >>= fun ct ->
-      (* Move _oasis file out of the temporary directory *)
-      begin
-        match ct.oasis_fn with 
-          | Some fn ->
-              let tgt = 
-                Filename.concat tmp_dn "_oasis"
-              in
-                ODBFileUtil.cp ~ctxt:ctxt.odb [fn] tgt
-                >>= fun () ->
-                return {ct with oasis_fn = Some tgt}
-          | None ->
-              return ct 
-      end)
+    | Data_session_expired | No_data ->
+        ()
 
-    >>= fun ct ->
-      return
-        {
-          temp_dir      = tmp_dn;
-          tarball       = Filename.basename tarball_fn;
-          publink       = publink;
-          completion    = ct;
-          upload_date   = upload_date;
-          upload_method = upload_method;
-        }
-    >>= fun res ->
-      if Conf.debug then
-        Lwt_unix.sleep 7.0
-        >>= fun () ->
-        return res
-      else
-        return res
+(** Retrieve a state for a session/upload 
+  *)
+let upload_data_get ~sp id = 
+  match get_volatile_session_data ~table:upload_data ~sp () with 
+    | Data hsh -> 
+        Hashtbl.find hsh id
 
-  in
-    Task.add uploads f ~ctxt ()
+    | Data_session_expired | No_data ->
+        raise Not_found
 
+(** Template of the upload pages
+  *)
 let upload_template ~ctxt ~sp ?extra_headers ctnt = 
   template
     ~ctxt
@@ -114,41 +79,53 @@ let upload_template ~ctxt ~sp ?extra_headers ctnt =
     ?extra_headers
     ctnt
 
-(* 
- *  
- * Step 2: Wait for the tarball to be processed and display
- * parameters for validation once done.
- *  
+(*
+ * Edit data of completion
  *)
 
-let mk_ver t = 
-  let value_of_answer =
-    function 
-      | Sure vl | Unsure (_, vl) -> 
-          vl
-      | NotFound -> 
-          raise Not_found
-  in
-    {
-      ODBPkgVer.pkg    = value_of_answer t.completion.pkg;
-      ver           = value_of_answer t.completion.ver;
-      ord           = value_of_answer t.completion.ord;
-      tarball       = t.tarball;
-      upload_date   = t.upload_date;
-      upload_method = t.upload_method;
-      publink       = t.publink;
-    }
+let upload_completion_action =
+  Eliom_predefmod.Action.register_new_post_coservice'
+    ~name:"upload_completion_action" 
+    ~post_params:(opt (string "publink") **
+                  string "package" **
+                  ExtParams.version "version" **
+                  int "order" **
+                  int "id")
+    ~keep_get_na_params:false
+    (fun sp _ (publink, (pkg, (version, (ord, id)))) ->
+       Context.get_user ~sp ()
+       >>= fun (ctxt, _) ->
+       begin
+         match upload_data_get ~sp id with
+           | Edit (upload, log) ->
+               begin
+                 let ctxt = 
+                   LogBox.set log ctxt
+                 in
+                 let upload = 
+                   {upload with 
+                        publink = 
+                          publink;
+                        completion = 
+                          {upload.completion with 
+                               ct_pkg = Sure pkg;
+                               ct_ver = Sure version;
+                               ct_ord = Sure ord}}
+                 in
+                 let pkg_ver =
+                   pkg_ver_of_upload upload
+                 in
+                   if ODBPkgVer.check ~ctxt:ctxt.odb pkg_ver then 
+                     upload_data_set ~sp 
+                       id (Edit (upload, log));
+                   return ()
+               end
 
-let load_ver ~ctxt t = 
-  catch 
-    (fun () ->
-       ODBPkgVer.from_file ~ctxt:ctxt.odb 
-         (ODBStorage.storage_filename t.temp_dir)
-       >|= fun ver -> Some ver)
-    (fun _ ->
-       return None)
+           | Begin _ | Commit _ | Cancel _ ->
+               fail StateTransitionNotAllowed
+       end)
 
-let upload_completion_box ~ctxt ~sp t = 
+let upload_completion_box ~ctxt ~sp id upload = 
   let value_of_answer printer dflt vl = 
     match vl with 
       | Sure vl ->
@@ -186,220 +163,182 @@ let upload_completion_box ~ctxt ~sp t =
            ~input_type:`Text
            ~name:nm ~value:vl ())
   in
- 
-  let upload_update_storage =
-    Eliom_predefmod.Any.register_new_post_coservice_for_session'
-      ~name:"logoutpost" 
-      ~post_params:(opt (string "publink") **
-                    string "package" **
-                    string "version" **
-                    int "order")
-      ~keep_get_na_params:false
-      ~sp 
-      (fun sp _ (publink, (pkg, (version, ord))) ->
-         Context.get_user ~sp ()
-         (* TODO: attach context to context task *)
-         >>= fun (ctxt, _) ->
-         load_ver ~ctxt t
-         >>= fun ver_opt ->
-         begin
-           let ver = 
-             match ver_opt with 
-               | Some ver -> ver 
-               | None -> mk_ver t
-           in
-           let ver' =
-             {ver with 
-                  ODBPkgVer.pkg = pkg;
-                  ver        = OASISVersion.version_of_string version;
-                  ord        = ord;
-                  publink    = publink}
-           in
-             Printf.eprintf "pkg: %s; ver: %s\n%!" pkg version;
-             if check ~ctxt:ctxt.odb ver' then 
-               ODBPkgVer.to_file 
-                 ~ctxt:ctxt.odb
-                 (ODBStorage.storage_filename t.temp_dir)
-                 ver'
-             else 
-               begin
-                 return ()
-               end
-         end
-         >>= fun () ->
-         Eliom_predefmod.Redirection.send ~sp
-           Eliom_services.void_hidden_coservice')
+
+  let pkg_ver_opt = 
+    try 
+      Some (pkg_ver_of_upload upload)
+    with Not_found ->
+      None
   in
 
-    load_ver ~ctxt t
-    >|= fun storage ->
-    begin
-      let has_oasis = 
-        Sys.file_exists (Filename.concat t.temp_dir "_oasis")
+  let has_oasis = 
+    upload.completion.ct_oasis <> None  
+  in
+
+  let get fver vt = 
+    match pkg_ver_opt with 
+      | Some v -> fver v
+      | None -> vt
+  in
+
+  let form =
+    post_form 
+      ~service:upload_completion_action
+      ~sp
+      (fun (publink, (pkg, (ver, (ord, id')))) ->
+         [p 
+            (List.flatten
+               [tmpl_field
+                  (s_ "Tarball: ")
+                  (pcdata (get (fun v -> v.ODBPkgVer.tarball) upload.tarball_nm));
+                tmpl_field
+                  (s_ "Has _oasis file: ")
+                  (pcdata 
+                     (if has_oasis then
+                        "true"
+                      else
+                        "false"));
+
+                 tmpl_field
+                  (s_ "Public link: ") 
+                  (string_input
+                     ~input_type:`Text
+                     ~name:publink
+                     ~value:(match get (fun v -> v.ODBPkgVer.publink) upload.publink with
+                               | Some lnk -> lnk
+                               | None -> "")
+                     ());
+
+                string_field_answer
+                  (s_ "Package: ") 
+                  pkg 
+                  (fun i -> i) 
+                  ""
+                  (get 
+                     (fun v -> Sure v.ODBPkgVer.pkg) 
+                     upload.completion.ct_pkg);
+
+                tmpl_field 
+                  (s_ "Version: ") 
+                  (user_type_input
+                     ~input_type:`Text
+                     ~name:ver
+                     ~value:(value_of_answer 
+                               (fun v -> v)
+                               (OASISVersion.version_of_string "")
+                               (get 
+                                  (fun v -> Sure v.ODBPkgVer.ver) 
+                                  upload.completion.ct_ver))
+                     OASISVersion.string_of_version
+                     ());
+
+                int_field_answer
+                  (s_ "Order: ")
+                  ord
+                  (fun i -> i)
+                  0
+                  (get 
+                     (fun v -> Sure v.ODBPkgVer.ord) 
+                     upload.completion.ct_ord);
+                [
+                  int_input ~input_type:`Hidden ~name:id' ~value:id ();
+                  string_input ~input_type:`Submit ~value:(s_ "Save") ();
+                ]
+               ]);
+       ])
+    ()
+  in
+    return form
+
+(** Preview of the package version page
+  *)
+let upload_preview_box ~ctxt ~sp id upload = 
+  begin
+    match upload.completion.ct_oasis with 
+      | Some str -> 
+          ODBOASIS.from_string ~ctxt:ctxt.odb str
+          >>= fun pkg ->
+          return (Some pkg)
+      | None -> 
+          return None
+  end
+  >>= fun pkg_opt ->
+    (* Test our ability to preview a valid storage datastructure *)
+    try 
+      let pkg_ver = 
+        pkg_ver_of_upload upload
       in
-      let get fver vt = 
-        match storage with 
-          | Some v -> fver v
-          | None -> vt
-      in
+        Browse.version_page_box ~ctxt ~sp
+          pkg_ver 
+          (fun () ->
+             return 
+               (XHTML.M.a  
+                  (* TODO: temporary service for upload *)
+                  ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
+                  [pcdata upload.tarball_nm; pcdata (s_ " (backup)")],
+                upload.tarball_nm))
+          pkg_opt
+        >|= fun (_, content) ->
+          (h3 [pcdata (s_ "Preview")])
+          ::
+          content
 
-        post_form 
-          ~service:upload_update_storage 
-          ~sp
-          (fun (publink, (pkg, (ver, ord))) ->
-             [p 
-                (List.flatten
-                   [tmpl_field
-                      (s_ "Tarball: ")
-                      (pcdata (get (fun v -> v.ODBPkgVer.tarball) t.tarball));
-                    tmpl_field
-                      (s_ "Has _oasis file: ")
-                      (pcdata 
-                         (if has_oasis then
-                            "false"
-                          else
-                            "true"));
-
-                     tmpl_field
-                      (s_ "Public link: ") 
-                      (string_input
-                         ~input_type:`Text
-                         ~name:publink
-                         ~value:(match get (fun v -> v.ODBPkgVer.publink) t.publink with
-                                   | Some lnk -> lnk
-                                   | None -> "")
-                         ());
-
-                    string_field_answer
-                      (s_ "Package: ") 
-                      pkg 
-                      (fun i -> i) 
-                      ""
-                      (get (fun v -> Sure v.ODBPkgVer.pkg) t.completion.pkg);
-
-                    string_field_answer
-                      (s_ "Version: ") 
-                      ver 
-                      OASISVersion.string_of_version 
-                      ""
-                      (get (fun v -> Sure v.ODBPkgVer.ver) t.completion.ver);
-
-                    int_field_answer
-                      (s_ "Order: ")
-                      ord
-                      (fun i -> i)
-                      0
-                      (get (fun v -> Sure v.ODBPkgVer.ord) t.completion.ord);
-
-                    [
-                      string_input ~input_type:`Submit ~value:(s_ "Save") ();
-                    ]
-                   ]);
-           ])
-        ()
-    end
-
-let upload_preview_box ~ctxt ~sp t = 
-  (* Test our ability to preview a valid storage datastructure *)
-  load_ver ~ctxt t
-  >>= 
-  function 
-    | Some ver ->
-        begin
-          Browse.version_page_box ~ctxt ~sp
-            ver 
-            (fun () ->
-               return 
-                 (XHTML.M.a  
-                    (* TODO: temporary service for upload *)
-                    ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
-                    [pcdata t.tarball; pcdata (s_ " (backup)")],
-                  "toto.tar.gz") (* TODO: real name *))
-            (* TODO: replace by ODBStorage.Ver.... *)
-            (return (Filename.concat t.temp_dir "_oasis"))
-          >|= fun (_, content) ->
-            (h3 [pcdata (s_ "Preview")])
-            ::
-            content
-        end
-    | None ->
-        return 
-          [h3 [pcdata (s_ "Preview")];
-           p [pcdata (s_ "Not enough data to build a preview")]]
+    with Not_found ->
+      return 
+        [h3 [pcdata (s_ "Preview")];
+         p [pcdata (s_ "Not enough data to build a preview")]]
 
 
 (* 
  * Cancel/confirm uploads
  *)
 
-exception PageNoPost 
-
-let upload_action_redirect_no_post =
-  register_new_service
-    ~path:["upload_action"]
-    ~get_params:unit
-    (fun _ _ _ ->
-       fail PageNoPost)
-
-let upload_action_redirect =
-  Eliom_predefmod.Redirection.register_new_post_service 
-    ~fallback:upload_action_redirect_no_post
+let upload_confirm_action =
+  Eliom_predefmod.Action.register_new_post_coservice'
+    ~name:"upload_confirm_action" 
     ~post_params:(string "action" ** int "id")
+    ~keep_get_na_params:false
     (fun sp id (action, id) ->
        Context.get_user ~sp () 
        >>= fun (ctxt, _) ->
-       Task.wait uploads ~ctxt id 
-         ctxt.upload_delay
-         (Printf.sprintf 
-            (f_ "Tarball not yet moved to storage."))
-       >>= fun (task, delay, t) ->
-       return (Task.set_logger task ctxt)
-       >>= fun ctxt ->
        begin
-         match action with 
-           | "cancel" ->
-               ODBFileUtil.rm ~ctxt:ctxt.odb ~recurse:true [t.temp_dir]
-               >>= fun () ->
-               return upload 
-           | "confirm" ->
-               load_ver ~ctxt t
-               >>= 
+         match upload_data_get ~sp id  with 
+           | Edit (upload, _) ->
                begin
-                 function
-                   | Some ver ->
-                       ODBStorage.Pkg.mem ver.ODBPkgVer.pkg
-                       >>= 
-                       begin
-                         function 
-                           | true ->
-                               return ()
-                           | false ->
-                               ODBStorage.Pkg.create ~ctxt:ctxt.odb ver.ODBPkgVer.pkg
-                               >>= 
-                               ODBStorage.Pkg.move ~ctxt:ctxt.odb
-                               >>= fun _ ->
-                               return ()
-                       end 
-                       >>= fun () ->
-                       ODBStorage.Ver.move ~ctxt:ctxt.odb t.temp_dir
-                       >>= fun _ ->
-                       return 
-                         (preapply 
-                            browse
-                            (Some ver.ODBPkgVer.pkg, 
-                             Some ver.ODBPkgVer.ver))
-                   | None ->
-                       (* TODO: redirect to upload page *)
-                       fail (Failure (s_ "Invalid version"))
+                 try 
+                   let state = 
+                     match action with 
+                       | "cancel" ->
+                           Cancel
+                             (Task.create ~ctxt 
+                                (fun ctxt ->
+                                   upload_rollback ~ctxt:ctxt.odb upload))
+
+                       | "confirm" ->
+                           Commit
+                             (upload,
+                              Task.create ~ctxt
+                                (fun ctxt ->
+                                   upload_commit ~ctxt:ctxt.odb upload))
+
+                       | str ->
+                           failwith (Printf.sprintf (f_ "Unknow action '%s'") str)
+                   in
+                     upload_data_set ~sp id state;
+                     return ()
+                 
+                 with e ->
+                   fail e
                end
-           | str ->
-               fail (Failure (Printf.sprintf (f_ "Unknow action '%s'") str))
+
+           | Begin _ | Commit _ | Cancel _ ->
+               fail StateTransitionNotAllowed
        end)
 
-let upload_action_box ~ctxt ~sp id t = 
+let upload_confirm_box ~ctxt ~sp id _ = 
   return
     (post_form 
-       ~service:upload_action_redirect
+       ~service:upload_confirm_action
        ~sp
        (fun (action, id') ->
           [p 
@@ -420,236 +359,219 @@ let upload_action_box ~ctxt ~sp id t =
              ]])
        ())
 
-let log_settings = 
-  Eliom_sessions.create_volatile_table ()
+(** Gather all edition box 
+  *)
+let upload_edit_box ~ctxt ~sp id upload log = 
+  upload_preview_box ~ctxt ~sp id upload
+  >>= fun preview_box ->
+  upload_completion_box ~ctxt ~sp id upload
+  >>= fun completion_box ->
+  upload_confirm_box ~ctxt ~sp id upload 
+  >>= fun action_box ->
+  LogBox.log_box ~ctxt ~sp log
+  >>= fun log_box ->
+  begin
+    return 
+      ([log_box]
+       @
+       [h3 [pcdata "Results"];
+        completion_box;
+       ]
+       @
+       preview_box
+       @
+       [action_box])
+  end
 
-let log_debug ~sp () = 
-  let sessdat = 
-    Eliom_sessions.get_volatile_session_data
-      ~table:log_settings 
-      ~sp ()
-  in
-    match sessdat with
-      | Eliom_sessions.Data debug ->
-          debug
-
-      | Eliom_sessions.Data_session_expired
-      | Eliom_sessions.No_data ->
-          false
-
-let log_debug_switch_action =
-  Eliom_predefmod.Action.register_new_coservice'
-    ~name:"log_debug_switch"
-    ~get_params:(bool "debug")
-    (fun sp debug _ ->
-       Eliom_sessions.set_volatile_session_data
-         ~table:log_settings
-         ~sp
-         debug;
-       return ())
-
-
-let log_box ~ctxt ~sp task = 
-
-  let debug =
-    log_debug ~sp ()
-  in
-
-  let debug_switch =
-    let text = 
-      if debug then
-        s_ "Hide debug log"
-      else
-        s_ "Show debug log"
-    in
-      p [a log_debug_switch_action sp [pcdata text] (not debug)]
-  in
-
-  let lst = 
-    Queue.fold
-      (fun acc (sct, lvl, msg) ->
-         if debug || lvl > Lwt_log.Debug then
-           begin
-             let short_nm, css_style = 
-               Log.html_log_level lvl 
-             in
-             let line =
-               tr
-                 ~a:[a_class [css_style]]
-                 (td [pcdata short_nm])
-                 [td [pcdata msg]]
-             in
-               line :: acc
-           end
-         else
-           begin
-             acc
-           end)
-      []
-      (Task.get_logger task)
-  in
-  let log =
-    match lst with 
-      | hd :: tl ->
-           odd_even_table hd tl
-      | [] ->
-          pcdata (s_ "(no log)")
-  in
-  let box = 
-    div 
-      ~a:[a_class ["log"]]
-      [h3 [pcdata (s_ "Log")];
-       debug_switch;
-       log]
-  in
-    return box
-
-
-let upload_content ~ctxt ~sp id = 
-
-
-    Task.wait uploads ~ctxt id 
-      ctxt.upload_delay
-      (Printf.sprintf
-         (f_ "The tarball is not yet processed."))
-         (* TODO: allow to cancel upload *)
-    >>= fun (task, delay, t) ->
-    return (Task.set_logger task ctxt)
-    >>= fun ctxt ->
-    begin
-      if not (Sys.file_exists (ODBStorage.storage_filename t.temp_dir)) then
-        (* TODO: the test above is really not precise *)
-        (* TODO: add this in the upload task *)
-        (* We should init ASAP i.e. maybe when we can generate a valid ver *)
-        try 
-          let ver = 
-            mk_ver t 
-          in
-            ODBStorage.Ver.init
-              ~ctxt:ctxt.odb 
-              ver 
-              t.temp_dir
-        with _ ->
-          return ()
-     else
-       return ()
-    end
-    >>= fun () ->
-    upload_preview_box ~ctxt ~sp t
-    >>= fun preview_box ->
-    upload_completion_box ~ctxt ~sp t
-    >>= fun completion_box ->
-    upload_action_box ~ctxt ~sp id t 
-    >>= fun action_box ->
-    log_box ~ctxt ~sp task
-    >>= fun log_box ->
-    begin
-      return 
-        ([log_box]
-         @
-         [h3 [pcdata "Results"];
-          if delay >= 0.0 then 
-            (* TODO: the test above is really not precise *)
-            p                   
-              [pcdata 
-                 (Printf.sprintf
-                    (f_ "The tarball '%s' has been processed in %.3fs, please \
-                         check and complete the result.")
-                    t.tarball delay)]
-          else
-              pcdata "";
-
-          completion_box;
-         ]
-         @
-         preview_box
-         @
-         [action_box])
-    end
-    >|=
-    upload_template ~ctxt ~sp
-
-let upload_step2 =
-  register_new_service
-    ~path:["upload_step2"]
-    ~get_params:(int "id")
-    (fun sp id _ ->
-       Context.get_user ~sp () 
-       >>= fun (ctxt, _) ->
-       upload_content ~ctxt ~sp id)
-
-(*
- *
- * Step 1: upload a tarball
- *
+(* 
+ * Initialization action: upload a tarball
  *)
 
-let upload_step1_no_post = 
-  Eliom_predefmod.Redirection.register_new_service
-    ~path:["upload_step1"]
-    ~get_params:unit
-    (fun _ _ _ ->
-       fail (Failure (s_ "Missing post parameters")))
-
-let upload_step1 = 
-  Eliom_predefmod.Redirection.register_new_post_service
-    ~post_params:(string "publink" ** file "tarball")
-    ~fallback:upload_step1_no_post
-    (fun sp _ (publink, tarball_fd)->
+let upload_init_action = 
+  Eliom_predefmod.Action.register_new_post_coservice'
+    ~name:"upload_tarball"
+    ~post_params:(string "publink" ** 
+                  file "tarball" **
+                  int "id")
+    (fun sp _ (publink, (tarball_fd, id))->
        Context.get_user ~sp () 
        >>= fun (ctxt, _) ->
        begin
-         let publink = 
-           match ExtString.String.strip publink with
-             | "" -> None
-             | s  -> Some s
-             (* TODO: test the link *)
-         in
-         let tarball =  
-           (* TODO: test the tarball size > 0 *)
-           FilePath.basename 
-             (get_original_filename tarball_fd)
-         in
-         let tarball_fn =
-           get_tmp_filename tarball_fd
-         in
-         let id = 
-           upload_task ~ctxt 
-             (Manual 
-                (Account.name_of_role ctxt.role))
-             tarball_fn tarball publink 
-         in
-
-           return (preapply upload_step2 id)
+         try 
+           let publink = 
+             match ExtString.String.strip publink with
+               | "" -> None
+               | s  -> Some s
+               (* TODO: test the link *)
+           in
+           let tarball =  
+             match get_original_filename tarball_fd with 
+               | "none" ->
+                   failwith 
+                     (s_ "No tarball uploaded, be sure to choose a \
+                          file to upload.")
+               | fn ->
+                   FilePath.basename fn 
+           in
+           let tarball_fn =
+             get_tmp_filename tarball_fd
+           in
+           let tsk = 
+             Task.create 
+               ~ctxt 
+               (fun ctxt ->
+                  upload_begin ~ctxt:ctxt.odb
+                    (Manual 
+                       (Account.name_of_role ctxt.role))
+                    tarball_fn tarball publink)
+           in
+             upload_data_set ~sp id (Begin tsk);
+             return ()
+         with e ->
+           fail e 
        end)
 
-(* 
- *
- * Step 0: Main entry point, upload a tarball
- *
- *)
-
-let upload_handler sp () () =
-  let f = 
+let upload_init_box ~ctxt ~sp id =
+  let upload_form = 
     post_form 
-      ~service:upload_step1 
+      ~service:upload_init_action
       ~sp
-      (fun (publink, tarball) ->
-         [p [pcdata (s_ "Tarball: ");
-             file_input 
-               ~a:[a_accept "application/x-bzip2;\
-                             application/zip;\
-                             application/x-gzip"]
-               ~name:tarball ();
-             br ();
-             pcdata (s_ "Public link: ");
-             string_input ~input_type:`Text ~name:publink ~value:"" ();
-             br ();
-             string_input ~input_type:`Submit ~value:(s_ "Upload") ()
-         ]])
+      (fun (publink, (tarball, id_nm)) ->
+           [p [pcdata (s_ "Tarball: ");
+               file_input 
+                 ~a:[a_accept "application/x-bzip2;\
+                               application/zip;\
+                               application/x-gzip"]
+                 ~name:tarball ();
+               br ();
+               pcdata (s_ "Public link: ");
+               string_input ~input_type:`Text ~name:publink ~value:"" ();
+               br ();
+               int_input ~input_type:`Hidden ~name:id_nm ~value:id ();
+               string_input ~input_type:`Submit ~value:(s_ "Upload") ()
+           ]])
       ()
   in
-    Context.get_user ~sp ()
-    >|= fun (ctxt, _) ->
-    upload_template ~ctxt ~sp [f]
+    return [upload_form]
 
+(** Service to handle state transition and related display/redirection
+  *)
+let upload_with_id =
+  Eliom_predefmod.Any.register_new_service
+    ~path:["upload"]
+    ~get_params:(int "id")
+    (fun sp id () ->
+       Context.get_user ~sp () 
+       >>= fun (ctxt, _) ->
+       try 
+         match upload_data_get ~sp id with 
+           | Begin task_upload ->
+               begin
+                 Task.wait ~ctxt 
+                   task_upload
+                   ctxt.upload_delay
+                   (s_ "The tarball is not yet processed.")
+                 >>= fun (task, delay, upload) ->
+                 begin
+                   let log = 
+                     Task.get_logger task 
+                   in
+                   let () = 
+                     upload_data_set ~sp id (Edit (upload, log))
+                   in
+                     upload_edit_box ~ctxt ~sp id upload log
+                     >>= fun edit_box ->
+                     Eliom_predefmod.Xhtml.send ~sp
+                       (upload_template ~ctxt ~sp
+                          ((p                   
+                              [pcdata 
+                                 (Printf.sprintf
+                                    (f_ "The tarball '%s' has been processed \
+                                         in %.3fs, please check and complete \
+                                         the result.")
+                                    upload.tarball_nm delay)])
+                          :: edit_box))
+                 end
+               end
+
+           | Edit (upload, log) ->
+               begin
+                 upload_edit_box ~ctxt ~sp id upload log
+                 >>= fun edit_box ->
+                 Eliom_predefmod.Xhtml.send ~sp                      
+                   (upload_template ~ctxt ~sp edit_box)
+               end
+
+           | Commit (upload, task_commit) ->
+               begin
+                 catch 
+                   (fun () -> 
+                      Task.wait ~ctxt 
+                        task_commit
+                        ctxt.upload_commit_delay
+                        (s_ "Commit of upload not yet finished.")
+                      >>= fun (task, delay, pkg_ver) ->
+                      begin
+                        upload_data_unset ~sp id;
+                        Eliom_predefmod.Redirection.send ~sp 
+                          (preapply 
+                             browse
+                             (Some pkg_ver.ODBPkgVer.pkg, 
+                              Some pkg_ver.ODBPkgVer.ver))
+                      end)
+                   (fun e ->
+                      let ctxt = 
+                        Task.set_logger task_commit ctxt
+                      in
+                        ODBMessage.error ~ctxt:ctxt.odb 
+                          (f_ "Unable to commit upload: %s")
+                          (Printexc.to_string e)
+                        >>= fun () ->
+                        begin
+                          let log = 
+                            Task.get_logger task_commit
+                          in
+                          let () =
+                            upload_data_set ~sp id 
+                              (Edit (upload, log))
+                          in
+                            upload_edit_box ~ctxt ~sp id upload log
+                            >>= fun edit_box ->
+                            (* TODO: xhtml error ? *)
+                            Eliom_predefmod.Xhtml.send ~sp 
+                              (upload_template ~ctxt ~sp edit_box)
+                        end)
+               end
+
+           | Cancel task_cancel ->
+               begin
+                 Task.wait ~ctxt 
+                   task_cancel
+                   ctxt.upload_cancel_delay 
+                   (s_ "Cancelation of upload not yet finished.")
+                 >>= fun (task, delay, ()) ->
+                 begin
+                   upload_data_unset ~sp id;
+                   Eliom_predefmod.Redirection.send ~sp upload
+                 end
+               end
+
+       with Not_found ->
+         begin
+           (* Nothing is defined, we start a new upload *)
+           upload_init_box ~ctxt ~sp id
+           >>= fun init_box ->
+           Eliom_predefmod.Xhtml.send ~sp 
+             (upload_template ~ctxt ~sp init_box)
+         end)
+
+(** Upload counter 
+  *)
+let upload_id = 
+  ref 1
+
+(** Redirect to upload_with_id
+  *)
+let upload_handler sp () () = 
+  incr upload_id;
+  return (preapply upload_with_id !upload_id)

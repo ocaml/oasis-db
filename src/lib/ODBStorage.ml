@@ -192,47 +192,23 @@ struct
       >>= fun () ->
       return t.pkg
 
-  (** Move a package define outside the dist_dir, into it and add it *)
-  let move ~ctxt dn =
-    let storage_fn = 
-      storage_filename dn
+  (** Create a package *)
+  let create ~ctxt pkg = 
+    let dn = 
+      Filename.concat ctxt.dist_dir pkg
     in
-      ODBPkg.from_file ~ctxt storage_fn 
-      >>= fun (pkg as pkg_str) ->
-      begin
-        let tgt_dn = 
-          Filename.concat ctxt.dist_dir pkg_str
-        in
-          try 
-            Sys.rename dn tgt_dn;
-            return tgt_dn
-          with e ->
-            fail e
-      end 
-      >>= fun tgt_dn ->
-      catch
-        (fun () -> 
-           add ~ctxt tgt_dn)
+      ODBFileUtil.mkdir dn 0o755
+      >>= fun () ->
+      catch 
+        (fun () ->
+           ODBPkg.to_file ~ctxt (storage_filename dn) pkg
+           >>= fun () ->
+           add ~ctxt dn)
         (fun e ->
-           (* We have a problem, restore directory *)
-           begin
-             try 
-               Sys.rename tgt_dn dn;
-               return ()
-             with e ->
-               error ~ctxt "%s" (string_of_exception e)
-           end
+           ODBFileUtil.rm ~ctxt ~recurse:true [dn]
            >>= fun () ->
            fail e)
-
-  (** Create a package directory outside the dist_dir *)
-  let create ~ctxt pkg = 
-    ODBFileUtil.temp_dir ~ctxt "oasis-db" "-pre-pkg.dir"
-    >>= fun dn ->
-    ODBPkg.to_file ~ctxt (storage_filename dn) pkg
-    >>= fun () ->
-    return dn 
-
+  
   let dirname k = 
     HLS.find all k
     >>= fun t ->
@@ -260,14 +236,21 @@ struct
   (** All available version of a package, beginning with the older
       one.
     *)
-  let elements pkg_str = 
+  let elements ?extra pkg_str = 
     get pkg_str
     >>= 
     HLS.elements 
     >|= 
     List.rev_map (fun (_, t) -> t.ver) 
-    >|=
-    List.sort ODBPkgVer.compare
+    >|= fun lst ->
+    begin
+      let lst = 
+        match extra with 
+          | Some ver -> ver :: lst
+          | None -> lst
+      in
+        List.sort ODBPkgVer.compare lst
+    end
     
   (** Check the existence of a package's version
    *)
@@ -286,8 +269,8 @@ struct
 
   (** Get the latest version
     *)
-  let latest pkg_str = 
-    elements pkg_str 
+  let latest ?extra pkg_str = 
+    elements ?extra pkg_str 
     >|= List.rev
     >>= function
       | [] -> 
@@ -358,70 +341,66 @@ struct
       >>= fun () ->
       return t.ver
 
-  (** Move a version created outside the dist_dir, inside it and add it *)
-  let move ~ctxt dn = 
-    let storage_fn =
-      storage_filename dn 
-    in
-      ODBPkgVer.from_file ~ctxt storage_fn
-      >>= fun ver ->
-      catch 
-        (fun () -> 
-           Pkg.dirname ver.ODBPkgVer.pkg)
-        (function
-           | Not_found as e -> 
-               error ~ctxt (f_ "Package '%s' doesn't exist") ver.ODBPkgVer.pkg
-               >>= fun () ->
-               fail e
-           | e ->
-               fail e)
-      >>= fun pkg_dn ->
-      begin
-        let ver_str = OASISVersion.string_of_version ver.ODBPkgVer.ver in
-        let tgt_dn  = Filename.concat pkg_dn ver_str in
-          try 
-            Sys.rename dn tgt_dn; 
-            return (ver_str, tgt_dn)
-          with e ->
-            fail e
-      end
-      >>= fun (ver_str, tgt_dn) ->
-      catch 
-        (fun () ->
-           add ~ctxt ver.ODBPkgVer.pkg tgt_dn)
-        (fun e ->
-           (* We have a problem, restore directory *)
-           begin
-             try 
-               Sys.rename tgt_dn dn;
-               return ()
-             with e ->
-               error ~ctxt "%s" (string_of_exception e)
-               >>= fun () ->
-               fail e
-           end
-           >>= fun () ->
-           fail e)
-
-  (** Initialize a directory containing a version 
-      out of the dist_dir
+  (** Create a package version 
     *)
-  let init ~ctxt ver dn = 
+  let create ~ctxt pkg_ver tarball_fd = 
+    catch 
+      (fun () -> 
+         Pkg.dirname pkg_ver.ODBPkgVer.pkg)
+      (function
+         | Not_found as e -> 
+             error ~ctxt 
+               (f_ "Package '%s' doesn't exist") 
+               pkg_ver.ODBPkgVer.pkg
+             >>= fun () ->
+             fail e
+         | e ->
+             fail e)
+    >>= fun pkg_dn ->
     begin
-      let oasis_fn = 
-        Filename.concat dn "_oasis"
+      let dn = 
+        Filename.concat pkg_dn 
+          (OASISVersion.string_of_version 
+             pkg_ver.ODBPkgVer.ver)
       in
-      let oasis_pristine_fn = 
-        oasis_fn ^ ".pristine"
-      in
-        if Sys.file_exists oasis_fn &&
-           not (Sys.file_exists oasis_pristine_fn) then
-          ODBFileUtil.cp ~ctxt [oasis_fn] oasis_pristine_fn
-        else
-          return ()
+        ODBFileUtil.mkdir dn 0o755 
+        >>= fun () ->
+        catch 
+          (fun () ->
+             (* Create storage.sexp *)
+             ODBPkgVer.to_file ~ctxt 
+               (storage_filename dn) pkg_ver
+             >>= fun () ->
+
+             (* Copy the tarball *)
+             begin
+               let chn_in = 
+                 Lwt_io.of_unix_fd 
+                   ~mode:Lwt_io.input 
+                   (Unix.dup tarball_fd)
+               in
+                 finalize 
+                   (fun () ->
+                      Lwt_io.with_file
+                        ~mode:Lwt_io.output
+                        (Filename.concat dn pkg_ver.ODBPkgVer.tarball)
+                        (fun chn_out ->
+                           Lwt_io.write_chars 
+                             chn_out
+                             (Lwt_io.read_chars chn_in)))
+                   (fun () ->
+                      Lwt_io.close chn_in)
+             end
+             >>= fun () ->
+
+             (* Notify installation of a new package version *)
+             add ~ctxt pkg_ver.ODBPkgVer.pkg dn)
+
+          (fun e ->
+             ODBFileUtil.rm ~ctxt ~recurse:true [dn]
+             >>= fun () ->
+             fail e)
     end
-    >>= fun () ->
-    ODBPkgVer.to_file ~ctxt (storage_filename dn) ver
 
   (** Return the directory name of a version 
     *)

@@ -41,6 +41,7 @@ type handle_status =
 
 let run_logged 
       ~ctxt ?timeout ?env 
+      ?stdin_fd
       ?(status=StatusExpected [Unix.WEXITED 0])
       cmd args = 
 
@@ -75,10 +76,6 @@ let run_logged
           end
   in
 
-  let p = 
-    Lwt_process.open_process_full
-      ?timeout ?env (cmd, Array.of_list (cmd :: args))
-  in
   let read_and_log f chn = 
     let rec read_and_log_aux () =
       catch
@@ -94,19 +91,53 @@ let run_logged
     in
       read_and_log_aux ()
   in
-    debug ~ctxt
-      (f_ "Running '%s'")
-      (String.concat " " (cmd :: args))
+    begin
+      let cmd_line = 
+        String.concat " " (cmd :: args)
+      in
+        match stdin_fd with
+          | Some fd ->
+              debug ~ctxt (f_ "Running '%s' with fd as input") 
+                cmd_line
+          | None ->
+              debug ~ctxt (f_ "Running '%s'") 
+                cmd_line
+    end
     >>= fun () ->
-    Lwt_io.close p#stdin
-    >>= fun () ->
-      join 
-        [       
-          read_and_log (info ~ctxt "%s") p#stdout;
-          read_and_log (error ~ctxt "%s") p#stderr;
-        ]
-    >>= fun () ->
-    p#close 
-    >>= 
-    handle_status 
+    Lwt_process.with_process_full
+      ?timeout ?env 
+      (cmd, Array.of_list (cmd :: args))
+      (fun p ->
+         let stdin_task =
+           match stdin_fd with 
+             | Some fd ->
+                 (* Copy fd into stdin of the process *)
+                 let chn = 
+                   Lwt_io.of_unix_fd 
+                     ~mode:Lwt_io.input 
+                     (Unix.dup fd)
+                 in
+                   finalize
+                     (fun () ->
+                        Lwt_io.write_chars
+                          p#stdin
+                          (Lwt_io.read_chars chn))
+                     (fun () ->
+                        Lwt_io.close chn
+                        >>= fun () ->
+                        Lwt_io.close p#stdin)
+
+             | None ->
+                 Lwt_io.close p#stdin
+         in
+           join 
+             [       
+               read_and_log (info ~ctxt "%s") p#stdout;
+               read_and_log (error ~ctxt "%s") p#stderr;
+               stdin_task;
+             ]
+         >>= fun () ->
+         p#close 
+         >>=  
+         handle_status)
 

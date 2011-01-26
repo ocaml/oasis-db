@@ -94,7 +94,8 @@ Library "oasis-db"
            ODBDeps,
            ODBREST,
            LwtExt,
-           ODBSync
+           ODBSync,
+           ODBUpload
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,
@@ -127,6 +128,7 @@ Library "oasis-db-ocsigen"
            SQL,
            Log,
            Dist,
+           LogBox,
            Upload,
            Mkd,
            Context,

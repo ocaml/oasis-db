@@ -61,6 +61,11 @@ let () =
                (error_message 
                   (s_ "You need to be logged in to see this page."))
 
+         | StateTransitionNotAllowed ->
+             error_template ~sp ~code:405
+               (error_message
+                  (s_ "This state transition is not allowed."))
+
          | Timeout msg ->
              (* TODO: error code *)
              error_template ~sp
@@ -72,7 +77,7 @@ let () =
                (error_message 
                   (* TODO: better HTML formatting *)
                   (Printf.sprintf
-                     (f_ "%s This page will be refreshed in a %.0f seconds.")
+                     (f_ "%s This page will be refreshed in %.0f seconds.")
                      msg Conf.timeout_delay))
 
          | Failure str ->

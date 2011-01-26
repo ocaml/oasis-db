@@ -17,48 +17,51 @@ let string_of_exception =
     | e ->
         raise e
 
-let uncompress ~ctxt fn dn = 
+let uncompress ~ctxt fd nm dn = 
+  let run prg args = 
+    run_logged ~ctxt ~stdin_fd:fd prg args
+  in
   let handlers = 
     [ 
       ".tgz",
-      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xzf"; fn]);
+      ctxt.tar,
+      ["-C"; dn; "-xz"];
 
       ".tar.gz",
-      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xzf"; fn]);
+      ctxt.tar,
+      ["-C"; dn; "-xz"];
 
       ".tar.bz2",
-      (fun () -> run_logged ~ctxt ctxt.tar ["-C"; dn; "-xjf"; fn]);
+      ctxt.tar,
+      ["-C"; dn; "-xjf"];
 
       ".zip",
-      (fun () -> run_logged ~ctxt ctxt.unzip [fn; "-d"; dn]);
+      ctxt.unzip,
+      ["-d"; dn];
     ]
   in
 
   let rec find_handler =
     function 
-      | (suf, f) :: tl ->
-          if Filename.check_suffix fn suf then
-            f () >>= fun () -> 
-            return (Filename.basename (Filename.chop_suffix fn suf))
+      | (suf, prg, args) :: tl ->
+          if Filename.check_suffix nm suf then
+            run prg args
+            >>= fun () -> 
+            return (Filename.basename (Filename.chop_suffix nm suf))
           else
             find_handler tl
 
       | [] ->
-          fail (NoHandler fn)
+          fail (NoHandler nm)
   in
 
     find_handler handlers 
 
 
-let uncompress_tmp_dir ~ctxt fn f = 
-  temp_dir ~ctxt "oasis-db-" "" 
-  >>= fun dn ->
-  (finalize
-     (fun () ->
-        uncompress ~ctxt fn dn
-        >>= fun an ->
-        (* Do something with content *)
-        f fn an dn)
-
-     (fun () ->
-        rm ~ctxt ~recurse:true [dn]))
+let uncompress_tmp_dir ~ctxt fd nm f = 
+  with_temp_dir ~ctxt "oasis-db-" "" 
+    (fun dn ->
+       uncompress ~ctxt fd nm dn
+       >>= fun an ->
+       (* Do something with content *)
+       f nm an dn)

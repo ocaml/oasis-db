@@ -19,10 +19,10 @@ type 'a answer =
 
 type t =
   {
-    pkg:       string answer;
-    ver:       version answer;
-    ord:       int answer;
-    oasis_fn:  filename option;
+    ct_pkg:   string answer;
+    ct_ver:   version answer;
+    ct_ord:   int answer;
+    ct_oasis: string option;
   } with sexp
 
 (** {2 Utils} *)
@@ -229,10 +229,12 @@ open OASISTypes
 (** Extract data from OASIS file *)
 let oasis ~ctxt fn an dn = 
   let oasis_extract fn _ =
-    ODBOASIS.from_file ~ctxt fn
+    LwtExt.IO.with_file_content fn 
+    >>= fun oasis_content ->
+    ODBOASIS.from_string ~ctxt oasis_content
     >>= fun pkg ->
     return 
-      (Some fn,
+      (Some oasis_content,
        Sure pkg.name,
        Sure (OASISVersion.string_of_version pkg.version))
   in
@@ -402,7 +404,7 @@ let run ~ctxt fn an dn =
     catch_log
       ("oasis", oasis)
       (None, NotFound, NotFound)
-    >>= fun (oasis_fn, pkg, ver) ->
+    >>= fun (oasis_content, pkg, ver) ->
     begin
       let further_guesses = 
         match pkg, ver with
@@ -434,7 +436,7 @@ let run ~ctxt fn an dn =
         >>= fun (a_pkg, a_ver_s) ->
         let a_ver =
           (* Use a version rather than a string *)
-          let vos  = OASISVersion.version_of_string  in
+          let vos  = OASISVersion.version_of_string in
           match a_ver_s with 
           | Sure s -> Sure (vos s)
           | Unsure (q, s) -> Unsure (q, vos s)
@@ -444,10 +446,10 @@ let run ~ctxt fn an dn =
           >>= fun a_ord ->
           return 
             {
-              pkg       = a_pkg;
-              ver       = a_ver;
-              ord       = a_ord;
-              oasis_fn  = oasis_fn;
+              ct_pkg    = a_pkg;
+              ct_ver    = a_ver;
+              ct_ord    = a_ord;
+              ct_oasis  = oasis_content;
             }
     end
 

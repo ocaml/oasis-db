@@ -95,3 +95,4 @@ let html_log_level =
     | Warning  -> s_ "W", "log_warning"
     | Error    -> s_ "E", "log_error" 
     | Fatal    -> s_ "F", "log_fatal"
+
