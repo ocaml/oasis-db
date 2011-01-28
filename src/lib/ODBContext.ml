@@ -8,15 +8,12 @@ type t =
     logger:            logger;
     tar:               program;
     unzip:             program;
-    storage_dir:       dirname;
     dist_dir:          dirname;
     incoming_dir:      dirname;
-    tmp_dir:           dirname;
-    min_running_time:  seconds;
   }
 
 
-let default ?logger storage_dir = 
+let default ?logger dist_dir incoming_dir = 
   let logger =
     match logger with 
       | Some l -> l
@@ -27,11 +24,8 @@ let default ?logger storage_dir =
       logger           = logger;
       tar              = "tar";
       unzip            = "unzip";
-      storage_dir      = storage_dir;
-      dist_dir         = FilePath.concat storage_dir "dist";
-      incoming_dir     = FilePath.concat storage_dir "incoming";
-      tmp_dir          = FilePath.concat storage_dir "tmp";
-      min_running_time = 300.0;
+      dist_dir         = dist_dir;
+      incoming_dir     = incoming_dir;
     }
 
 let to_oasis ctxt =

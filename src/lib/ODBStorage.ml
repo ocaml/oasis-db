@@ -373,24 +373,9 @@ struct
              >>= fun () ->
 
              (* Copy the tarball *)
-             begin
-               let chn_in = 
-                 Lwt_io.of_unix_fd 
-                   ~mode:Lwt_io.input 
-                   (Unix.dup tarball_fd)
-               in
-                 finalize 
-                   (fun () ->
-                      Lwt_io.with_file
-                        ~mode:Lwt_io.output
-                        (Filename.concat dn pkg_ver.ODBPkgVer.tarball)
-                        (fun chn_out ->
-                           Lwt_io.write_chars 
-                             chn_out
-                             (Lwt_io.read_chars chn_in)))
-                   (fun () ->
-                      Lwt_io.close chn_in)
-             end
+             LwtExt.IO.copy_fd 
+               tarball_fd 
+               (Filename.concat dn pkg_ver.ODBPkgVer.tarball)
              >>= fun () ->
 
              (* Notify installation of a new package version *)

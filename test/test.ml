@@ -62,7 +62,7 @@ let _ :: _ | [] =
       ("OASIS-DB">:::
        [
          TestCompletion.tests;
-         (* TestIncoming.tests; *)
+         TestIncoming.tests; 
          TestAPI.tests;
          TestSync.tests;
          TestGit.tests;

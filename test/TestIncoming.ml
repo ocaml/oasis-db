@@ -1,439 +1,190 @@
 
 open TestCommon
+open TestCommon.InotifyExt
 open OUnit
 open Unix
 open FileUtil
+open CalendarLib
 open ODBContext
 open ODBPkgVer
-open CalendarLib
+open ODBIncoming
 
-(*
-let default_timeout = 1.0
-
-let wait_create ~is_file ?(timeout=default_timeout) topfn = 
-
-  let directory_exists dn =
-    Sys.file_exists dn && Sys.is_directory dn
-  in
-
-  let fd = 
-    Inotify.init ()
-  in
-
-  let end_time =
-    (Unix.gettimeofday ()) +. timeout
-  in
-
-  let existence_test ~is_file fn =
-    (* Maybe the file already exists? *)
-    (is_file && Sys.file_exists fn) ||
-    (* Maybe the directory already exists? *)
-    (not is_file && directory_exists fn)
-  in
-
-  let loop_test ~is_file fn =
-    let dn =
-      Filename.dirname fn
-    in
-    let wd = 
-      Inotify.add_watch fd dn
-        (if is_file then
-           [Inotify.S_Close_write]
-         else
-           [Inotify.S_Create])
-    in
-    let rec loop_select () = 
-      let timeout =
-        end_time -. (Unix.gettimeofday ())
-      in
-        if timeout > 0.0 then
-          begin
-                 
-              if existence_test ~is_file fn then 
-                true
-              else
-                let _, _, _ =
-                  Unix.select [fd] [] [] timeout
-                in
-                  loop_select () 
-          end
-        else
-          (* We reach the timeout *)
-          false
-    in
-    let res = 
-      loop_select ()
-    in
-      Inotify.rm_watch fd wd;
-      res
-  in
-
-  (* Find the first existing directory *)
-  let rec wait_aux ~is_file fn =
-    if FilePath.is_current fn then
-      begin
-        failwith 
-          (Printf.sprintf 
-             "Cannot find an existing directory to watch for file '%s'"
-             topfn)
-      end 
-    else 
-      begin
-        let dn = 
-          Filename.dirname fn
-        in
-          if directory_exists dn then
-            (* Directory exists, test for its content *)
-            loop_test ~is_file fn 
-
-          else if wait_aux ~is_file:false dn then
-            (* Directory doesn't exist, wait for its creation 
-             * and retest.
-             *)
-            wait_aux ~is_file fn
-
-          else
-            (* Unable to create toplevel directory... *)
-            false
-      end
-  in
-
-  let res = 
-    wait_aux ~is_file topfn
-  in
-    Unix.close fd;
-    res
-
-
-let wait_remove ?(timeout=default_timeout) fn =
-  let fd =
-    Inotify.init ()
-  in
-    try 
-      let wd = 
-        Inotify.add_watch fd fn [Inotify.S_Delete_self]
-      in
-      let res =
-        match Unix.select [fd] [] [] timeout with 
-          | _ :: _, _, _ -> 
-              true
-
-          | [], _, _ ->
-              false
-      in
-        Inotify.rm_watch fd wd;
-        Unix.close fd;
-        res
-
-    with 
-      | Inotify.Error ("add_watch", 2) ->
-          (* ENOENT *)
-          Unix.close fd;
-          true
-
-let wait_change ?(timeout=default_timeout) fn f =
-  let fd =
-    Inotify.init ()
-  in
-  let wd = 
-    Inotify.add_watch fd fn [Inotify.S_Close_write]
-  in
-
-  let end_timeout = 
-    (Unix.gettimeofday ()) +. timeout
-  in
-
-  let gtd () = 
-    end_timeout -. (Unix.gettimeofday ())
-  in
-
-  let rec aux () = 
-    if f () then
-      begin
-        true
-      end
-    else
-      begin
-        match Unix.select [fd] [] [] (gtd ()) with 
-          | _ :: _, _, _ -> 
-              aux ()
-                
-          | [], _, _ ->
-              false
-      end
-  in
-
-  let res =
-    aux ()
-  in
-    Inotify.rm_watch fd wd;
-    Unix.close fd;
-    res
-
-let assert_create_file ?timeout fn =
-  assert_bool
-    (Printf.sprintf "File '%s' created" fn)
-    (wait_create ?timeout ~is_file:true fn)
-
-let assert_create_dir ?timeout fn =
-  assert_bool
-    (Printf.sprintf "Directory '%s' created" fn)
-    (wait_create ?timeout ~is_file:false fn)
-
-let assert_remove_file ?timeout fn =
-  assert_bool
-    (Printf.sprintf "File '%s' removed" fn)
-    (wait_remove ?timeout fn)
-
-let assert_remove_dir ?timeout fn =
-  assert_bool
-    (Printf.sprintf "Directory '%s' removed" fn)
-    (wait_remove ?timeout fn)
-
-let assert_changed ?timeout ~what fn f = 
-  assert_bool
-    (Printf.sprintf "File '%s' doesn't match %s" fn what) 
-    (wait_change ?timeout fn f)
-
-let assert_ver_file ~ctxt ?(oasis=true) pkg ver =
+let assert_ver_file ocs pkg ver oasis =
   let mk_fn bn =
-    in_dist_dir ~ctxt (FilePath.make_filename [pkg; ver; bn])
-  in
-  let () =
-    assert_create_file (mk_fn "storage.sexp");
-    if oasis then 
-      begin
-        assert_create_file (mk_fn "_oasis");
-        assert_create_file (mk_fn "_oasis.pristine")
-      end
+    in_dist_dir ocs (FilePath.make_filename [pkg; ver; bn])
   in
   let ver =
-    odb_run ctxt 
+    assert_create_file (mk_fn "storage.sexp");
+    odb_run 
       (fun ~ctxt () -> 
          ODBPkgVer.from_file 
            ~ctxt 
            (mk_fn "storage.sexp"))
   in
-    assert_create_file (mk_fn ver.tarball)
+    assert_create_file (mk_fn ver.tarball);
+    List.iter 
+      (if oasis then 
+         (fun nm -> 
+            assert_create_file (mk_fn nm))
+       else
+         (fun nm -> 
+            let fn = 
+              mk_fn nm
+            in
+              assert_equal 
+                ~msg:(Printf.sprintf "File '%s' don't exist" fn)
+                ~printer:string_of_bool
+                false
+                (Sys.file_exists fn)))
+      ["_oasis"; "_oasis.pristine"]
 
-
-let upload ctxt mthd ?time fn = 
+let upload ocs date fn = 
   let fn_sexp = 
-    ODBIncoming.sexp_of_tarball ~ctxt:ctxt.odb fn
+    in_incoming_dir ocs (sexp_of_tarball fn) 
   in
-    cp [in_data_dir ~ctxt fn] ctxt.odb.incoming_dir;
-    begin 
-      match time with 
-        | Some date -> 
-             let tm = 
-               Calendar.to_unixfloat
-                 (Printer.Calendar.from_string date)
-             in
-               touch 
-                 ~time:(Touch_timestamp tm) 
-                 (in_incoming_dir ~ctxt fn)
-
-        | None ->
-            ()
-    end;
+  let fn_tarball = 
+    in_incoming_dir ocs fn 
+  in
+  let tm = 
+    Calendar.to_unixfloat
+      (Printer.Calendar.from_string date)
+  in
+    cp [in_data_dir fn] fn_tarball;
+    touch ~time:(Touch_timestamp tm) fn_tarball;
     odb_run
-      ctxt
       (fun ~ctxt () ->
-         ODBIncoming.to_file
-           ~ctxt
-           fn_sexp
-           (ODBIncoming.make mthd))
+         ODBIncoming.to_file ~ctxt fn_sexp {publink = None})
 
-let tests ctxt = 
-  "Incoming" >::
-  (fun () ->
-    (* Start the process FakeIncoming *)
-    let pid = 
-      create_process 
-        ctxt.fake_incoming [|ctxt.fake_incoming|]
-        stdin stdout stderr
-    in
-    let clean_exit () = 
-      (* End scenario *)
-      kill pid Sys.sigterm;
-      snd (waitpid [] pid)
-    in
-    begin
-      try 
-        rm ~recurse:true [ctxt.odb.storage_dir]; 
-        mkdir ctxt.odb.storage_dir;
-        mkdir ctxt.odb.incoming_dir;
-        mkdir ctxt.odb.dist_dir;
-        mkdir ctxt.odb.tmp_dir;
+let tests = 
+  let one ocs (fn, time, pkg, ver, oasis) () =
+    upload ocs time fn;
+    assert_ver_file ocs pkg ver oasis
+  in
 
-        (* Auto upload *)
-        List.iter 
-          (fun (mthd, fn, time, pkg, ver) -> 
-             upload ctxt mthd ~time fn;
-             assert_ver_file ctxt pkg ver)
-          [
-            OCamlForge, "baz_3.O~alpha1.zip", 
-            "2010-07-31 15:35:09",
-            "baz", "3.0~alpha1";
+  let vecs = 
+    [
+      "baz_3.O~alpha1.zip", 
+      "2010-07-31 15:35:09",
+      "baz", "3.0~alpha1", 
+      true;
 
-            Uscan, "foo-0.1.0.tar.gz", 
-            "2010-07-30 16:00:00",
-            "foo", "0.1.0";
+      "foo-0.1.0.tar.gz", 
+      "2010-07-30 16:00:00",
+      "foo", "0.1.0",
+      true;
 
-            OCamlForge, "ocaml-csvgenerator-0.0.5.tar.gz", 
-            "2010-07-29 14:00:00",
-            "ocaml-csvgenerator", "0.0.5";
+      "ocaml-csvgenerator-0.0.5.tar.gz", 
+      "2010-07-29 14:00:00",
+      "ocaml-csvgenerator", "0.0.5",
+      true;
 
-            OCamlForge, "ocaml-data-notation-0.0.1.tar.gz", 
-            "2010-07-28 12:00:00",
-            "ocaml-data-notation", "0.0.1";
+      "ocaml-data-notation-0.0.1.tar.gz", 
+      "2010-07-28 12:00:00",
+      "ocaml-data-notation", "0.0.1",
+      true;
 
-            OCamlForge, "ocaml-fastrandom-0.0.1.tar.gz", 
-            "2010-06-07 13:00:00",
-            "ocaml-fastrandom", "0.0.1";
+      "ocaml-fastrandom-0.0.1.tar.gz", 
+      "2010-06-07 13:00:00",
+      "ocaml-fastrandom", "0.0.1",
+      true;
 
-            OCamlForge, "ocamlify-0.0.1.tar.gz", 
-            "2010-06-01 08:30:00",
-            "ocamlify", "0.0.1";
+      "ocamlify-0.0.1.tar.gz", 
+      "2010-06-01 08:30:00",
+      "ocamlify", "0.0.1",
+      true;
 
-            OCamlForge, "ocaml-moifile-0.1.0.tar.gz", 
-            "2010-05-14 14:30:00",
-            "ocaml-moifile", "0.1.0";
+      "ocaml-moifile-0.1.0.tar.gz", 
+      "2010-05-14 14:30:00",
+      "ocaml-moifile", "0.1.0",
+      true;
 
-            OCamlForge, "ocaml-moifile-0.1.1.tar.gz", 
-            "2010-05-03 17:00:00",
-            "ocaml-moifile", "0.1.1";
+      "ocaml-moifile-0.1.1.tar.gz", 
+      "2010-05-03 17:00:00",
+      "ocaml-moifile", "0.1.1",
+      true;
 
-            OCamlForge, "ocaml-posix-resource-0.0.1.tar.gz", 
-            "2010-04-16 10:30:00",
-            "ocaml-posix-resource", "0.0.1";
+      "ocaml-posix-resource-0.0.1.tar.gz", 
+      "2010-04-16 10:30:00",
+      "ocaml-posix-resource", "0.0.1",
+      true;
 
-            OCamlForge, "oasis-0.2.0~alpha1.tar.gz", 
-            "2010-04-12 09:25:12",
-            "oasis", "0.2.0~alpha1";
+      "oasis-0.2.0~alpha1.tar.gz", 
+      "2010-04-12 09:25:12",
+      "oasis", "0.2.0~alpha1",
+      true;
 
-            OCamlForge, "oasis-0.1.0.tar.gz", 
-            "2010-04-11 13:35:02",
-            "oasis", "0.1.0";
-          ];
+      "oasis-0.1.0.tar.gz", 
+      "2010-04-11 13:35:02",
+      "oasis", "0.1.0",
+      true;
 
-        (* Need confirmation *)
-        List.iter 
-          (fun (mthd, fn, time, pkg, ver, has_oasis) -> 
-             let sexp_fn = 
-               ODBIncoming.sexp_of_tarball ~ctxt:ctxt.odb fn
-             in
-             let () = 
-               upload ctxt mthd ?time fn;
-               assert_changed ~what:"Step2_UserEditable"
-                 sexp_fn
-                 (fun () -> 
-                    let t =
-                      odb_run ctxt 
-                        (fun ~ctxt () -> 
-                           ODBIncoming.check_step2 ~ctxt fn) 
-                    in
-                      match t with 
-                        | ODBIncoming.Step2_Reached _ -> 
-                            true
-                        | _ -> 
-                            false)
-             in
-             let incoming_level = 
-               odb_run ctxt 
-                 (fun ~ctxt () -> 
-                    ODBIncoming.from_file ~ctxt sexp_fn)
-             in
-             let the = 
-               function
-                 | Some v -> v
-                 | None -> assert false
-             in
-             let () = 
-               match incoming_level with 
-                 | ODBIncoming.Step2_UserEditable (ut, ct) ->
-                     assert_equal
-                       ~msg:(Printf.sprintf "Package of %s after completion" fn)
-                       ~printer:(function Some s -> s | None -> "<none>" )
-                       (Some pkg)
-                       (ODBCompletion.value ct.ODBCompletion.pkg);
-                     assert_equal
-                       ~msg:(Printf.sprintf "Version of %s after completion" fn)
-                       ~printer:(function 
-                                   | Some v ->
-                                       OASISVersion.string_of_version v
-                                   | None -> 
-                                       "<none>")
-                       (Some (OASISVersion.version_of_string ver))
-                       (ODBCompletion.value ct.ODBCompletion.ver);
-                     odb_run ctxt
-                       (fun ~ctxt () ->
-                          ODBIncoming.validate ~ctxt
-                            ut.ODBIncoming.upload_method 
-                            ut.ODBIncoming.publink 
-                            (the (ODBCompletion.value ct.ODBCompletion.pkg))
-                            (the (ODBCompletion.value ct.ODBCompletion.ver))
-                            (the (ODBCompletion.value ct.ODBCompletion.ord))
-                            ct.ODBCompletion.oasis_fn
-                            fn)
-                 | _ ->
-                     assert_failure 
-                       (Printf.sprintf "Unexpected value in %s" sexp_fn)
-             in
-               assert_ver_file ~ctxt ~oasis:has_oasis pkg ver)
-          [
-            Manual "gildor", "bar-0.2.0.tar.bz2",
-            None,
-            "bar", "0.2.0", true;
+      "bar-0.2.0.tar.bz2",
+      "2010-04-11 13:35:02",
+      "bar", "0.2.0", true;
 
-            OCamlForge, "mlblock-0.1.tar.bz2",
-            Some "2008-04-25 23:49:02",
-            "mlblock", "0.1", false;
+      "mlblock-0.1.tar.bz2",
+      "2008-04-25 23:49:02",
+      "mlblock", "0.1", false;
 
-            OCamlForge, "hydro-0.7.1.tar.gz",
-            Some "2010-04-11 13:35:02",
-            "hydro", "0.7.1", false;
+      "hydro-0.7.1.tar.gz",
+      "2010-04-11 13:35:02",
+      "hydro", "0.7.1", false;
 
-            OCamlForge, "crypt-1.0.tar.gz",
-            Some "2010-04-11 13:35:02",
-            "crypt", "1.0", false;
+      "crypt-1.0.tar.gz",
+      "2010-04-11 13:35:02",
+      "crypt", "1.0", false;
 
-            OCamlForge, "ccss-1.0.tgz",
-            Some "2010-03-10 16:58:02",
-            "ccss", "1.0", false;
+      "ccss-1.0.tgz",
+      "2010-03-10 16:58:02",
+      "ccss", "1.0", false;
 
-            OCamlForge, "batteries-1.2.2.tar.gz",
-            Some "2010-06-15 03:49:02",
-            "batteries", "1.2.2", false;
+      "batteries-1.2.2.tar.gz",
+      "2010-06-15 03:49:02",
+      "batteries", "1.2.2", false;
 
-            OCamlForge, "batteries-1.2.1.tar.gz",
-            Some "2010-06-12 15:33:02",
-            "batteries", "1.2.1", false;
+      "batteries-1.2.1.tar.gz",
+      "2010-06-12 15:33:02",
+      "batteries", "1.2.1", false;
 
-            OCamlForge, "batteries-1.2.0.tar.gz",
-            Some "2010-06-06 01:38:00",
-            "batteries", "1.2.0", false;
+      "batteries-1.2.0.tar.gz",
+      "2010-06-06 01:38:00",
+      "batteries", "1.2.0", false;
 
-            OCamlForge, "batteries-1.1.0.tar.gz",
-            Some "2010-02-28 14:26:02",
-            "batteries", "1.1.0", false;
+      "batteries-1.1.0.tar.gz",
+      "2010-02-28 14:26:02",
+      "batteries", "1.1.0", false;
 
-            OCamlForge, "batteries-1.0.1.tar.gz",
-            Some "2010-02-01 15:07:02",
-            "batteries", "1.0.1", false;
+      "batteries-1.0.1.tar.gz",
+      "2010-02-01 15:07:02",
+      "batteries", "1.0.1", false;
 
-            OCamlForge, "batteries-1.0.0.tar.gz",
-            Some "2010-01-15 19:57:00",
-            "batteries", "1.0.0", false;
-          ];
-
-
-      with e ->
-        ignore (clean_exit ());
-        raise e
-    end;
-
-    assert_equal 
-      (WSIGNALED Sys.sigterm)
-      (clean_exit ()))
-  *)
+      "batteries-1.0.0.tar.gz",
+      "2010-01-15 19:57:00",
+      "batteries", "1.0.0", false;
+    ]
+  in
+    
+    "Incoming" >:::
+    (List.map 
+       (fun ((fn, _, _, _, _) as vec) ->
+          fn >:: 
+          bracket_oasis_db
+            ignore
+            (fun ocs -> 
+               one ocs vec)
+            ignore)
+       vecs)
+    @
+    [
+      "ManyInARow" >::
+       (* Start an ocsigen process *)
+       bracket_oasis_db
+         ignore
+         (fun ocs ->
+            (* Auto upload *)
+            List.iter 
+              (fun vec -> 
+                 one ocs vec ()) 
+              vecs)
+         ignore
+    ]

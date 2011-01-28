@@ -5,6 +5,8 @@ open ODBGettext
 open ODBMessage
 open ODBContext
 
+let min_running_time = 300.0
+
 (** Allow only one loop at a time
  *)
 let singleton nm f = 
@@ -41,10 +43,10 @@ let singleton nm f =
                            running_time
                            (string_of_exception e)
                          >>= fun () ->
-                         if running_time < ctxt.min_running_time then 
+                         if running_time < min_running_time then 
                            begin
                              let delayed =
-                               ctxt.min_running_time -. running_time
+                               min_running_time -. running_time
                              in
                                warning ~ctxt
                                  (f_ "Function %s doesn't run for enough time, \

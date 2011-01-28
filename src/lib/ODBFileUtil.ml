@@ -184,7 +184,7 @@ let temp_dir ~ctxt pre suf =
   let rec temp_dir_aux n = 
     let dn =
       FilePath.concat 
-        ctxt.tmp_dir
+        Filename.temp_dir_name
         (Printf.sprintf "%s%06d%s" pre n suf)
     in
       catch 

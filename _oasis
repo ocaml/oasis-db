@@ -150,11 +150,6 @@ Library "oasis-db-ocsigen"
                 sexplib,
                 rest.ocsigen
 
-Executable FakeIncoming
-  Path: test
-  MainIs: FakeIncoming.ml
-  BuildDepends: oasis-db
-
 Executable test
   Path:   test
   MainIs: test.ml

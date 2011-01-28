@@ -106,11 +106,11 @@ struct
               "upload_method", 
               `Assoc
                 (match t.upload_method with
-                   | Manual nm -> 
-                       ["type", `String "Manual";
+                   | Web nm -> 
+                       ["type", `String "Web";
                         "name", `String nm]
 
-                   | API nm -> 
+                   | WebAPI nm -> 
                        ["type", `String "Manual";
                         "name", `String nm]
 
@@ -119,6 +119,10 @@ struct
 
                    | OCamlForge -> 
                        ["type", `String "OCamlForge"]
+
+                   | Incoming nm ->
+                       ["type", `String "Incoming";
+                        "name", `String nm]
                 );
 
               "publink", 
@@ -197,7 +201,7 @@ struct
           ord = 10;
           tarball = "oasis-0.2.0.tar.gz";
           upload_date = CalendarLib.Calendar.now ();
-          upload_method = Manual "gildor";
+          upload_method = Web "gildor";
           publink = 
             Some 
               "https://forge.ocamlcore.org/frs/download.php/501/oasis-0.2.0.tar.gz";

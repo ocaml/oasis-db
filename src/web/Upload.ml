@@ -421,8 +421,7 @@ let upload_init_action =
                ~ctxt 
                (fun ctxt ->
                   upload_begin ~ctxt:ctxt.odb
-                    (Manual 
-                       (Account.name_of_role ctxt.role))
+                    (Web (Account.name_of_role ctxt.role))
                     tarball_fn tarball publink)
            in
              upload_data_set ~sp id (Begin tsk);

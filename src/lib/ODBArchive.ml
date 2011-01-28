@@ -19,25 +19,29 @@ let string_of_exception =
 
 let uncompress ~ctxt fd nm dn = 
   let run prg args = 
-    run_logged ~ctxt ~stdin_fd:fd prg args
+    run_logged ~ctxt prg args
   in
+  let tarball_fn = 
+    Filename.concat dn nm
+  in
+
   let handlers = 
     [ 
       ".tgz",
       ctxt.tar,
-      ["-C"; dn; "-xz"];
+      ["-C"; dn; "-xzf"; tarball_fn];
 
       ".tar.gz",
       ctxt.tar,
-      ["-C"; dn; "-xz"];
+      ["-C"; dn; "-xzf"; tarball_fn];
 
       ".tar.bz2",
       ctxt.tar,
-      ["-C"; dn; "-xjf"];
+      ["-C"; dn; "-xjf"; tarball_fn];
 
       ".zip",
       ctxt.unzip,
-      ["-d"; dn];
+      ["-d"; dn; tarball_fn];
     ]
   in
 
@@ -54,9 +58,15 @@ let uncompress ~ctxt fd nm dn =
       | [] ->
           fail (NoHandler nm)
   in
-
+    (* Copy the tarball to temporary directory *)
+    LwtExt.IO.copy_fd fd tarball_fn 
+    >>= fun () ->
+    (* Uncompress the tarball *)
     find_handler handlers 
-
+    >>= fun res ->
+    ODBFileUtil.rm ~ctxt [tarball_fn]
+    >|= fun () ->
+    res
 
 let uncompress_tmp_dir ~ctxt fd nm f = 
   with_temp_dir ~ctxt "oasis-db-" "" 

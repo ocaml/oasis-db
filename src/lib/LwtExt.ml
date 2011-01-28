@@ -67,4 +67,37 @@ struct
           Lwt_io.write_from_exactly
             chn str 0 (String.length str))
 
+  let copy_fd fd fn = 
+    begin
+      try 
+        return 
+          (Lwt_io.of_unix_fd 
+             ~mode:Lwt_io.input 
+             (Unix.dup fd))
+      with e ->
+        fail e
+    end 
+    >>= fun chn_in ->
+    finalize 
+      (fun () ->
+         Lwt_io.with_file
+           ~mode:Lwt_io.output
+           fn
+           (fun chn_out ->
+              let buf = 
+                String.make (Lwt_io.buffer_size chn_in) 'X'
+              in
+              let rec copy () = 
+                Lwt_io.read_into chn_in buf 0 (String.length buf)
+                >>= fun read ->
+                if read > 0 then
+                  Lwt_io.write_from_exactly chn_out buf 0 read 
+                  >>=
+                  copy
+                else
+                  return ()
+              in
+                copy ()))
+      (fun () ->
+         Lwt_io.close chn_in)
 end

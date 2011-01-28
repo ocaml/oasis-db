@@ -6,21 +6,19 @@ let fake_incoming : string option ref = ref None
 let verbose = ref true
 
 let odb = 
-  ref 
-    (ODBContext.default 
-       (FilePath.make_filename ["test"; "data"; "storage"]))
+  let rebase fn = 
+    FilePath.make_filename ["test"; "data"; "storage"; fn]
+  in
+    ref 
+      (ODBContext.default 
+         (rebase "dist")
+         (rebase "incoming"))
 
 let ocsigen = ref "ocsigen"
 let ocsigen_args = ref ["-s"]
 
 let in_data_dir fn = 
   FilePath.make_filename ["test"; "data"; fn]
-
-let in_incoming_dir fn = 
-  FilePath.concat !odb.incoming_dir fn 
-
-let in_dist_dir fn =
-  FilePath.concat !odb.dist_dir fn
 
 let odb_run f = 
   Lwt_main.run (f ~ctxt:!odb ())
@@ -176,7 +174,7 @@ let bracket_ocsigen conf pre_start f post_stop () =
   in
 
   let clean () = 
-    FileUtil.rm ~recurse:true [conf_fn; rootdir]
+    FileUtil.rm ~recurse:true [conf_fn; rootdir] 
   in
 
   let ocs = 
@@ -256,5 +254,239 @@ let bracket_ocsigen conf pre_start f post_stop () =
       clean ();
       raise e
 
+let bracket_oasis_db pre_start f post_stop = 
+   bracket_ocsigen
+     "<ocsigen>
+        <server>
+          $std_conf
+          <extension findlib-package=\"pgocaml\" />
+          <extension findlib-package=\"oasis\" />
+          <extension findlib-package=\"sexplib\" />
+          <extension findlib-package=\"inotify\" />
+          <extension findlib-package=\"markdown\" />
+          <extension findlib-package=\"markdown.html\" />
+          <extension findlib-package=\"cameleon.rss\" />
+          <extension findlib-package=\"yojson\" />
+          <extension findlib-package=\"curl\" />
+
+          <host charset=\"utf-8\" >
+            <site path=\"\">
+              <eliom module=\"$curdir/_build/src/rest/rest.cma\" />
+              <eliom module=\"$curdir/_build/src/rest/curl/rest-curl.cma\" />
+              <eliom module=\"$curdir/_build/src/rest/ocsigen/rest-ocsigen.cma\" />
+              <eliom module=\"$curdir/_build/src/lib/oasis-db.cma\" />
+              <eliom module=\"$curdir/_build/src/web/oasis-db-ocsigen.cma\">
+                <dir rel=\"incoming\">$rootdir/incoming</dir>
+                <dir rel=\"dist\">$rootdir/dist</dir>
+              </eliom>
+              <static dir=\"$curdir/src/web/static\" /> 
+            </site>
+          </host>
+        </server>
+      </ocsigen>"
+
+     (fun ocs ->
+        List.iter
+          (fun nm ->
+             FileUtil.mkdir 
+               (Filename.concat ocs.ocs_rootdir nm))
+          ["incoming"; "dist"];
+        pre_start ocs)
+
+     f post_stop
+
+let in_incoming_dir ocs fn = 
+  FilePath.make_filename [ocs.ocs_rootdir; "incoming"; fn]
+
+let in_dist_dir ocs fn =
+  FilePath.make_filename [ocs.ocs_rootdir; "dist"; fn]
+
+module InotifyExt =
+struct 
+  let default_timeout = 1.0
+
+  let wait_create ~is_file ?(timeout=default_timeout) topfn = 
+
+    let directory_exists dn =
+      Sys.file_exists dn && Sys.is_directory dn
+    in
+
+    let fd = 
+      Inotify.init ()
+    in
+
+    let end_time =
+      (Unix.gettimeofday ()) +. timeout
+    in
+
+    let existence_test ~is_file fn =
+      (* Maybe the file already exists? *)
+      (is_file && Sys.file_exists fn) ||
+      (* Maybe the directory already exists? *)
+      (not is_file && directory_exists fn)
+    in
+
+    let loop_test ~is_file fn =
+      let dn =
+        Filename.dirname fn
+      in
+      let wd = 
+        Inotify.add_watch fd dn
+          (if is_file then
+             [Inotify.S_Close_write]
+           else
+             [Inotify.S_Create])
+      in
+      let rec loop_select () = 
+        let timeout =
+          end_time -. (Unix.gettimeofday ())
+        in
+          if timeout > 0.0 then
+            begin
+                   
+                if existence_test ~is_file fn then 
+                  true
+                else
+                  let _, _, _ =
+                    Unix.select [fd] [] [] timeout
+                  in
+                    loop_select () 
+            end
+          else
+            (* We reach the timeout *)
+            false
+      in
+      let res = 
+        loop_select ()
+      in
+        Inotify.rm_watch fd wd;
+        res
+    in
+
+    (* Find the first existing directory *)
+    let rec wait_aux ~is_file fn =
+      if FilePath.is_current fn then
+        begin
+          failwith 
+            (Printf.sprintf 
+               "Cannot find an existing directory to watch for file '%s'"
+               topfn)
+        end 
+      else 
+        begin
+          let dn = 
+            Filename.dirname fn
+          in
+            if directory_exists dn then
+              (* Directory exists, test for its content *)
+              loop_test ~is_file fn 
+
+            else if wait_aux ~is_file:false dn then
+              (* Directory doesn't exist, wait for its creation 
+               * and retest.
+               *)
+              wait_aux ~is_file fn
+
+            else
+              (* Unable to create toplevel directory... *)
+              false
+        end
+    in
+
+    let res = 
+      wait_aux ~is_file topfn
+    in
+      Unix.close fd;
+      res
 
 
+  let wait_remove ?(timeout=default_timeout) fn =
+    let fd =
+      Inotify.init ()
+    in
+      try 
+        let wd = 
+          Inotify.add_watch fd fn [Inotify.S_Delete_self]
+        in
+        let res =
+          match Unix.select [fd] [] [] timeout with 
+            | _ :: _, _, _ -> 
+                true
+
+            | [], _, _ ->
+                false
+        in
+          Inotify.rm_watch fd wd;
+          Unix.close fd;
+          res
+
+      with 
+        | Inotify.Error ("add_watch", 2) ->
+            (* ENOENT *)
+            Unix.close fd;
+            true
+
+  let wait_change ?(timeout=default_timeout) fn f =
+    let fd =
+      Inotify.init ()
+    in
+    let wd = 
+      Inotify.add_watch fd fn [Inotify.S_Close_write]
+    in
+
+    let end_timeout = 
+      (Unix.gettimeofday ()) +. timeout
+    in
+
+    let gtd () = 
+      end_timeout -. (Unix.gettimeofday ())
+    in
+
+    let rec aux () = 
+      if f () then
+        begin
+          true
+        end
+      else
+        begin
+          match Unix.select [fd] [] [] (gtd ()) with 
+            | _ :: _, _, _ -> 
+                aux ()
+                  
+            | [], _, _ ->
+                false
+        end
+    in
+
+    let res =
+      aux ()
+    in
+      Inotify.rm_watch fd wd;
+      Unix.close fd;
+      res
+
+  let assert_create_file ?timeout fn =
+    assert_bool
+      (Printf.sprintf "File '%s' created" fn)
+      (wait_create ?timeout ~is_file:true fn)
+
+  let assert_create_dir ?timeout fn =
+    assert_bool
+      (Printf.sprintf "Directory '%s' created" fn)
+      (wait_create ?timeout ~is_file:false fn)
+
+  let assert_remove_file ?timeout fn =
+    assert_bool
+      (Printf.sprintf "File '%s' removed" fn)
+      (wait_remove ?timeout fn)
+
+  let assert_remove_dir ?timeout fn =
+    assert_bool
+      (Printf.sprintf "Directory '%s' removed" fn)
+      (wait_remove ?timeout fn)
+
+  let assert_changed ?timeout ~what fn f = 
+    assert_bool
+      (Printf.sprintf "File '%s' doesn't match %s" fn what) 
+      (wait_change ?timeout fn f)
+end

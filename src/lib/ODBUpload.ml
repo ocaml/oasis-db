@@ -12,6 +12,9 @@ open Lwt
 
 type t = 
     {
+      mutable tarball_closed: bool;
+      (* Is tarball_fd closed *)
+
       tarball_fd: Unix.file_descr;
       (* Handle to the tarball *)
 
@@ -32,10 +35,19 @@ type t =
     }
 
 let safe_clean t = 
-  try 
-    Unix.close t.tarball_fd 
-  with _ ->
-    ()
+  if not t.tarball_closed then
+    begin
+      try 
+        prerr_endline ("Close fd "^t.tarball_nm);
+        Unix.close t.tarball_fd;
+        t.tarball_closed <- true;
+      with _ ->
+        prerr_endline ("Error while closing "^t.tarball_nm)
+    end
+  else
+    begin
+      prerr_endline ("Fd "^t.tarball_nm^" already closed");
+    end
 
 let pkg_ver_of_upload t = 
   let value_of_answer =
@@ -106,12 +118,13 @@ let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =
     begin
       let t = 
         {
-          tarball_fd    = tarball_fd;
-          tarball_nm    = tarball_nm;
-          publink       = publink;
-          completion    = ct;
-          upload_date   = upload_date;
-          upload_method = upload_method;
+          tarball_closed = false;
+          tarball_fd     = tarball_fd;
+          tarball_nm     = tarball_nm;
+          publink        = publink;
+          completion     = ct;
+          upload_date    = upload_date;
+          upload_method  = upload_method;
         }
       in
         Gc.finalise safe_clean t;

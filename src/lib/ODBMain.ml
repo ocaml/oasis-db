@@ -41,7 +41,7 @@ let run =
                 (catch_exn ~ctxt)
                 [
                   "ODBStorage.run",  ODBStorage.init;
-(*                   "ODBIncoming.run", ODBIncoming.run; *)
+                  "ODBIncoming.run", ODBIncoming.run; 
                 ])
          with e ->
            fail e)

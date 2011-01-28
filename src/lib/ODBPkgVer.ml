@@ -14,8 +14,9 @@ TYPE_CONV_PATH "ODBPkgVer"
 type upload_method = 
   | OCamlForge
   | Uscan
-  | Manual of user
-  | API of user
+  | Incoming of user
+  | Web of user
+  | WebAPI of user
   with sexp
 
 
@@ -27,13 +28,17 @@ let string_of_upload_method =
     | Uscan -> 
         "uscan"
 
-    | Manual user -> 
+    | Incoming user ->
+        Printf.sprintf
+          (f_ "incoming directory by %s") user
+
+    | Web user -> 
         Printf.sprintf
           (f_ "web by %s") user
 
-    | API user ->
+    | WebAPI user ->
         Printf.sprintf
-          (f_ "API by %s") user
+          (f_ "Web API by %s") user
 
 
 type t = 

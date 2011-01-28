@@ -1,6 +1,8 @@
 
 open Lwt
 open Lwt_log
+open Simplexmlparser
+open ODBGettext
 
 type context =
     {
@@ -17,11 +19,64 @@ type context =
       (* Delay to cancel an upload *)
     }
 
-let get_odb () = 
-  let storage_fn = 
-    (* TODO: configure *)
-    FilePath.make_filename ["test"; "data"; "storage"]
+let incoming_dir = ref None
+let dist_dir     = ref None
+
+let read_config () = 
+  let spf fmt = 
+    Printf.sprintf fmt 
   in
+  let rec parse lst =
+    match lst with 
+      | e :: tl ->
+          begin
+            let () = 
+              match e with 
+                | Element ("dir", ["rel", "incoming"], [PCData dn]) ->
+                    incoming_dir := Some dn
+                | Element ("dir", ["rel", "dist"], [PCData dn]) ->
+                    dist_dir := Some dn
+                | Element (nm, _, _) ->
+                    failwith 
+                      (spf
+                         (f_ "Don't know what to do with \
+                              configuration element '<%s .../>'") 
+                         nm)
+                | PCData str ->
+                    failwith 
+                      (spf
+                         (f_ "Don't know what to do with \
+                              configuration pcdata '%s'")
+                         str)
+            in
+              parse tl
+          end
+      | [] ->
+          ()
+  in
+  let test_dir not_defined fmt = 
+    function 
+      | Some dn -> 
+          if not (Sys.is_directory dn) then
+            failwith 
+              (spf fmt dn)
+      | None ->
+          failwith not_defined
+  in
+
+    parse (Eliom_sessions.get_config ());
+
+    test_dir 
+      "Incoming directory not defined"
+       (f_ "Incoming directory '%s' doesn't exist")
+       !incoming_dir;
+    test_dir
+      "Dist directory not defined"
+      (f_ "Dist directory '%s' doesn't exist")
+      !dist_dir
+
+
+let get_odb () = 
 
   let logger = 
     Lwt_log.make
@@ -61,7 +116,15 @@ let get_odb () =
       ~close:(fun () -> return ())
   in
 
-    ODBContext.default ~logger storage_fn
+  let the = 
+    function 
+      | Some e -> e
+      | None -> invalid_arg "the"
+  in
+
+    ODBContext.default ~logger 
+      (the !dist_dir) 
+      (the !incoming_dir)
 
 let get ~sp () = 
   Account.get ~sp () 
