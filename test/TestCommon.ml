@@ -2,7 +2,6 @@
 open ODBContext
 open OUnit
 
-let fake_incoming : string option ref = ref None
 let verbose = ref true
 
 let odb = 
@@ -23,6 +22,12 @@ let in_data_dir fn =
 let odb_run f = 
   Lwt_main.run (f ~ctxt:!odb ())
 
+let long =
+  ref true
+
+let skip_long () =
+  skip_if (not !long)
+    "Skipping long test"
 
 open Unix
 

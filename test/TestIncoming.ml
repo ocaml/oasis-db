@@ -169,7 +169,8 @@ let tests =
        (fun ((fn, _, _, _, _) as vec) ->
           fn >:: 
           bracket_oasis_db
-            ignore
+            (fun _ ->
+               skip_long ())
             (fun ocs -> 
                one ocs vec)
             ignore)
@@ -179,7 +180,8 @@ let tests =
       "ManyInARow" >::
        (* Start an ocsigen process *)
        bracket_oasis_db
-         ignore
+         (fun _ ->
+            skip_long ())
          (fun ocs ->
             (* Auto upload *)
             List.iter 

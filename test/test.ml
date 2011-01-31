@@ -42,17 +42,17 @@ let _ :: _ | [] =
 
   let arg_specs = 
     [
-      "--fake-incoming",
-      Arg.String (fun s -> fake_incoming := Some s),
-      "prog Fake incoming program.";
-
-      "--ocsigen",
+      "-ocsigen",
       Arg.Set_string ocsigen,
       "prog Ocsigen launch script.";
 
-      "--ocsigen-args",
+      "-ocsigen-args",
       Arg.Rest (fun s -> ocsigen_args := !ocsigen_args @ [s]),
       "args* Ocsigen args.";
+
+      "-not-long",
+      Arg.Clear long,
+      " Don't run long tests.";
     ]
   in
 
