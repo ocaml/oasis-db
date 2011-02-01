@@ -246,7 +246,15 @@ struct
     begin
       let lst = 
         match extra with 
-          | Some ver -> ver :: lst
+          | Some ver -> 
+              if List.exists 
+                   (fun pkg_ver ->
+                      pkg_ver.ODBPkgVer.ver = ver.ODBPkgVer.ver &&
+                      pkg_ver.ODBPkgVer.pkg = ver.ODBPkgVer.pkg)
+                   lst then
+                lst
+              else
+                ver :: lst
           | None -> lst
       in
         List.sort ODBPkgVer.compare lst
