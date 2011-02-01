@@ -298,7 +298,7 @@ let upload_preview_box ~ctxt ~sp id upload =
                   [pcdata upload.tarball_nm; pcdata (s_ " (backup)")],
                 upload.tarball_nm))
           pkg_opt
-        >|= fun (_, content) ->
+        >|= fun content ->
           (h3 [pcdata (s_ "Preview")])
           ::
           content
@@ -539,9 +539,9 @@ let upload_with_id =
                         upload_data_unset ~sp id;
                         Eliom_predefmod.Redirection.send ~sp 
                           (preapply 
-                             browse
-                             (Some pkg_ver.ODBPkgVer.pkg, 
-                              Some pkg_ver.ODBPkgVer.ver))
+                             view
+                             (pkg_ver.ODBPkgVer.pkg, 
+                              Version pkg_ver.ODBPkgVer.ver))
                       end)
                    (fun e ->
                       let ctxt = 

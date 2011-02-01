@@ -55,9 +55,9 @@ let tests =
        let lst' = 
          List.map 
            (fun pkg ->
-              pkg,
+              pkg.ODBPkg.pkg_name,
               OASISVersion.string_of_version 
-                (ODBREST.PkgVer.latest ~ctxt base_url pkg))
+                (ODBREST.PkgVer.latest ~ctxt base_url pkg.ODBPkg.pkg_name))
            lst
        in
          assert_equal 

@@ -54,13 +54,13 @@ let home_handler sp () () =
                      in
                        li 
                          [a 
-                            browse
+                            view
                             sp
                             [pcdata 
                                (Printf.sprintf 
                                   (f_ "%s v%s (%s)")
                                   ver.pkg ver_s date)]
-                            (Some ver.pkg, Some ver.ver)]
+                            (ver.pkg, Version ver.ver)]
                    in
                      ul (to_li hd) (List.map to_li tl)
                  end

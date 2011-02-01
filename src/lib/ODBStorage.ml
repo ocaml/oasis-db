@@ -144,8 +144,8 @@ struct
       storage_filename dn
     in
       ODBPkg.from_file ~ctxt storage_fn
-      >>= fun (pkg as pkg_str) ->
-      HLS.mem all pkg_str 
+      >>= fun ({pkg_name = pkg_str} as pkg) ->
+      HLS.mem all pkg_str
       >>= fun pkg_exists ->
       begin
         let bn = 
@@ -218,10 +218,26 @@ struct
     dirname k 
     >|= fun dn ->
     begin
-      match fn with 
-        | `PluginData plg ->
-            Filename.concat dn (plg^".sexp")
+      let bn = 
+        match fn with 
+          | `PluginData plg ->
+             plg^".sexp"
+          | `Other fn ->
+              fn
+      in
+        Filename.concat dn bn
     end
+
+  let with_file_in k fn read dflt =
+    filename k fn 
+    >>= fun fn ->
+    if Sys.file_exists fn then
+      Lwt_io.with_file
+        ~mode:Lwt_io.input
+        fn
+        read
+    else
+      dflt ()
 end
 
 module PkgVer = 
@@ -446,7 +462,7 @@ let init ~ctxt () =
          if Sys.is_directory fn then
            (* Maybe a package *)
            Pkg.add ~ctxt fn
-           >>= fun (pkg as pkg_str) ->
+           >>= fun {ODBPkg.pkg_name = pkg_str} ->
            add_versions pkg_str fn
          else
            return ())

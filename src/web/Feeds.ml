@@ -39,13 +39,13 @@ let info () =
   ODBStorage.Pkg.elements () 
   >>= fun pkg_lst -> 
   Lwt_list.fold_left_s
-    (fun t pkg ->
-      ODBStorage.PkgVer.elements pkg
+    (fun t {ODBPkg.pkg_name = pkg_str} ->
+      ODBStorage.PkgVer.elements pkg_str
       >>= fun ver_lst ->
-      ODBStorage.PkgVer.latest pkg
+      ODBStorage.PkgVer.latest pkg_str
       >>= fun ver_latest ->
       ODBStorage.PkgVer.filename 
-        pkg 
+        pkg_str
         (OASISVersion.string_of_version ver_latest.ver)
         `OASIS
       >>= fun oasis_fn ->
@@ -141,7 +141,7 @@ let rss2_handler =
                ~link:(make_string_uri 
                         ~sp 
                         ~absolute:true
-                        ~service:(preapply browse (Some ver.pkg, Some ver.ver))
+                        ~service:(preapply view (ver.pkg, Version ver.ver))
                         ())
                ()
            in

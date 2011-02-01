@@ -40,6 +40,25 @@ let mk ~ctxt api_fun base_url params =
 
 module Pkg = 
 struct 
+  open ODBPkg
+  open RESTConv
+
+  let conv_t = 
+    {
+      to_sexp = ODBPkg.sexp_of_t;
+      of_sexp = ODBPkg.t_of_sexp;
+
+      to_json = 
+        (fun t -> 
+           `Assoc 
+             ["pkg_name",    `String t.pkg_name;
+              "pkg_watch",   
+              (match t.pkg_watch with 
+                 | Some s -> `String s
+                 | None -> `Null)]);
+      of_json = (fun _ -> failwith "TODO");
+    }
+
   let section =
     {
       sct_title = ns_ "Package management";
@@ -61,10 +80,25 @@ struct
       [
         "",
         (),
-        ["oasis"; "ocaml-data-notation"; "ocamlify"]
+        [
+          {
+            pkg_name  = "oasis"; 
+            pkg_watch = None;
+          };
+
+          {
+            pkg_name  = "ocaml-data-notation";
+            pkg_watch = None;
+          };
+
+          {
+            pkg_name  = "ocamlify";
+            pkg_watch = None;
+          };
+        ]
       ]
       ODBStorage.Pkg.elements 
-      (RESTConv.list RESTConv.string)
+      (RESTConv.list conv_t)
 
   let list = 
     mk def_list

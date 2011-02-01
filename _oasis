@@ -138,6 +138,7 @@ Library "oasis-db-ocsigen"
            Feeds,
            API,
            MarkdownExt,
+           PkgView,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

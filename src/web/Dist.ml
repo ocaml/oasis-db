@@ -78,10 +78,8 @@ let () =
                    ODBStorage.Pkg.elements () 
                    >|= 
                    (List.map 
-                      (fun pkg ->
-                         "dir",
-                         pkg,
-                         [pkg]))
+                      (fun {ODBPkg.pkg_name = pkg_str} ->
+                         "dir", pkg_str, [pkg_str]))
                  end
 
              | [pkg] ->

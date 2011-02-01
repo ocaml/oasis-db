@@ -85,10 +85,10 @@ let oasis_fields ~ctxt ~sp pkg =
              match e.ODBDeps.package_version with 
                | Some ver ->
                    a 
-                     browse 
+                     view 
                      sp 
                      [pcdata txt]
-                     (Some ver.pkg, Some ver.ver)
+                     (ver.pkg, Version ver.ver)
                | None ->
                    pcdata txt 
            in
@@ -336,31 +336,30 @@ let oasis_fields ~ctxt ~sp pkg =
       ]
   end
 
-
-let version_page_box ~ctxt ~sp ver backup_link pkg_opt = 
+let version_page_box ~ctxt ~sp pkg_ver backup_link oasis_opt = 
   (catch 
      (fun () ->
-        ODBStorage.PkgVer.elements ~extra:ver ver.pkg)
+        ODBStorage.PkgVer.elements ~extra:pkg_ver pkg_ver.pkg)
      (function 
         | Not_found ->
-            return [ver]
+            return [pkg_ver]
         | e ->
             fail e))
-  >>= fun ver_lst ->
+  >>= fun pkg_ver_lst ->
   catch 
     (fun () ->
-       ODBStorage.PkgVer.latest ~extra:ver ver.pkg)
+       ODBStorage.PkgVer.latest ~extra:pkg_ver pkg_ver.pkg)
     (function 
        | Not_found ->
-           return ver
+           return pkg_ver
        | e ->
            fail e)
-  >>= fun ver_latest ->
+  >>= fun pkg_ver_latest ->
   backup_link () 
   >>= fun (a_backup, fn_backup) ->
 
   begin
-    match pkg_opt with 
+    match oasis_opt with 
       | Some pkg ->
           oasis_fields ~ctxt ~sp pkg
           >|= fun extra_fields ->
@@ -394,46 +393,8 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
           []
   in
 
-  (* Field for versions number and their links to 
-   * version's page
-   *)
-  let versions_field =
-    let mk_pcdata ver = 
-      if ver = ver_latest then
-        b [pcdata ((string_of_version ver.ver)^"*")]
-      else
-        pcdata (string_of_version ver.ver)
-    in
-    let lst =
-      List.fold_left
-        (fun acc cur_ver ->
-           let hd = 
-             if cur_ver = ver then
-               mk_pcdata cur_ver
-             else
-               a
-                 browse
-                 sp
-                 [mk_pcdata cur_ver]
-                 (Some cur_ver.pkg, Some cur_ver.ver)
-           in
-             hd :: acc)
-        []
-        ver_lst
-    in
-    let rec add_comma =
-      function
-        | e1 :: e2 :: tl ->
-            e1 :: pcdata (s_ ", ") :: add_comma (e2 :: tl)
-        | _ :: [] 
-        | [] as lst ->
-            lst
-    in
-      add_comma (List.rev lst)
-  in
-
   let downloads =
-    match ver.publink with 
+    match pkg_ver.publink with 
       | Some url ->
           [
             XHTML.M.a 
@@ -445,7 +406,6 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
           [a_backup]
   in
 
-    pkg_opt,
     [
       (match description with 
          | Some txt -> 
@@ -457,7 +417,8 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
 
       odd_even_table 
         (field 
-           ("versions", (s_ "Versions: "), versions_field))
+           ("versions", (s_ "Versions: "), 
+            versions_field ~sp pkg_ver_lst (Some pkg_ver) pkg_ver_latest))
         (gen_fields
            (extra_fields
             @
@@ -465,12 +426,14 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
               Some 
                 ("upload_date",
                  s_ "Upload date: ",
-                 [pcdata (Printer.Calendar.to_string ver.upload_date)]);
+                 [pcdata (Printer.Calendar.to_string 
+                            pkg_ver.upload_date)]);
 
               Some 
                 ("upload_method",
                  s_ "Upload method: ",
-                 [pcdata (string_of_upload_method ver.upload_method)]);
+                 [pcdata (string_of_upload_method 
+                            pkg_ver.upload_method)]);
 
               Some 
                 ("downloads",
@@ -478,72 +441,69 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
                  html_concat (pcdata (s_ ", ")) downloads);
             ]))]
 
-let browse_version_page ~ctxt ~sp fver = 
-  catch 
-    (fun () -> 
-       fver () 
-       >>= fun ver ->
-       begin
-         let backup_link () = 
-           (* Backup download link *)
-           Dist.a_dist 
-             ~sp ~ctxt ver 
-             (fun fn -> 
-                [pcdata 
-                   (Printf.sprintf 
-                      (f_ "%s (backup)") 
-                      (FilePath.basename fn))])
-             `Tarball
-         in
-         let oasis_fn = 
-           ODBStorage.PkgVer.filename 
-             ver.pkg 
-             (string_of_version ver.ver)
-             `OASIS
-         in
-           (* Load OASIS file *)
-           catch 
-             (fun () ->
-                oasis_fn
-                >>= 
-                ODBOASIS.from_file 
-                  ~ctxt:ctxt.odb
-                >>= fun pkg ->
-                return (Some pkg))
-             (fun e ->
-                return None)
-           >>= fun pkg_opt ->
+let browse_version_page ~ctxt ~sp pkg_ver = 
+  begin
+    let oasis_fn = 
+      ODBStorage.PkgVer.filename 
+        pkg_ver.pkg 
+        (string_of_version pkg_ver.ver)
+        `OASIS
+    in
+      (* Load OASIS file *)
+      catch 
+        (fun () ->
+           oasis_fn
+           >>= 
+           ODBOASIS.from_file 
+             ~ctxt:ctxt.odb
+           >>= fun pkg ->
+           return (Some pkg))
+        (fun e ->
+           return None)
+  end 
+  >>= fun oasis_opt ->
+  begin
+    let backup_link () = 
+      (* Backup download link *)
+      Dist.a_dist 
+        ~sp ~ctxt pkg_ver 
+        (fun fn -> 
+           [pcdata 
+              (Printf.sprintf 
+                 (f_ "%s (backup)") 
+                 (FilePath.basename fn))])
+        `Tarball
+    in
+      version_page_box ~ctxt ~sp pkg_ver backup_link oasis_opt
+  end
+  >|= fun box ->
+  begin
+    (* Page titles *)
+    let browser_ttl =
+      Printf.sprintf (f_ "%s v%s") 
+        pkg_ver.pkg 
+        (string_of_version pkg_ver.ver)
+    in
+    let page_ttl = 
+      match oasis_opt with 
+        | Some {synopsis = s} -> 
+            Printf.sprintf (f_ "%s: %s") pkg_ver.pkg s
+        | None -> 
+            pkg_ver.pkg
+    in
+      template 
+        ~ctxt
+        ~sp 
+        ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
+        ~div_id:"browse" 
+        [
+          div box;
 
-           version_page_box ~ctxt ~sp
-             ver backup_link pkg_opt
-       end
-       >|= fun (oasis_pkg, content) ->
-       begin
-         (* Page titles *)
-         let browser_ttl =
-           Printf.sprintf (f_ "%s v%s") 
-             ver.pkg 
-             (string_of_version ver.ver)
-         in
-         let page_ttl = 
-           match oasis_pkg with 
-             | Some {synopsis = s} -> 
-                 Printf.sprintf (f_ "%s: %s") ver.pkg s
-             | None -> 
-                 ver.pkg
-         in
-           template 
-             ~ctxt
-             ~sp 
-             ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 
-             ~div_id:"browse" 
-             content
-       end)
-    (function
-       | Not_found ->
-           fail Eliom_common.Eliom_404
-       | e ->
-           fail e)
+          a view sp 
+            [pcdata (Printf.sprintf (f_ "Package %s") pkg_ver.pkg)]
+            (pkg_ver.pkg, NoVersion)
+        ]
+  end
 
 module MapStringCsl = 
   Map.Make 
@@ -593,28 +553,28 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
   ODBStorage.Pkg.elements () 
   >>= 
   Lwt_list.map_s
-    (fun pkg ->
-       ODBStorage.PkgVer.latest pkg 
+    (fun {ODBPkg.pkg_name = pkg_str} ->
+       ODBStorage.PkgVer.latest pkg_str
        >>= fun ver ->
        catch 
          (fun () ->
             ODBStorage.PkgVer.filename 
-              ver.pkg 
+              ver.pkg
               (string_of_version ver.ver)
               `OASIS
             >>= 
             ODBOASIS.from_file 
               ~ctxt:ctxt.odb
             >>= fun oasis ->
-            return (pkg, ver, Some oasis))
+            return (pkg_str, ver, Some oasis))
          (fun e ->
-            return (pkg, ver, None)))
+            return (pkg_str, ver, None)))
   >>= fun pkg_lst ->
 
   (* Build a map after extracting categories from package version *)
   Lwt_list.fold_left_s
-    (fun mp ((pkg, ver, oasis_opt) as data) ->
-       classify pkg ver oasis_opt
+    (fun mp ((pkg_str, ver, oasis_opt) as data) ->
+       classify pkg_str ver oasis_opt
        >|= function
          | [] ->
              add_acc None data mp
@@ -640,7 +600,7 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
 
       let to_li (pkg, _, oasis_opt) = 
         li 
-          [a browse sp [pcdata pkg] (Some pkg, None);
+          [a view sp [pcdata pkg] (pkg, LatestVersion);
            
            match oasis_opt with 
              | Some oasis ->
@@ -785,24 +745,33 @@ let edit_info =
            tmpl [])
  *)
 
-let browse_handler sp (pkg_opt, ver_opt) () =
+let view_handler sp (pkg, ver_opt) () =
   Context.get ~sp () 
   >>= fun ctxt ->
-  begin
-    match pkg_opt, ver_opt with 
-      | Some pkg, Some ver ->
-          browse_version_page ~ctxt ~sp 
-            (fun () -> ODBStorage.PkgVer.find pkg 
-                         (string_of_version ver))
+  catch 
+    (fun () ->
+       match pkg, ver_opt with 
+         | pkg_str, NoVersion ->
+             ODBStorage.Pkg.find pkg_str
+             >>= 
+             PkgView.package_page ~ctxt ~sp 
 
-      | Some pkg, None ->
-          browse_version_page ~ctxt ~sp
-            (fun () -> ODBStorage.PkgVer.latest pkg)
+         | pkg_str, Version ver ->
+             ODBStorage.PkgVer.find pkg_str (string_of_version ver)
+             >>= 
+             browse_version_page ~ctxt ~sp 
 
-      | None, None ->
-          browse_topics_handler ~ctxt ~sp ()
+         | pkg_str, LatestVersion ->
+             ODBStorage.PkgVer.latest pkg_str
+             >>= 
+             browse_version_page ~ctxt ~sp)
+    (function
+       | Not_found ->
+           fail Eliom_common.Eliom_404
+       | e ->
+           fail e)
 
-      | None, Some _ ->
-          fail Eliom_common.Eliom_404
-  end
-
+let browse_handler sp () () = 
+  Context.get ~sp () 
+  >>= fun ctxt ->
+  browse_topics_handler ~ctxt ~sp ()

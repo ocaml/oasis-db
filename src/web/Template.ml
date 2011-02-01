@@ -94,7 +94,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
               *)
                [ul
                   (li [a home sp       [pcdata (s_ "Home")] ()])
-                  [li [a browse_all sp [pcdata (s_ "Browse")] ()];
+                  [li [a browse sp     [pcdata (s_ "Browse")] ()];
                    li [a upload sp     [pcdata (s_ "Upload")] ()];
                    li [a contribute sp [pcdata (s_ "Contribute")] ()]]];
 

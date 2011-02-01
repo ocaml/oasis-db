@@ -50,7 +50,7 @@ let tests =
          ODBStorage.Pkg.elements () 
          >>=
          Lwt_list.fold_left_s
-           (fun sync pkg_str ->
+           (fun sync {ODBPkg.pkg_name = pkg_str} ->
               ODBStorage.Pkg.filename pkg_str (`PluginData "storage")
               >>= fun fn ->
               ODBSync.add fn sync

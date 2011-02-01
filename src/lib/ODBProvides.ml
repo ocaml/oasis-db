@@ -1,5 +1,6 @@
 
 open OASISUtils
+open ODBPkg
 open ODBPkgVer
 open Lwt
 
@@ -43,7 +44,7 @@ let map ~ctxt () =
     in
 
     let one_pkg pkg = 
-      ODBStorage.PkgVer.elements pkg
+      ODBStorage.PkgVer.elements pkg.pkg_name
       >>=
       Lwt_list.rev_map_p one_ver 
     in
