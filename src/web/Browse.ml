@@ -340,7 +340,7 @@ let oasis_fields ~ctxt ~sp pkg =
 let version_page_box ~ctxt ~sp ver backup_link pkg_opt = 
   (catch 
      (fun () ->
-        ODBStorage.Ver.elements ~extra:ver ver.pkg)
+        ODBStorage.PkgVer.elements ~extra:ver ver.pkg)
      (function 
         | Not_found ->
             return [ver]
@@ -349,7 +349,7 @@ let version_page_box ~ctxt ~sp ver backup_link pkg_opt =
   >>= fun ver_lst ->
   catch 
     (fun () ->
-       ODBStorage.Ver.latest ~extra:ver ver.pkg)
+       ODBStorage.PkgVer.latest ~extra:ver ver.pkg)
     (function 
        | Not_found ->
            return ver
@@ -496,7 +496,7 @@ let browse_version_page ~ctxt ~sp fver =
              `Tarball
          in
          let oasis_fn = 
-           ODBStorage.Ver.filename 
+           ODBStorage.PkgVer.filename 
              ver.pkg 
              (string_of_version ver.ver)
              `OASIS
@@ -594,11 +594,11 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
   >>= 
   Lwt_list.map_s
     (fun pkg ->
-       ODBStorage.Ver.latest pkg 
+       ODBStorage.PkgVer.latest pkg 
        >>= fun ver ->
        catch 
          (fun () ->
-            ODBStorage.Ver.filename 
+            ODBStorage.PkgVer.filename 
               ver.pkg 
               (string_of_version ver.ver)
               `OASIS
@@ -792,12 +792,12 @@ let browse_handler sp (pkg_opt, ver_opt) () =
     match pkg_opt, ver_opt with 
       | Some pkg, Some ver ->
           browse_version_page ~ctxt ~sp 
-            (fun () -> ODBStorage.Ver.find pkg 
+            (fun () -> ODBStorage.PkgVer.find pkg 
                          (string_of_version ver))
 
       | Some pkg, None ->
           browse_version_page ~ctxt ~sp
-            (fun () -> ODBStorage.Ver.latest pkg)
+            (fun () -> ODBStorage.PkgVer.latest pkg)
 
       | None, None ->
           browse_topics_handler ~ctxt ~sp ()

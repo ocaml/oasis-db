@@ -72,19 +72,19 @@ end
 
 (** Storage information for a version 
   *)
-type ver_t =
+type pkg_ver_t =
   {
-    ver: ODBPkgVer.t;
-    ver_dir: dirname;
+    pkg_ver: ODBPkgVer.t;
+    pkg_ver_dir: dirname;
   }
 
 (** Storage information for a package
   *)
 type pkg_t = 
   {
-    pkg:  ODBPkg.t;
+    pkg:      ODBPkg.t;
     pkg_dir:  dirname;
-    vers: ver_t HLS.t
+    pkg_vers: pkg_ver_t HLS.t
   }
 
 let storage_filename dn =
@@ -178,9 +178,9 @@ struct
       begin
         let t = 
           {
-            pkg     = pkg;
-            pkg_dir = dn;
-            vers    = HLS.create ();
+            pkg      = pkg;
+            pkg_dir  = dn;
+            pkg_vers = HLS.create ();
           }
         in
           HLS.add all pkg_str t
@@ -224,14 +224,14 @@ struct
     end
 end
 
-module Ver = 
+module PkgVer = 
 struct 
-  (** Get the [ver_t HLS.t] out of [Pkg.all].
+  (** Get the [pkg_ver_t HLS.t] out of [Pkg.all].
     *)
   let get pkg_str = 
     HLS.find Pkg.all pkg_str
     >>= fun pkg_strg ->
-    return pkg_strg.vers
+    return pkg_strg.pkg_vers
 
   (** All available version of a package, beginning with the older
       one.
@@ -241,20 +241,20 @@ struct
     >>= 
     HLS.elements 
     >|= 
-    List.rev_map (fun (_, t) -> t.ver) 
+    List.rev_map (fun (_, t) -> t.pkg_ver) 
     >|= fun lst ->
     begin
       let lst = 
         match extra with 
-          | Some ver -> 
+          | Some pkg_ver -> 
               if List.exists 
-                   (fun pkg_ver ->
-                      pkg_ver.ODBPkgVer.ver = ver.ODBPkgVer.ver &&
-                      pkg_ver.ODBPkgVer.pkg = ver.ODBPkgVer.pkg)
+                   (fun pkg_ver' ->
+                      pkg_ver'.ODBPkgVer.ver = pkg_ver.ODBPkgVer.ver &&
+                      pkg_ver'.ODBPkgVer.pkg = pkg_ver.ODBPkgVer.pkg)
                    lst then
                 lst
               else
-                ver :: lst
+                pkg_ver :: lst
           | None -> lst
       in
         List.sort ODBPkgVer.compare lst
@@ -264,16 +264,16 @@ struct
    *)
   let mem pkg_str k = 
     get pkg_str
-    >>= fun vers ->
-    HLS.mem vers k
+    >>= fun pkg_vers ->
+    HLS.mem pkg_vers k
 
   (** Get a specific version
     *)
   let find pkg_str k =
     get pkg_str 
-    >>= fun vers ->
-    HLS.find vers k
-    >|= (fun t -> t.ver)
+    >>= fun pkg_vers ->
+    HLS.find pkg_vers k
+    >|= (fun t -> t.pkg_ver)
 
   (** Get the latest version
     *)
@@ -286,18 +286,18 @@ struct
       | e :: _ ->
           return e
 
-  (** Add a version that is already in the dist_dir *)
+  (** Add a package version that is already in the dist_dir *)
   let add ~ctxt pkg_str dn = 
     let storage_fn = 
       storage_filename dn 
     in
       ODBPkgVer.from_file ~ctxt storage_fn 
-      >>= fun ver ->
-      return (OASISVersion.string_of_version ver.ODBPkgVer.ver)
+      >>= fun pkg_ver ->
+      return (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
       >>= fun ver_str ->
       get pkg_str 
-      >>= fun vers ->
-      HLS.mem vers ver_str
+      >>= fun pkg_vers ->
+      HLS.mem pkg_vers ver_str
       >>= fun ver_exists ->
       Pkg.dirname pkg_str 
       >>= fun pkg_dn ->
@@ -325,29 +325,29 @@ struct
               spf (f_ "Storage file '%s' defines version '%s' previously \
                        defined.") storage_fn ver_str;
 
-              ver.ODBPkgVer.pkg <> pkg_str,
+              pkg_ver.ODBPkgVer.pkg <> pkg_str,
               true, 
               spf (f_ "Storage file '%s' belongs to package '%s' but \
                        is stored in package '%s'.")
-                storage_fn ver.ODBPkgVer.pkg pkg_str;
+                storage_fn pkg_ver.ODBPkgVer.pkg pkg_str;
             ]
       end
       >>= fun () ->
       begin
         let t = 
           {
-            ver     = ver;
-            ver_dir = dn;
+            pkg_ver     = pkg_ver;
+            pkg_ver_dir = dn;
           }
         in
-          HLS.add vers ver_str t
+          HLS.add pkg_vers ver_str t
           >>= fun () ->
           return t 
       end 
       >>= fun t ->
       info ~ctxt (f_ "New version %s/%s") pkg_str ver_str
       >>= fun () ->
-      return t.ver
+      return t.pkg_ver
 
   (** Create a package version 
     *)
@@ -399,28 +399,28 @@ struct
     *)
   let dirname pkg_str k = 
     get pkg_str
-    >>= fun vers ->
-    HLS.find vers k
+    >>= fun pkg_vers ->
+    HLS.find pkg_vers k
     >>= fun t ->
-    return t.ver_dir
+    return t.pkg_ver_dir
 
   (** Resolve the name of a file for a particular version
     *)
   let filename pkg_str k fn = 
     get pkg_str
-    >>= fun vers ->
-    HLS.find vers k
+    >>= fun pkg_vers ->
+    HLS.find pkg_vers k
     >>= fun t ->
     begin
       let bn =
         match fn with 
           | `OASIS -> "_oasis"
           | `OASISPristine -> "_oasis.pristine"
-          | `Tarball -> t.ver.ODBPkgVer.tarball
+          | `Tarball -> t.pkg_ver.ODBPkgVer.tarball
           | `PluginData nm -> nm^".sexp"
           | `Other fn -> fn
       in
-        return (Filename.concat t.ver_dir bn)
+        return (Filename.concat t.pkg_ver_dir bn)
     end
 end
 
@@ -432,7 +432,7 @@ let init ~ctxt () =
       (fun fn bn () ->
          if Sys.is_directory fn then
            (* Maybe a version *)
-           Ver.add ~ctxt pkg_str fn 
+           PkgVer.add ~ctxt pkg_str fn 
            >>= fun _ ->
            return ()
          else

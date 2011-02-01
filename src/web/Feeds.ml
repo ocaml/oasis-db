@@ -40,11 +40,11 @@ let info () =
   >>= fun pkg_lst -> 
   Lwt_list.fold_left_s
     (fun t pkg ->
-      ODBStorage.Ver.elements pkg
+      ODBStorage.PkgVer.elements pkg
       >>= fun ver_lst ->
-      ODBStorage.Ver.latest pkg
+      ODBStorage.PkgVer.latest pkg
       >>= fun ver_latest ->
-      ODBStorage.Ver.filename 
+      ODBStorage.PkgVer.filename 
         pkg 
         (OASISVersion.string_of_version ver_latest.ver)
         `OASIS

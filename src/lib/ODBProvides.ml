@@ -26,7 +26,7 @@ let map ~ctxt () =
   >>= 
   begin
     let one_ver ver = 
-      ODBStorage.Ver.filename 
+      ODBStorage.PkgVer.filename 
         ver.pkg 
         (OASISVersion.string_of_version ver.ver) 
         `OASIS
@@ -43,7 +43,7 @@ let map ~ctxt () =
     in
 
     let one_pkg pkg = 
-      ODBStorage.Ver.elements pkg
+      ODBStorage.PkgVer.elements pkg
       >>=
       Lwt_list.rev_map_p one_ver 
     in

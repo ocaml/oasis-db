@@ -32,7 +32,7 @@ let mk_ver_fn ~ctxt fn_t ver =
     OASISVersion.string_of_version
       ver.ver
   in
-    ODBStorage.Ver.filename pkg ver_str fn_t
+    ODBStorage.PkgVer.filename pkg ver_str fn_t
     >>= fun fn ->
       let pwd =
         FileUtil.pwd ()
@@ -87,7 +87,7 @@ let () =
              | [pkg] ->
                  begin
                    (* Access to a package  -> list version + package files *)
-                   ODBStorage.Ver.elements pkg
+                   ODBStorage.PkgVer.elements pkg
                    >|= fun lst ->
                    ("dir", "download", [pkg; "download"])
                    ::
@@ -105,7 +105,7 @@ let () =
 
              | [pkg; "download"] ->
                  begin
-                   ODBStorage.Ver.elements pkg
+                   ODBStorage.PkgVer.elements pkg
                    >>= 
                    Lwt_list.map_s (mk_ver_fn ~ctxt `Tarball)
                  end
@@ -113,7 +113,7 @@ let () =
              | [pkg; ver_str] ->
                  (* Access to a package's version file *)
                  begin
-                   ODBStorage.Ver.find pkg ver_str
+                   ODBStorage.PkgVer.find pkg ver_str
                    >>= fun ver ->
                    Lwt_list.fold_left_s
                      (fun acc fn_t ->

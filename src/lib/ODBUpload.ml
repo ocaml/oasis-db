@@ -133,7 +133,7 @@ let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =
 
 let upload_commit ~ctxt t = 
   let pkg_ver_filename pkg_ver = 
-    ODBStorage.Ver.filename 
+    ODBStorage.PkgVer.filename 
       pkg_ver.ODBPkgVer.pkg
       (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
   in
@@ -159,7 +159,7 @@ let upload_commit ~ctxt t =
     end 
     >>= fun () ->
 
-    ODBStorage.Ver.create ~ctxt pkg_ver t.tarball_fd
+    ODBStorage.PkgVer.create ~ctxt pkg_ver t.tarball_fd
     >>= fun pkg_ver ->
 
     (* Create _oasis and _oasis.pristine *)

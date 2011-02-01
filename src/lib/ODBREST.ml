@@ -149,7 +149,7 @@ struct
         List.map version_of_string ["0.1.0"; "0.2.0"]
       ]
       (fun pkg ->
-         ODBStorage.Ver.elements pkg
+         ODBStorage.PkgVer.elements pkg
          >|=
          List.map (fun ver -> ver.ODBPkgVer.ver))
       (list version)
@@ -173,7 +173,7 @@ struct
         OASISVersion.version_of_string "0.2.0"
       ]
       (fun pkg ->
-         (ODBStorage.Ver.latest pkg)
+         (ODBStorage.PkgVer.latest pkg)
          >|= fun ver ->
          ver.ODBPkgVer.ver)
       version
@@ -208,7 +208,7 @@ struct
         }
       ]
       (fun (pkg, ver) ->
-         ODBStorage.Ver.find pkg ver)
+         ODBStorage.PkgVer.find pkg ver)
       conv_t
 
   let show = 

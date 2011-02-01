@@ -25,7 +25,7 @@ let tests =
        (* Put in place the synchronization data *)
 
        let add_exists pkg_str ver_str sync fn =
-         ODBStorage.Ver.filename pkg_str ver_str fn 
+         ODBStorage.PkgVer.filename pkg_str ver_str fn 
          >>= fun fn ->
            if Sys.file_exists fn then
              ODBSync.add fn sync
@@ -57,7 +57,7 @@ let tests =
               >>= fun sync ->
               
               (* Iterate in package version *)
-              ODBStorage.Ver.elements pkg_str 
+              ODBStorage.PkgVer.elements pkg_str 
               >>= 
               Lwt_list.fold_left_s
                 (fun sync ver ->
