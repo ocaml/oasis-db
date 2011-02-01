@@ -93,12 +93,57 @@ let users =
     3l,  "user2",   "Bar user", "GMT",     1l;
   ]
 
-let missing_params =
-  Eliom_predefmod.Redirection.register_new_service
-    ~path:["account_ext"]
+let logout_action db user_id =
+  PGSQL(db)
+    "DELETE FROM account_ext WHERE user_id = $user_id"
+
+let logout_get =
+  Eliom_predefmod.Unit.Cookies.register_new_service 
+    ~path:["logout"]
     ~get_params:unit
     (fun sp () () ->
-       return (preapply default_redirect "Missing parameters"))
+       Lwt_pool.use SQL.pool
+         (fun db ->
+            guess_user_id sp db 
+            >>= function
+              | Some (user_id, _) -> 
+                  logout_action db user_id
+              | None ->
+                  return ())
+         >>= fun () ->
+         return ((), [Unset (None, cookiename)]))
+
+let login_action user_id password =
+  Lwt_pool.use SQL.pool
+    (fun db ->
+       (* Create a token *)
+       let token = 
+         let str = 
+           String.make 30 '\000'
+         in
+           for i = 0 to (String.length str) - 1 do
+             str.[i] <- Char.chr((Random.int 127) + 1)
+           done;
+           str
+       in
+       let token_url =
+         Netencoding.Url.encode token
+       in
+         PGSQL(db)
+           "DELETE FROM account_ext WHERE user_id = $user_id"
+         >>= fun () ->
+         begin
+           let (_, user_name, realname, tz, lang) = 
+             List.find 
+               (fun (id, _, _, _, _) -> id = user_id)
+               users
+           in
+           PGSQL(db) 
+             "INSERT INTO account_ext (token, user_id, expire, user_name, realname, timezone, language) \
+               VALUES ($token, $user_id, NOW () + interval '1 hour', $user_name, $realname, $tz, $lang)"
+        end
+        >>= fun () ->
+        return token_url)
 
 let mk_cookie token = 
   Set 
@@ -108,45 +153,39 @@ let mk_cookie token =
      token,
      false)
 
+let login_get =
+  Eliom_predefmod.Unit.Cookies.register_new_service
+    ~path:["login"]
+    ~get_params:(string "login" ** string "password")
+    (fun sp (login, password) () ->
+       let (user_id, _, _, _, _) = 
+         List.find
+           (fun (_, user_name, _, _, _) -> user_name = login)
+           users
+       in
+         login_action user_id password
+         >>= fun token_url ->
+         return ((), [mk_cookie token_url]))
+
+let missing_params =
+  Eliom_predefmod.Redirection.register_new_service
+    ~path:["account_ext"]
+    ~get_params:unit
+    (fun sp () () ->
+       return (preapply default_redirect "Missing parameters"))
+
 let login = 
   Eliom_predefmod.Any.register_new_post_service
-    ~post_params:(int32 "user_id" ** string "action" ** opt (string "redirect"))
+    ~post_params:(int32 "user_id" ** opt (string "redirect"))
     ~fallback:missing_params
-    (fun sp () (user_id, (action, redirect_opt)) -> 
-       Lwt_pool.use SQL.pool
-         (fun db ->
-            (* Create a token *)
-            let token = 
-              let str = 
-                String.make 30 '\000'
-              in
-                for i = 0 to (String.length str) - 1 do
-                  str.[i] <- Char.chr((Random.int 127) + 1)
-                done;
-                str
-            in
-            let token_url =
-              Netencoding.Url.encode token
-            in
-              PGSQL(db)
-                "DELETE FROM account_ext WHERE user_id = $user_id"
-              >>= fun () ->
-              begin
-                let (_, user_name, realname, tz, lang) = 
-                  List.find 
-                    (fun (id, _, _, _, _) -> id = user_id)
-                    users
-                in
-                PGSQL(db) 
-                  "INSERT INTO account_ext (token, user_id, expire, user_name, realname, timezone, language) \
-                    VALUES ($token, $user_id, NOW () + interval '1 hour', $user_name, $realname, $tz, $lang)"
-              end
-              >>= fun () -> 
-              redirect 
-                ~sp 
-                ~cookies:[mk_cookie token_url]
-                "You are now logged in." 
-                redirect_opt))
+    (fun sp () (user_id, redirect_opt) -> 
+       login_action user_id ""
+       >>= fun token_url ->
+       redirect 
+         ~sp 
+         ~cookies:[mk_cookie token_url]
+         "You are now logged in." 
+         redirect_opt)
 
 let action_no_userid sp _ redirect_opt act = 
   let dflt msg = 
@@ -158,10 +197,9 @@ let action_no_userid sp _ redirect_opt act =
             post_form
               ~sp
               ~service:login
-              (fun (user_id_nm, (action_nm, redirect_opt_nm)) ->
+              (fun (user_id_nm, redirect_opt_nm) ->
                  [p
-                    [string_input ~input_type:`Hidden ~name:action_nm ~value:act ();
-                     pcdata "Action: "; 
+                    [pcdata "Action: "; 
                      pcdata act; 
                      br ();
 
@@ -220,8 +258,7 @@ let action_userid sp db user_id token redirect_opt =
 
     | "logout" ->
         begin
-          PGSQL(db)
-            "DELETE FROM account_ext WHERE user_id = $user_id"
+          logout_action db user_id
           >>= fun () ->
           redirect 
             ~sp

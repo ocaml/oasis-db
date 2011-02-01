@@ -387,6 +387,30 @@ let upload_edit_box ~ctxt ~sp id upload log =
  * Initialization action: upload a tarball
  *)
 
+let upload_init_check tarball_fd publink = 
+  try 
+    let publink = 
+      match ExtString.String.strip publink with
+        | "" -> None
+        | s  -> Some s
+        (* TODO: test the link *)
+    in
+    let tarball_nm =  
+      match get_original_filename tarball_fd with 
+        | "none" ->
+            failwith 
+              (s_ "No tarball uploaded, be sure to choose a \
+                   file to upload.")
+        | fn ->
+            FilePath.basename fn 
+    in
+    let tarball_fn =
+      get_tmp_filename tarball_fd
+    in
+      return (tarball_fn, tarball_nm, publink)
+  with e -> 
+    fail e
+
 let upload_init_action = 
   Eliom_predefmod.Action.register_new_post_coservice'
     ~name:"upload_tarball"
@@ -395,39 +419,20 @@ let upload_init_action =
                   int "id")
     (fun sp _ (publink, (tarball_fd, id))->
        Context.get_user ~sp () 
-       >>= fun (ctxt, _) ->
+       >>= fun (ctxt, accnt) ->
+       upload_init_check tarball_fd publink
+       >>= fun (tarball_fn, tarball_nm, publink) ->
        begin
-         try 
-           let publink = 
-             match ExtString.String.strip publink with
-               | "" -> None
-               | s  -> Some s
-               (* TODO: test the link *)
-           in
-           let tarball =  
-             match get_original_filename tarball_fd with 
-               | "none" ->
-                   failwith 
-                     (s_ "No tarball uploaded, be sure to choose a \
-                          file to upload.")
-               | fn ->
-                   FilePath.basename fn 
-           in
-           let tarball_fn =
-             get_tmp_filename tarball_fd
-           in
-           let tsk = 
-             Task.create 
-               ~ctxt 
-               (fun ctxt ->
-                  upload_begin ~ctxt:ctxt.odb
-                    (Web (Account.name_of_role ctxt.role))
-                    tarball_fn tarball publink)
-           in
-             upload_data_set ~sp id (Begin tsk);
-             return ()
-         with e ->
-           fail e 
+         let tsk = 
+           Task.create 
+             ~ctxt 
+             (fun ctxt ->
+                upload_begin ~ctxt:ctxt.odb
+                  (Web accnt.Account.accnt_name)
+                  tarball_fn tarball_nm publink)
+         in
+           upload_data_set ~sp id (Begin tsk);
+           return ()
        end)
 
 let upload_init_box ~ctxt ~sp id =

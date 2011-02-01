@@ -2,6 +2,104 @@
 open ODBContext
 open OUnit
 
+let () =
+  Printexc.register_printer 
+    (function
+       | Curl.CurlException (curl_code, http_code, str) ->
+           let curl_str = 
+             match curl_code with 
+               |  Curl.CURLE_OK                          -> "CURLE_OK"
+               |  Curl.CURLE_UNSUPPORTED_PROTOCOL        -> "CURLE_UNSUPPORTED_PROTOCOL"
+               |  Curl.CURLE_FAILED_INIT                 -> "CURLE_FAILED_INIT"
+               |  Curl.CURLE_URL_MALFORMAT               -> "CURLE_URL_MALFORMAT"
+               |  Curl.CURLE_URL_MALFORMAT_USER          -> "CURLE_URL_MALFORMAT_USER"
+               |  Curl.CURLE_COULDNT_RESOLVE_PROXY       -> "CURLE_COULDNT_RESOLVE_PROXY"
+               |  Curl.CURLE_COULDNT_RESOLVE_HOST        -> "CURLE_COULDNT_RESOLVE_HOST"
+               |  Curl.CURLE_COULDNT_CONNECT             -> "CURLE_COULDNT_CONNECT"
+               |  Curl.CURLE_FTP_WEIRD_SERVER_REPLY      -> "CURLE_FTP_WEIRD_SERVER_REPLY"
+               |  Curl.CURLE_FTP_ACCESS_DENIED           -> "CURLE_FTP_ACCESS_DENIED"
+               |  Curl.CURLE_FTP_USER_PASSWORD_INCORRECT -> "CURLE_FTP_USER_PASSWORD_INCORRECT"
+               |  Curl.CURLE_FTP_WEIRD_PASS_REPLY        -> "CURLE_FTP_WEIRD_PASS_REPLY"
+               |  Curl.CURLE_FTP_WEIRD_USER_REPLY        -> "CURLE_FTP_WEIRD_USER_REPLY"
+               |  Curl.CURLE_FTP_WEIRD_PASV_REPLY        -> "CURLE_FTP_WEIRD_PASV_REPLY"
+               |  Curl.CURLE_FTP_WEIRD_227_FORMAT        -> "CURLE_FTP_WEIRD_227_FORMAT"
+               |  Curl.CURLE_FTP_CANT_GET_HOST           -> "CURLE_FTP_CANT_GET_HOST"
+               |  Curl.CURLE_FTP_CANT_RECONNECT          -> "CURLE_FTP_CANT_RECONNECT"
+               |  Curl.CURLE_FTP_COULDNT_SET_BINARY      -> "CURLE_FTP_COULDNT_SET_BINARY"
+               |  Curl.CURLE_PARTIAL_FILE                -> "CURLE_PARTIAL_FILE"
+               |  Curl.CURLE_FTP_COULDNT_RETR_FILE       -> "CURLE_FTP_COULDNT_RETR_FILE"
+               |  Curl.CURLE_FTP_WRITE_ERROR             -> "CURLE_FTP_WRITE_ERROR"
+               |  Curl.CURLE_FTP_QUOTE_ERROR             -> "CURLE_FTP_QUOTE_ERROR"
+               |  Curl.CURLE_HTTP_NOT_FOUND              -> "CURLE_HTTP_NOT_FOUND"
+               |  Curl.CURLE_WRITE_ERROR                 -> "CURLE_WRITE_ERROR"
+               |  Curl.CURLE_MALFORMAT_USER              -> "CURLE_MALFORMAT_USER"
+               |  Curl.CURLE_FTP_COULDNT_STOR_FILE       -> "CURLE_FTP_COULDNT_STOR_FILE"
+               |  Curl.CURLE_READ_ERROR                  -> "CURLE_READ_ERROR"
+               |  Curl.CURLE_OUT_OF_MEMORY               -> "CURLE_OUT_OF_MEMORY"
+               |  Curl.CURLE_OPERATION_TIMEOUTED         -> "CURLE_OPERATION_TIMEOUTED"
+               |  Curl.CURLE_FTP_COULDNT_SET_ASCII       -> "CURLE_FTP_COULDNT_SET_ASCII"
+               |  Curl.CURLE_FTP_PORT_FAILED             -> "CURLE_FTP_PORT_FAILED"
+               |  Curl.CURLE_FTP_COULDNT_USE_REST        -> "CURLE_FTP_COULDNT_USE_REST"
+               |  Curl.CURLE_FTP_COULDNT_GET_SIZE        -> "CURLE_FTP_COULDNT_GET_SIZE"
+               |  Curl.CURLE_HTTP_RANGE_ERROR            -> "CURLE_HTTP_RANGE_ERROR"
+               |  Curl.CURLE_HTTP_POST_ERROR             -> "CURLE_HTTP_POST_ERROR"
+               |  Curl.CURLE_SSL_CONNECT_ERROR           -> "CURLE_SSL_CONNECT_ERROR"
+               |  Curl.CURLE_FTP_BAD_DOWNLOAD_RESUME     -> "CURLE_FTP_BAD_DOWNLOAD_RESUME"
+               |  Curl.CURLE_FILE_COULDNT_READ_FILE      -> "CURLE_FILE_COULDNT_READ_FILE"
+               |  Curl.CURLE_LDAP_CANNOT_BIND            -> "CURLE_LDAP_CANNOT_BIND"
+               |  Curl.CURLE_LDAP_SEARCH_FAILED          -> "CURLE_LDAP_SEARCH_FAILED"
+               |  Curl.CURLE_LIBRARY_NOT_FOUND           -> "CURLE_LIBRARY_NOT_FOUND"
+               |  Curl.CURLE_FUNCTION_NOT_FOUND          -> "CURLE_FUNCTION_NOT_FOUND"
+               |  Curl.CURLE_ABORTED_BY_CALLBACK         -> "CURLE_ABORTED_BY_CALLBACK"
+               |  Curl.CURLE_BAD_FUNCTION_ARGUMENT       -> "CURLE_BAD_FUNCTION_ARGUMENT"
+               |  Curl.CURLE_BAD_CALLING_ORDER           -> "CURLE_BAD_CALLING_ORDER"
+               |  Curl.CURLE_HTTP_PORT_FAILED            -> "CURLE_HTTP_PORT_FAILED"
+               |  Curl.CURLE_BAD_PASSWORD_ENTERED        -> "CURLE_BAD_PASSWORD_ENTERED"
+               |  Curl.CURLE_TOO_MANY_REDIRECTS          -> "CURLE_TOO_MANY_REDIRECTS"
+               |  Curl.CURLE_UNKNOWN_TELNET_OPTION       -> "CURLE_UNKNOWN_TELNET_OPTION"
+               |  Curl.CURLE_TELNET_OPTION_SYNTAX        -> "CURLE_TELNET_OPTION_SYNTAX"
+               |  Curl.CURLE_OBSOLETE                    -> "CURLE_OBSOLETE"
+               |  Curl.CURLE_SSL_PEER_CERTIFICATE        -> "CURLE_SSL_PEER_CERTIFICATE"
+               |  Curl.CURLE_GOT_NOTHING                 -> "CURLE_GOT_NOTHING"
+               |  Curl.CURLE_SSL_ENGINE_NOTFOUND         -> "CURLE_SSL_ENGINE_NOTFOUND"
+               |  Curl.CURLE_SSL_ENGINE_SETFAILED        -> "CURLE_SSL_ENGINE_SETFAILED"
+               |  Curl.CURLE_SEND_ERROR                  -> "CURLE_SEND_ERROR"
+               |  Curl.CURLE_RECV_ERROR                  -> "CURLE_RECV_ERROR"
+               |  Curl.CURLE_SHARE_IN_USE                -> "CURLE_SHARE_IN_USE"
+               |  Curl.CURLE_SSL_CERTPROBLEM             -> "CURLE_SSL_CERTPROBLEM"
+               |  Curl.CURLE_SSL_CIPHER                  -> "CURLE_SSL_CIPHER"
+               |  Curl.CURLE_SSL_CACERT                  -> "CURLE_SSL_CACERT"
+               |  Curl.CURLE_BAD_CONTENT_ENCODING        -> "CURLE_BAD_CONTENT_ENCODING"
+               |  Curl.CURLE_LDAP_INVALID_URL            -> "CURLE_LDAP_INVALID_URL"
+               |  Curl.CURLE_FILESIZE_EXCEEDED           -> "CURLE_FILESIZE_EXCEEDED"
+               |  Curl.CURLE_FTP_SSL_FAILED              -> "CURLE_FTP_SSL_FAILED"
+               |  Curl.CURLE_USE_SSL_FAILED              -> "CURLE_USE_SSL_FAILED"
+               |  Curl.CURLE_SEND_FAIL_REWIND            -> "CURLE_SEND_FAIL_REWIND"
+               |  Curl.CURLE_SSL_ENGINE_INITFAILED       -> "CURLE_SSL_ENGINE_INITFAILED"
+               |  Curl.CURLE_LOGIN_DENIED                -> "CURLE_LOGIN_DENIED"
+               |  Curl.CURLE_TFTP_NOTFOUND               -> "CURLE_TFTP_NOTFOUND"
+               |  Curl.CURLE_TFTP_PERM                   -> "CURLE_TFTP_PERM"
+               |  Curl.CURLE_REMOTE_DISK_FULL            -> "CURLE_REMOTE_DISK_FULL"
+               |  Curl.CURLE_TFTP_ILLEGAL                -> "CURLE_TFTP_ILLEGAL"
+               |  Curl.CURLE_TFTP_UNKNOWNID              -> "CURLE_TFTP_UNKNOWNID"
+               |  Curl.CURLE_REMOTE_FILE_EXISTS          -> "CURLE_REMOTE_FILE_EXISTS"
+               |  Curl.CURLE_TFTP_NOSUCHUSER             -> "CURLE_TFTP_NOSUCHUSER"
+               |  Curl.CURLE_CONV_FAILED                 -> "CURLE_CONV_FAILED"
+               |  Curl.CURLE_CONV_REQD                   -> "CURLE_CONV_REQD"
+               |  Curl.CURLE_SSL_CACERT_BADFILE          -> "CURLE_SSL_CACERT_BADFILE"
+               |  Curl.CURLE_REMOTE_FILE_NOT_FOUND       -> "CURLE_REMOTE_FILE_NOT_FOUND"
+               |  Curl.CURLE_SSH                         -> "CURLE_SSH"
+               |  Curl.CURLE_SSL_SHUTDOWN_FAILED         -> "CURLE_SSL_SHUTDOWN_FAILED"
+               |  Curl.CURLE_AGAIN                       -> "CURLE_AGAIN"
+           in
+             Some (Printf.sprintf 
+                     "Curl.CurlException (%s, %d, %S)" 
+                     curl_str
+                     http_code 
+                     str)
+       | _ ->
+           None)
+
 let verbose = ref true
 
 let odb = 

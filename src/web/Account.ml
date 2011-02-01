@@ -161,6 +161,28 @@ let account_ext =
       ~post_params:unit
       ()
 
+let login_get_ext = 
+  if ODBConf.dev then 
+    AccountStub.login_get
+  else
+    new_external_service
+      ~prefix:"http://localhost"
+      ~path:["~gildor"; "login.php"]
+      ~get_params:(string "login" ** string "password")
+      ~post_params:unit
+      ()
+
+let logout_get_ext =  
+  if ODBConf.dev then
+    AccountStub.logout_get
+  else
+    new_external_service
+      ~prefix:"http://localhost"
+      ~path:["~gildor"; "logout.php"]
+      ~get_params:unit
+      ~post_params:unit
+      ()
+
 let mk_account sp action =
   preapply account_ext (action, Some (self_uri ~sp))
 
