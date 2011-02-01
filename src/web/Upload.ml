@@ -102,15 +102,25 @@ let upload_completion_action =
                  let ctxt = 
                    LogBox.set log ctxt
                  in
+
+                 let completion =
+                   let completion = 
+                     upload.completion 
+                   in
+                     if completion.ct_oasis <> None then
+                       (* If we have _oasis, never set pkg/ver *)
+                       {completion with ct_ord = Sure ord}
+                     else
+                       {completion with 
+                            ct_pkg = Sure pkg;
+                            ct_ver = Sure version;
+                            ct_ord = Sure ord}
+                 in
+
                  let upload = 
                    {upload with 
-                        publink = 
-                          publink;
-                        completion = 
-                          {upload.completion with 
-                               ct_pkg = Sure pkg;
-                               ct_ver = Sure version;
-                               ct_ord = Sure ord}}
+                        publink = publink;
+                        completion = completion}
                  in
                  let pkg_ver =
                    pkg_ver_of_upload upload
@@ -142,15 +152,20 @@ let upload_completion_box ~ctxt ~sp id upload =
     ]
   in
 
-  let string_field_answer ttl nm printer dflt vl = 
+  let string_field_answer ?(disabled=false) ttl nm printer dflt vl = 
     let vl = 
       value_of_answer printer dflt vl
     in
       tmpl_field 
         ttl 
         (string_input
+           ~a:(if disabled then
+                 [a_disabled `Disabled]
+               else
+                 [])
            ~input_type:`Text
-           ~name:nm ~value:vl ())
+           ~name:nm 
+           ~value:vl ())
   in
 
   let int_field_answer ttl nm printer dflt vl = 
@@ -210,6 +225,7 @@ let upload_completion_box ~ctxt ~sp id upload =
                      ());
 
                 string_field_answer
+                  ~disabled:has_oasis
                   (s_ "Package: ") 
                   pkg 
                   (fun i -> i) 
@@ -221,6 +237,10 @@ let upload_completion_box ~ctxt ~sp id upload =
                 tmpl_field 
                   (s_ "Version: ") 
                   (user_type_input
+                     ~a:(if has_oasis then
+                           [a_disabled `Disabled]
+                         else
+                           [])
                      ~input_type:`Text
                      ~name:ver
                      ~value:(value_of_answer 
