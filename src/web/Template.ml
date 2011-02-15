@@ -78,7 +78,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                 div ~a:[a_id "subtitle"]
                   [pcdata (s_ "an OCaml packages archive")]];
              
-             div ~a:[a_id "account"] account_box;
+             account_box;
 
              div ~a:[a_id "menu"]
              (*
@@ -151,3 +151,7 @@ let template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
       ~sp ?extra_headers ~title ~div_id 
       account_box 
       ctnt
+
+let lwt_template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
+  return
+    (template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt)

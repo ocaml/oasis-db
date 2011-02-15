@@ -76,6 +76,33 @@ let odd_even_table ?caption ?columns hd tl =
       (addto_class1 "odd" hd)
       (set_class false tl)
         
+let rec html_flatten sep =
+  function
+    | e1 :: ((_ :: _) as tl) ->
+        e1 @ (sep :: (html_flatten sep tl))
+    | [e] ->
+        e
+    | [] ->
+        []
+
+let rec html_concat sep =
+  function
+    | e1 :: ((_ :: _) as tl) ->
+        e1 :: sep :: (html_concat sep tl)
+    | [_] | [] as lst ->
+        lst
+
+let non_zero_lst_html id nm lst = 
+  let len =
+    List.length lst 
+  in
+    if len > 0 then
+      Some (id, nm len, html_concat (pcdata (s_ ", ")) lst)
+    else
+      None
+
+let non_zero_lst id nm lst =
+  non_zero_lst_html id nm (List.map pcdata lst)
 
 (* Field for versions number and their links to 
  * version's page

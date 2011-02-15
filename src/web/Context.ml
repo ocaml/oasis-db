@@ -148,3 +148,12 @@ let get_user ~sp () =
           return (ctxt, accnt)
       | Account.Anon ->
           fail Common.RequiresAuth
+
+let get_admin ~sp () = 
+  get ~sp () 
+  >>= fun ctxt -> 
+    match ctxt.role with 
+      | Account.Admin accnt ->
+          return (ctxt, accnt)
+      | Account.Anon | Account.User _ ->
+          fail Common.RequiresAuth

@@ -10,9 +10,11 @@ open XHTML.M
 open Lwt
 open ODBGettext
 
+let html str = 
+  p ~a:[a_class ["error"]] [pcdata str]
+
 let () =
-  let error_message s = 
-    [p ~a:[a_class ["error"]] [pcdata s]]
+  let error_message = html
   in
 
   let error_template ?extra_headers ?code ~sp lst = 
@@ -53,18 +55,18 @@ let () =
 
          | Eliom_common.Eliom_Wrong_parameter ->
              error_template ~sp ~code:400
-               (error_message 
-                  (s_ "Wrong parameters"))
+               [error_message 
+                  (s_ "Wrong parameters")]
 
          | RequiresAuth ->
              error_template ~sp ~code:401
-               (error_message 
-                  (s_ "You need to be logged in to see this page."))
+               [error_message 
+                  (s_ "You need to be logged in to see this page.")]
 
          | StateTransitionNotAllowed ->
              error_template ~sp ~code:405
-               (error_message
-                  (s_ "This state transition is not allowed."))
+               [error_message
+                  (s_ "This state transition is not allowed.")]
 
          | Timeout msg ->
              (* TODO: error code *)
@@ -74,19 +76,19 @@ let () =
                   ~a:[a_http_equiv "refresh"] 
                   ~content:(string_of_int (int_of_float Conf.timeout_delay))
                   ()]
-               (error_message 
+               [error_message 
                   (* TODO: better HTML formatting *)
                   (Printf.sprintf
                      (f_ "%s This page will be refreshed in %.0f seconds.")
-                     msg Conf.timeout_delay))
+                     msg Conf.timeout_delay)]
 
          | Failure str ->
              error_template ~sp ~code:500
                (backtrace 
-                  (error_message str))
+                  [error_message str])
 
          | e -> 
              error_template ~sp ~code:500
                (backtrace 
-                  (error_message
-                     (Printexc.to_string e))))
+                  [error_message
+                     (Printexc.to_string e)]))

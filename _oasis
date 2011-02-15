@@ -139,6 +139,11 @@ Library "oasis-db-ocsigen"
            API,
            MarkdownExt,
            PkgView,
+           PkgVerView,
+           Distro,
+           Monitor,
+           Comment,
+           Rating,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

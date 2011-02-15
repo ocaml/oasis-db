@@ -22,7 +22,7 @@ let () =
     in
       Xhtml.register home Index.home_handler;
       Xhtml.register browse Browse.browse_handler;
-      Xhtml.register view Browse.view_handler;
+      Xhtml.register view PkgVerView.view_handler;
       Redirection.register upload Upload.upload_handler;
       Xhtml.register contribute Index.contribute_handler;
       Xhtml.register about Index.about_handler;

@@ -41,7 +41,6 @@ let string_of_role =
           (f_ "administrator %s")
           accnt.accnt_name
 
-
 let get ~sp () = 
   let the =
     function 
@@ -95,6 +94,11 @@ let get ~sp () =
     with Not_found ->
       return Anon
      
+let is_admin ~sp () =
+  get ~sp () 
+  >|= function
+    | Admin _ -> true
+    | User _ | Anon -> false
 
 let self_uri ~sp = 
   let proto =
@@ -217,12 +221,36 @@ let new_account =
     ()
 
 let box role sp = 
+  div 
+    ~a:[a_id "account"] 
+    [
+      match role with 
+        | User _ | Admin _->
+            ul 
+              (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
+              [li [a my_account sp  [pcdata (s_ "My account")] None]]
+        | Anon ->
+            ul
+              (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
+              [li [a new_account sp [pcdata (s_ "New account")] ()]]
+    ]
+
+let user_settings_box role sp = 
   match role with 
-    | User _ | Admin _->
-        [ul 
-           (li [a (logout_ext sp) sp [pcdata (s_ "Log Out")] ()])
-           [li [a my_account sp  [pcdata (s_ "My account")] None]]]
+    | Admin accnt | User accnt ->
+        return 
+          (div
+             [
+               table
+                 (tr
+                    (td [pcdata (s_ "Name")])
+                    [td [pcdata accnt.accnt_name]])
+                 [tr
+                    (td [pcdata (s_ "Role")])
+                    [td [pcdata (string_of_role role)]]
+                 ];
+               p [a (manage_account_ext sp) sp
+                    [pcdata (s_ "Edit settings on OCaml forge")] ()];
+             ])
     | Anon ->
-        [ul
-           (li [a (login_ext sp) sp  [pcdata (s_ "Log In")] ()])
-           [li [a new_account sp [pcdata (s_ "New account")] ()]]]
+        fail (Failure (s_ "No settings for anonymous user."))

@@ -1,4 +1,8 @@
 
+(** Web services to manage account
+    @author Sylvain Le Gall
+  *)
+
 open Lwt
 open XHTML.M
 open Eliom_services
@@ -19,7 +23,13 @@ let account_settings =
     ~get_params:unit
     (fun sp () () -> 
        Context.get_user ~sp () 
-       >|= fun (ctxt, accnt) ->
+       >>= fun (ctxt, accnt) ->
+       Distro.user_settings_box ~sp ~ctxt () 
+       >>= fun distro_user_settings_box ->
+       Monitor.user_settings_box ~sp ~ctxt () 
+       >>= fun monitor_user_settings_box ->
+       Account.user_settings_box ctxt.role sp 
+       >|= fun account_ext_user_settings_box ->
        template 
          ~ctxt
          ~sp 
@@ -33,20 +43,31 @@ let account_settings =
                    OCaml forge to edit the later.")];
 
            h2 [pcdata (s_ "OCaml forge information")];
-
-           table
-             (tr
-                (td [pcdata (s_ "Name")])
-                [td [pcdata accnt.accnt_name]])
-             [tr
-                (td [pcdata (s_ "Role")])
-                [td [pcdata (string_of_role ctxt.role)]]
-             ];
-
-           p [a (manage_account_ext sp) sp
-                [pcdata (s_ "Edit settings on OCaml forge")] ()];
+           account_ext_user_settings_box;
 
            h2 [pcdata (s_ "Local information")];
+           monitor_user_settings_box;
+           distro_user_settings_box;
+         ])
+
+
+let admin =
+  register_new_service
+    ~path:["admin"]
+    ~get_params:unit
+    (fun sp () () ->
+       Context.get_admin ~sp ()
+       >|= fun (ctxt, accnt) ->
+       template
+         ~ctxt
+         ~sp
+         ~title:(OneTitle (s_ "Administration"))
+         ~div_id:"admin"
+         [
+           p [pcdata
+                (s_ "This page let you access operation that requires 'admin'
+                     privileges.");
+              em [pcdata (s_ "Use with caution.")]];
          ])
 
 let my_account_handler = 
@@ -62,6 +83,8 @@ let my_account_handler =
 
        Context.get_user ~sp () 
        >>= fun (ctxt, accnt) ->
+       Account.is_admin ~sp () 
+       >>= fun is_admin ->
        (* Compute events list *)
        Log.get Log.All Log.LevelAndDate log_offset log_per_page
 
@@ -144,6 +167,15 @@ let my_account_handler =
              ]
          in
 
+         let admin_only txt srvc arg = 
+           if is_admin then
+             a srvc sp [pcdata txt] arg
+           else
+             span ~a:[a_class ["link_disabled"];
+                      a_title (s_ "Need to be admin.")]
+               [pcdata txt]
+         in
+
            template 
              ~ctxt
              ~sp 
@@ -164,7 +196,12 @@ let my_account_handler =
 
               div ~a:[a_class ["navigate"; "bottom"]] navigation_box;
 
-              p [a account_settings sp 
-                   [pcdata (s_ "Account settings")] ()];
+              ul
+                (li [a account_settings sp 
+                       [pcdata (s_ "Settings")] ()])
+                (* TODO *)
+                [li [admin_only (s_ "Delete packages and versions") admin ()];
+                 li [a admin sp [pcdata (s_ "Create package")] ()];
+                 li [admin_only (s_ "Manage tasks") admin ()]];
              ]
        end)

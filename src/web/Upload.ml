@@ -288,7 +288,7 @@ let upload_preview_box ~ctxt ~sp id upload =
       let pkg_ver = 
         pkg_ver_of_upload upload
       in
-        Browse.version_page_box ~ctxt ~sp
+        PkgVerView.box ~ctxt ~sp
           pkg_ver 
           (fun () ->
              return 
