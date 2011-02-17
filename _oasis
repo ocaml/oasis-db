@@ -140,6 +140,7 @@ Library "oasis-db-ocsigen"
            MarkdownExt,
            PkgView,
            PkgVerView,
+           Sqlexpr,
            Distro,
            Monitor,
            Comment,
@@ -154,7 +155,8 @@ Library "oasis-db-ocsigen"
                 markdown, markdown.html,
                 cameleon.rss,
                 sexplib,
-                rest.ocsigen
+                rest.ocsigen, 
+                sqlexpr
 
 Executable test
   Path:   test

@@ -14,6 +14,12 @@ let () =
     in
     let _bkgrnd_job = 
       ODBMessage.info ~ctxt
+        (f_ "OASIS-DB v%s starting")
+        ODBConf.version
+      >>= fun () ->
+      Context.init ()
+      >>= fun _ ->
+      ODBMessage.info ~ctxt
         (f_ "OASIS-DB v%s started")
         ODBConf.version
       >>= 

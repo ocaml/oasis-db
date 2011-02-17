@@ -125,3 +125,6 @@
 "test/FakeIncoming.byte": use_ocamlbuild
 
 "src/web/Main.native": use_ocamlbuild
+
+"src/web/Sqlexpr.ml": syntax_camlp4o, pkg_sqlexpr.syntax
+"src/web/MyAccount.ml": syntax_camlp4o, pkg_sqlexpr.syntax

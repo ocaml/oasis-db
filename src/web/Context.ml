@@ -8,6 +8,7 @@ type context =
     {
       odb:   ODBContext.t;
       role:  Account.t;
+      sqle:  Sqlexpr.t;
 
       upload_delay: float; 
       (* Delay for upload (wait for completion and refresh) *)   
@@ -19,13 +20,30 @@ type context =
       (* Delay to cancel an upload *)
     }
 
-let incoming_dir = ref None
-let dist_dir     = ref None
+let mk_var nm = 
+  ref 
+    (fun () -> 
+       failwith 
+         (Printf.sprintf 
+            "Uninitialized variable '%s'"
+            nm))
+
+
+let incoming_dir = mk_var "incoming directory"
+let dist_dir     = mk_var "dist directory"
+let sqle_fn      = mk_var "SQLite DB"
+let sqle         = mk_var "SQLExpr context"
+
+let init_mutex   = Lwt_mutex.create () 
+let init_cond    = Lwt_condition.create () 
+let init_val     = ref false
+
 
 let read_config () = 
   let spf fmt = 
     Printf.sprintf fmt 
   in
+
   let rec parse lst =
     match lst with 
       | e :: tl ->
@@ -33,9 +51,11 @@ let read_config () =
             let () = 
               match e with 
                 | Element ("dir", ["rel", "incoming"], [PCData dn]) ->
-                    incoming_dir := Some dn
+                    incoming_dir := fun () -> dn
                 | Element ("dir", ["rel", "dist"], [PCData dn]) ->
-                    dist_dir := Some dn
+                    dist_dir := fun () -> dn
+                | Element ("db", [], [PCData fn]) ->
+                    sqle_fn := fun () -> fn
                 | Element (nm, _, _) ->
                     failwith 
                       (spf
@@ -54,30 +74,26 @@ let read_config () =
       | [] ->
           ()
   in
-  let test_dir not_defined fmt = 
-    function 
-      | Some dn -> 
-          if not (Sys.is_directory dn) then
-            failwith 
-              (spf fmt dn)
-      | None ->
-          failwith not_defined
+  let test_dir fmt rfdn = 
+    let dn =
+      !rfdn ()
+    in
+      if not (Sys.is_directory dn) then
+        failwith 
+          (spf fmt dn)
   in
 
     parse (Eliom_sessions.get_config ());
 
     test_dir 
-      "Incoming directory not defined"
        (f_ "Incoming directory '%s' doesn't exist")
-       !incoming_dir;
+       incoming_dir;
     test_dir
-      "Dist directory not defined"
       (f_ "Dist directory '%s' doesn't exist")
-      !dist_dir
-
+      dist_dir;
+    ignore (!sqle_fn ())
 
 let get_odb () = 
-
   let logger = 
     Lwt_log.make
       ~output:
@@ -115,30 +131,51 @@ let get_odb () =
            join [task_stdout; task_logfile; task_db])
       ~close:(fun () -> return ())
   in
-
-  let the = 
-    function 
-      | Some e -> e
-      | None -> invalid_arg "the"
-  in
-
     ODBContext.default ~logger 
-      (the !dist_dir) 
-      (the !incoming_dir)
+      (!dist_dir ()) 
+      (!incoming_dir ())
+
+let init () = 
+  Lwt_mutex.with_lock init_mutex
+    (fun () ->
+       begin
+         let log =
+           ODBMessage.info ~ctxt:(get_odb ()) "%s"
+         in
+           Sqlexpr.create ~log (!sqle_fn ())
+       end
+       >>= fun sqle' ->
+       begin
+         sqle := (fun () -> sqle');
+         init_val := true;
+         return ()
+       end)
+  >|= 
+  Lwt_condition.broadcast init_cond
 
 let get ~sp () = 
-  Account.get ~sp () 
-  >>= fun role ->
-  return 
-    {
-      odb  = get_odb ();
-      role = role;
+  Lwt_mutex.with_lock init_mutex
+    (fun () ->
+       begin
+         if !init_val then
+           return ()
+         else
+           Lwt_condition.wait ~mutex:init_mutex init_cond
+       end
+       >>= fun () ->
+       Account.get ~sp () 
+       >>= fun role ->
+       return 
+         {
+           odb  = get_odb ();
+           role = role;
+           sqle = !sqle ();
 
-      (* TODO: load configuration *)
-      upload_delay = 5.0;
-      upload_commit_delay = 5.0;
-      upload_cancel_delay = 5.0;
-    }
+           (* TODO: load configuration *)
+           upload_delay = 5.0;
+           upload_commit_delay = 5.0;
+           upload_cancel_delay = 5.0;
+         })
 
 let get_user ~sp () = 
   get ~sp () 

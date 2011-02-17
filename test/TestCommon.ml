@@ -558,6 +558,7 @@ let bracket_oasis_db pre_start f post_stop =
           <extension findlib-package=\"cameleon.rss\" />
           <extension findlib-package=\"yojson\" />
           <extension findlib-package=\"curl\" />
+          <extension findlib-package=\"sqlexpr\" />
 
           <host charset=\"utf-8\" >
             <site path=\"\">
@@ -568,6 +569,7 @@ let bracket_oasis_db pre_start f post_stop =
               <eliom module=\"$curdir/_build/src/web/oasis-db-ocsigen.cma\">
                 <dir rel=\"incoming\">$rootdir/incoming</dir>
                 <dir rel=\"dist\">$rootdir/dist</dir>
+                <db>test/data/storage/db.sql</db>
               </eliom>
               <static dir=\"$curdir/src/web/static\" /> 
             </site>

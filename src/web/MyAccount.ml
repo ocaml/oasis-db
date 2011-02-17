@@ -17,6 +17,16 @@ open Context
 open Account
 open Lwt_log
 
+let () = 
+  Sqlexpr.register
+    "account"
+    1
+    (fun db ->
+       Sqlexpr.execute db
+         sqlinit"CREATE TABLE IF NOT EXISTS account\
+         (id INTEGER PRIMARY KEY NOT NULL)")
+    (fun _ _ -> return ())
+
 let account_settings = 
   register_new_service
     ~path:["account"; "settings"]
