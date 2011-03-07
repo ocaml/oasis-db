@@ -84,11 +84,11 @@ let my_account_handler =
   register
     Account.my_account
     (fun sp log_offset_opt () ->
-       let log_per_page = 20L in
+       let log_per_page = 20 in
        let log_offset = 
          match log_offset_opt with 
            | Some n -> n 
-           | None -> 0L 
+           | None -> 0 
        in
 
        Context.get_user ~sp () 
@@ -96,20 +96,17 @@ let my_account_handler =
        Account.is_admin ~sp () 
        >>= fun is_admin ->
        (* Compute events list *)
-       Log.get Log.All Log.LevelAndDate log_offset log_per_page
+       Log.get ~offset:log_offset ~limit:log_per_page ctxt.sqle 
 
        (* Display events list *)
        >|= fun events ->
        begin
-         let user_tz = 
-           Time_Zone.current ()
-         in
-
          let rec mk_lst prv_user_date = 
            function 
-             | ((date, tz, log_lvl, descr, lnk) :: tl) as lst ->
+             | (hd :: tl) as lst ->
                  let user_date = 
-                   Calendar.convert date tz user_tz
+                   (* TODO: Calendar.convert date tz user_tz *)
+                   hd.ODBLog.log_timestamp
                  in
                  let same_day =
                    match prv_user_date with 
@@ -123,16 +120,20 @@ let my_account_handler =
                  in
                    if same_day then
                      begin
-                       let shrt_lvl, class_lvl =
-                         Log.html_log_level log_lvl
+                       let class_lvl =
+                         Log.html_log_level hd
                        in
                          (tr
-                            ~a:[a_class [class_lvl]]
+                            ~a:
+                            (match class_lvl with 
+                               | Some tk -> [a_class [tk]]
+                               | None -> [])
+
                             (th
                                ~a:[a_class ["hour"]]
                                [pcdata (Printer.Calendar.sprint (s_ "%R") user_date)])
-                            [td [pcdata shrt_lvl];
-                             td [pcdata descr];
+
+                            [td [pcdata (ODBLog.to_string hd)];
                              td []])
                          ::
                          mk_lst (Some user_date) tl
@@ -141,7 +142,7 @@ let my_account_handler =
                      begin
                        (tr 
                           (th 
-                             ~a:[a_colspan 4; a_class ["day"]]
+                             ~a:[a_colspan 3; a_class ["day"]]
                              [pcdata (Printer.Calendar.sprint (s_ "%F") user_date)])
                           [])
                        ::
@@ -158,7 +159,7 @@ let my_account_handler =
                span ~a:[a_class ["enabled"]]
                  [a 
                     my_account sp [pcdata txt] 
-                    (Some (max 0L offset))]
+                    (Some (max 0 offset))]
              else
                span ~a:[a_class ["disabled"]] 
                  [pcdata txt]
@@ -166,13 +167,13 @@ let my_account_handler =
 
              [
                mk_item 
-                 (log_offset > 0L)
-                 (Int64.sub log_offset log_per_page)
+                 (log_offset > 0)
+                 (log_offset - log_per_page)
                  (s_ "Previous");
 
                mk_item
-                 (Int64.of_int (List.length events) = log_per_page)
-                 (Int64.add log_offset log_per_page)
+                 (List.length events = log_per_page)
+                 (log_offset + log_per_page)
                  (s_ "Next");
              ]
          in
@@ -200,8 +201,7 @@ let my_account_handler =
                 (tr 
                    (th [pcdata (s_ "Date")])
                    [th [pcdata ""];
-                    th [pcdata (s_ "Description")];
-                    th [pcdata (s_ "Link")]])
+                    th [pcdata (s_ "Description")]])
                 (mk_lst None events);
 
               div ~a:[a_class ["navigate"; "bottom"]] navigation_box;

@@ -93,3 +93,13 @@ let create ?(log) ?(n=5) fn =
      use res init
      >>= fun () ->
      return res
+
+let () = 
+  Printexc.register_printer
+    (function
+       | Sqlexpr_sqlite.Error(e) ->
+           Some 
+             (Printf.sprintf "Sqlexpr_sqlite.Error(%s)"
+                (Printexc.to_string e))
+       | _ ->
+           None)

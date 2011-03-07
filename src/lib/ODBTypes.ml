@@ -23,7 +23,7 @@ type filename = string with sexp
 (** Dirname *)
 type dirname = string with sexp 
 
-(** Data (ISO) *)
+(** Date (ISO) *)
 type date = CalendarLib.Calendar.t
 
 let date_of_sexp s = 

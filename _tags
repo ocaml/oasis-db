@@ -114,17 +114,16 @@
 "src/lib/ODBCompletion.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBIncoming.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBSync.ml": syntax_camlp4o, pkg_sexplib.syntax
+"src/lib/ODBLog.ml": syntax_camlp4o, pkg_sexplib.syntax
 
 "src/web/Account.ml": syntax_camlp4o, pkg_pgocaml.syntax
 "src/web/AccountStub.ml": syntax_camlp4o, pkg_pgocaml.syntax
-"src/web/Log.ml": syntax_camlp4o, pkg_sexplib.syntax, pkg_pgocaml.syntax
 
 "test/test.ml": syntax_camlp4o, pkg_camlp4.macro
 
 "test/test.byte": use_ocamlbuild
-"test/FakeIncoming.byte": use_ocamlbuild
-
 "src/web/Main.native": use_ocamlbuild
 
 "src/web/Sqlexpr.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 "src/web/MyAccount.ml": syntax_camlp4o, pkg_sqlexpr.syntax
+"src/web/Log.ml": syntax_camlp4o, pkg_sqlexpr.syntax

@@ -93,6 +93,7 @@ Library "oasis-db"
            ODBProvides,
            ODBDeps,
            ODBREST,
+           ODBLog,
            LwtExt,
            ODBSync,
            ODBUpload

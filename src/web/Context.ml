@@ -122,11 +122,26 @@ let get_odb () =
                lst 
          in
          let task_db = 
-           Log.add lvl 
-             Log.Other 
-             (Lwt_log.Section.name sct) 
-             ("nothing", []) 
-             lst
+           let lvl = 
+             match lvl with
+               | Fatal   -> `Fatal
+               | Error   -> `Error
+               | Warning -> `Warning
+               | Notice  -> `Notice
+               | Info    -> `Info
+               | Debug   -> `Debug
+           in
+             try 
+               let sqle = 
+                 !sqle ()
+               in
+                 Lwt_list.iter_s
+                   (fun msg ->
+                      Log.add sqle
+                        (`Sys (Section.name sct, `Message(lvl, msg))))
+                   lst
+             with _ ->
+               return ()
          in
            join [task_stdout; task_logfile; task_db])
       ~close:(fun () -> return ())

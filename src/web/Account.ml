@@ -85,8 +85,6 @@ let get ~sp () =
 
           (function
              | Failure msg ->
-                 Log.add Lwt_log.Notice Log.Auth "Account" ("",[]) [msg]
-                 >>= fun () ->
                  return Anon
              | e ->
                  fail e)
@@ -196,7 +194,7 @@ let logout_ext sp =
 let my_account =
   new_service 
     ~path:["my_account"] 
-    ~get_params:(opt (int64 "log_offset"))
+    ~get_params:(opt (int "log_offset"))
     ()
 
 let login_ext sp =

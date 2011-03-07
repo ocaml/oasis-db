@@ -93,7 +93,13 @@ let log_box ~ctxt ~sp t =
          if debug || lvl > Lwt_log.Debug then
            begin
              let short_nm, css_style = 
-               Log.html_log_level lvl 
+               match lvl with
+                 | Debug    -> s_ "D", "log_debug" 
+                 | Info     -> s_ "I", "log_info"
+                 | Notice   -> s_ "N", "log_notice"
+                 | Warning  -> s_ "W", "log_warning"
+                 | Error    -> s_ "E", "log_error" 
+                 | Fatal    -> s_ "F", "log_fatal"
              in
              let line =
                tr

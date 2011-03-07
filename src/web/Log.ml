@@ -4,95 +4,172 @@
   *)
 
 open Lwt
-open Lwt_log
-open Sexplib
-open SQL
 open ODBGettext
+open CalendarLib
+open ODBLog
 
-TYPE_CONV_PATH "Log"
+module S = Sqlexpr
 
-type what =
-  | Package  of string
-  | Version  of string * string
-  | Incoming of string (* tarball *)
-  | Auth
-  | Other with sexp  
-
-type replay =  
-    (* Look like a function *)
-    string * string list with sexp 
-
-type t = 
-    {
-      id:      int32;
-      level:   Lwt_log.level;
-      what:    what;
-      path:    string list;
-      message: string;
-      replay:  replay;
-    }
-
-let string_of_level = 
-  [
-    Error,   "E";
-    Fatal,   "F";
-    Warning, "W";
-    Notice,  "N";
-    Info,    "I";
-    Debug,   "D";
-  ]
-
-let level_of_string = 
-  List.map (fun (a, b) -> (b, a)) string_of_level
-
-let add level what path replay messages = 
-  let pglvl  = List.assoc level string_of_level in
-  let pgwhat = Sexp.to_string (sexp_of_what what) in
-  let pgreplay = Sexp.to_string (sexp_of_replay replay) in
-    
-    Lwt_pool.use SQL.pool
-      (fun db ->
-         Lwt_list.iter_s
-           (fun msg -> 
-              PGSQL(db)
-                "INSERT INTO log (level, what, path, message, replay) \
-                 VALUES ($pglvl, $pgwhat, $path, $msg, $pgreplay)")
-           messages)
-
-
-type get_what = 
-  | All 
-  | Only of what list with sexp 
-
-type order =
-  | LevelAndDate
-  | DateAndLevel with sexp 
-
-let get what order offset limit = 
-  Lwt_pool.use SQL.pool
+let () = 
+  S.register
+    "log"
+    2
     (fun db ->
-       PGSQL(db)  
-         "SELECT id, level, what, message, replay, timestamp FROM log \
-          ORDER BY timestamp DESC OFFSET $offset LIMIT $limit"
-        >>= fun lst ->
-        return 
-          (List.map
-             (function (id, pglvl, pgwhat, msg, pgreplay, timestamp) ->
-               fst timestamp,
-               snd timestamp,
-               List.assoc pglvl level_of_string,
-               msg,
-               "")
-             lst))
+       S.execute db 
+         sqlinit"CREATE TABLE IF NOT EXISTS log\
+          (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+           user_id INTEGER, \
+           pkg TEXT, \
+           ver TEXT, \
+           sys TEXT, \
+           event INTEGER NOT NULL, \
+           sexp TEXT NOT NULL, \
+           timestamp DATETIME DEFAULT (datetime('now')),
+           CHECK ((pkg ISNULL AND sys NOTNULL) OR (pkg NOTNULL AND sys ISNULL)),
+           CHECK (ver ISNULL OR pkg NOTNULL), 
+           FOREIGN KEY(user_id) REFERENCES user(id))")
+    (fun db v -> 
+       match v with 
+         | 1 ->
+             S.execute db
+               sql"ALTER TABLE log ADD COLUMN sexp TEXT NOT NULL"
+         | _ ->
+             return ())
 
+let int_of_sevent = 
+  function
+    | `Undefined             -> 0
+    | `Created               -> 1
+    | `Deleted               -> 2
+    | `Rated                 -> 3
+    | `Commented             -> 4
+    | `UscanChanged          -> 5
+    | `Started               -> 6
+    | `Stopped               -> 7
+    | `VersionCreated        -> 8
+    | `VersionDeleted        -> 9
+    | `Message (`Fatal, _)   -> 10
+    | `Message (`Error, _)   -> 11
+    | `Message (`Warning, _) -> 12
+    | `Message (`Notice, _)  -> 13
+    | `Message (`Info, _)    -> 14
+    | `Message (`Debug, _)   -> 15
+    | `Failure               -> 16
+
+(* TODO: remove
+let sevent_of_int = 
+  let max, assoc = 
+    List.fold_left
+      (fun (mx, assoc) ev -> 
+         let i = 
+           int_of_sevent ev
+         in
+           max mx i,
+           (i, ev) :: assoc)
+      (0, [])
+      [`Created; 
+       `Deleted; 
+       `Rated; 
+       `Commented; 
+       `UscanChanged; 
+       `Started; 
+       `Stopped;
+       `VersionCreated;
+       `VersionDeleted;
+       `Message `Fatal;
+       `Message `Error;
+       `Message `Warning;
+       `Message `Notice;
+       `Message `Info;
+       `Message `Debug;
+       `Failure;
+      ]
+  in
+  let arr = 
+    Array.make (max + 1) `Undefined
+  in
+  let () =
+    List.iter 
+      (fun (i, ev) ->
+         arr.(i) <- ev)
+      assoc
+  in
+    fun i -> arr.(i)
+ *)
+
+let add sqle ev =  
+  S.use sqle
+    (fun db ->
+       let sexp = 
+         Sexplib.Sexp.to_string 
+           (ODBLog.sexp_of_event ev)
+       in
+
+       match ev with
+         | `Pkg (pkg, se) ->
+             S.execute db
+               (sqlc"INSERT INTO log (pkg, event, sexp) VALUES (%s, %d, %s)")
+               pkg (int_of_sevent se) sexp
+         | `Sys (sys, se) ->
+             S.execute db
+               (sqlc"INSERT INTO log (sys, event, sexp) VALUES (%s, %d, %s)")
+               sys (int_of_sevent se) sexp)
+
+let get ?offset ?limit sqle =
+  S.use sqle
+    (fun db ->
+       let decode acc (id, sexp, timestamp) = 
+         id >>= fun id ->
+         sexp >>= fun sexp ->
+         timestamp >>= fun timestamp -> 
+         begin
+           let res = 
+             {
+               log_id = id;
+               log_timestamp = 
+                 (Printer.Calendar.from_string 
+                    timestamp);
+               log_event = 
+                 (ODBLog.event_of_sexp 
+                    (Sexplib.Sexp.of_string sexp));
+             }
+           in
+             return (res :: acc)
+         end
+       in
+       let exec sql = 
+         S.fold db decode [] sql
+       in
+         (match offset, limit with 
+            | None, None ->
+                exec 
+                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log"
+            | Some off, None ->
+                exec 
+                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log OFFSET %d"
+                  off
+            | None, Some lmt ->
+                exec 
+                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log LIMIT %d")
+                  lmt
+            | Some off, Some lmt ->
+                exec
+                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log LIMIT %d OFFSET %d")
+                  lmt off))
+
+
+(* TODO: move to an appropriate place? *)
+
+open Lwt_log
 
 (** Return short symbol and CSS style *)
-let html_log_level =
-  function
-    | Debug    -> s_ "D", "log_debug" 
-    | Info     -> s_ "I", "log_info"
-    | Notice   -> s_ "N", "log_notice"
-    | Warning  -> s_ "W", "log_warning"
-    | Error    -> s_ "E", "log_error" 
-    | Fatal    -> s_ "F", "log_fatal"
-
+let html_log_level t =
+  match t.log_event with 
+    | `Sys (_, `Message (`Debug, _))    -> Some "log_debug" 
+    | `Sys (_, `Message (`Info, _))     -> Some "log_info"
+    | `Sys (_, `Message (`Notice, _))   -> Some "log_notice"
+    | `Sys (_, `Message (`Warning, _))  -> Some "log_warning"
+    | `Sys (_, `Message (`Error, _))    -> Some "log_error" 
+    | `Sys (_, `Message (`Fatal, _))    -> Some "log_fatal"
+    | `Sys (_, `Failure _)              -> Some "log_failure"
+    | _ -> None 
