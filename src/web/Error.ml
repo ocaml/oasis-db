@@ -21,8 +21,8 @@ let () =
     catch 
       (fun () -> 
          Context.get ~sp () 
-         >|= fun ctxt ->
-         Account.box ctxt.Context.role sp)
+         >>= fun ctxt ->
+         Session.action_box ~ctxt sp)
       (fun e ->
          return 
            (error_message

@@ -144,14 +144,10 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                ]]])
 
 let template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
-  let account_box = 
-    Account.box ctxt.role sp
-  in
-    template_skeleton 
-      ~sp ?extra_headers ~title ~div_id 
-      account_box 
-      ctnt
-
-let lwt_template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
-  return
-    (template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt)
+  Session.action_box ctxt sp
+  >>= fun session_box ->
+  return 
+    (template_skeleton 
+       ~sp ?extra_headers ~title ~div_id 
+       session_box 
+       ctnt)

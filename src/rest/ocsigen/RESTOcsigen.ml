@@ -6,7 +6,6 @@ open Eliom_parameters
 open Eliom_sessions
 open Xhtml
 open XHTML.M
-open Template
 open Lwt
 open OASISVersion
 open REST

@@ -448,7 +448,7 @@ let upload_init_action =
              ~ctxt 
              (fun ctxt ->
                 upload_begin ~ctxt:ctxt.odb
-                  (Web accnt.Account.accnt_name)
+                  (Web accnt.OCAAccount.accnt_real_name)
                   tarball_fn tarball_nm publink)
          in
            upload_data_set ~sp id (Begin tsk);
@@ -505,16 +505,17 @@ let upload_with_id =
                    in
                      upload_edit_box ~ctxt ~sp id upload log
                      >>= fun edit_box ->
-                     Eliom_predefmod.Xhtml.send ~sp
-                       (upload_template ~ctxt ~sp
-                          ((p                   
-                              [pcdata 
-                                 (Printf.sprintf
-                                    (f_ "The tarball '%s' has been processed \
-                                         in %.3fs, please check and complete \
-                                         the result.")
-                                    upload.tarball_nm delay)])
-                          :: edit_box))
+                     upload_template ~ctxt ~sp
+                       ((p                   
+                           [pcdata 
+                              (Printf.sprintf
+                                 (f_ "The tarball '%s' has been processed \
+                                      in %.3fs, please check and complete \
+                                      the result.")
+                                 upload.tarball_nm delay)])
+                       :: edit_box)
+                     >>= fun page ->
+                     Eliom_predefmod.Xhtml.send ~sp page
                  end
                end
 
@@ -522,8 +523,9 @@ let upload_with_id =
                begin
                  upload_edit_box ~ctxt ~sp id upload log
                  >>= fun edit_box ->
-                 Eliom_predefmod.Xhtml.send ~sp                      
-                   (upload_template ~ctxt ~sp edit_box)
+                 upload_template ~ctxt ~sp edit_box
+                 >>= fun page -> 
+                 Eliom_predefmod.Xhtml.send ~sp page
                end
 
            | Commit (upload, task_commit) ->
@@ -561,9 +563,10 @@ let upload_with_id =
                           in
                             upload_edit_box ~ctxt ~sp id upload log
                             >>= fun edit_box ->
+                            upload_template ~ctxt ~sp edit_box
+                            >>= fun page ->
                             (* TODO: xhtml error ? *)
-                            Eliom_predefmod.Xhtml.send ~sp 
-                              (upload_template ~ctxt ~sp edit_box)
+                            Eliom_predefmod.Xhtml.send ~sp page
                         end)
                end
 
@@ -585,8 +588,9 @@ let upload_with_id =
            (* Nothing is defined, we start a new upload *)
            upload_init_box ~ctxt ~sp id
            >>= fun init_box ->
-           Eliom_predefmod.Xhtml.send ~sp 
-             (upload_template ~ctxt ~sp init_box)
+           upload_template ~ctxt ~sp init_box
+           >>= fun page ->
+           Eliom_predefmod.Xhtml.send ~sp page
          end)
 
 (** Upload counter 

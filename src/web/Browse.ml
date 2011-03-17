@@ -93,7 +93,7 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
                mp cats)
     MapStringCsl.empty
     pkg_lst
-  >|= fun categories ->
+  >>= fun categories ->
 
   begin
 

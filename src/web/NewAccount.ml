@@ -10,10 +10,11 @@ open Template
 
 let new_account_handler = 
   register
-    Account.new_account
-    (fun sp () () ->
+    Common.new_account
+    (fun sp redirect_opt () ->
+       (* TODO: use redirect_opt *)
        Context.get ~sp () 
-       >|= fun ctxt ->
+       >>= fun ctxt ->
        template 
          ~ctxt
          ~sp 
@@ -33,9 +34,9 @@ let new_account_handler =
                     If you need a username, you must create an account on \
                     OCaml forge.")];
 
-           p [a (Account.new_account_ext sp) sp 
-                [pcdata (s_ "Create an account on OCaml forge")] ()];
-
+           p [XHTML.M.a
+                ~a:[a_href (Account.new_account_ext ~ctxt sp)]
+                [pcdata (s_ "Create an account on OCaml forge")]];
 
            h3 [pcdata (s_ "Lost password")];
            p [pcdata 
@@ -44,6 +45,7 @@ let new_account_handler =
                     your password, just follow the password recovery process \
                     of the forge.")];
 
-           p [a (Account.lost_passwd_ext sp) sp
-                [pcdata (s_ "Reset your password on OCaml forge")] ()];
+           p [XHTML.M.a 
+                ~a:[a_href (Account.lost_passwd_ext ~ctxt sp)]
+                [pcdata (s_ "Reset your password on OCaml forge")]];
          ])

@@ -7,8 +7,10 @@ open ODBGettext
 type context =
     {
       odb:   ODBContext.t;
-      role:  Account.t;
       sqle:  Sqlexpr.t;
+      ocaw:  OCAWeb.t;
+      sess:  OCASession.t option;
+      accnt: OCAAccount.t option;
 
       upload_delay: float; 
       (* Delay for upload (wait for completion and refresh) *)   
@@ -33,6 +35,7 @@ let incoming_dir = mk_var "incoming directory"
 let dist_dir     = mk_var "dist directory"
 let sqle_fn      = mk_var "SQLite DB"
 let sqle         = mk_var "SQLExpr context"
+let ocaw         = mk_var "OCamlCore Web context"
 
 let init_mutex   = Lwt_mutex.create () 
 let init_cond    = Lwt_condition.create () 
@@ -56,6 +59,9 @@ let read_config () =
                     dist_dir := fun () -> dn
                 | Element ("db", [], [PCData fn]) ->
                     sqle_fn := fun () -> fn
+                | Element ("ocamlcore-api", _, _) ->
+                    (* Processed by OCAWeb.create_from_config *)
+                    ()
                 | Element (nm, _, _) ->
                     failwith 
                       (spf
@@ -82,6 +88,17 @@ let read_config () =
         failwith 
           (spf fmt dn)
   in
+
+    (* Initialize OCamlCore API *)
+    begin
+      let vocaw = 
+        OCAWeb.create_from_config 
+          ~my_account:Common.my_account
+          ~new_account:Common.new_account
+          ()
+      in
+        ocaw := fun () -> vocaw;
+    end;
 
     parse (Eliom_sessions.get_config ());
 
@@ -176,36 +193,69 @@ let get ~sp () =
            return ()
          else
            Lwt_condition.wait ~mutex:init_mutex init_cond
-       end
-       >>= fun () ->
-       Account.get ~sp () 
-       >>= fun role ->
-       return 
-         {
-           odb  = get_odb ();
-           role = role;
-           sqle = !sqle ();
+       end)
+  >>= fun () ->
+  begin
+    let ocaw = 
+      !ocaw ()
+    in
+      OCAWeb.Session.get ~ctxt:ocaw sp
+      >>= fun sess ->
+      begin
+        match sess with 
+          | Some _ ->
+              OCAWeb.Account.get ~sess ~ctxt:ocaw sp
+          | None ->
+              return None
+      end
+      >>= fun accnt ->
+      return 
+        {
+          odb   = get_odb ();
+          sqle  = !sqle ();
+          ocaw  = ocaw;
+          sess  = sess;
+          accnt = accnt;
 
-           (* TODO: load configuration *)
-           upload_delay = 5.0;
-           upload_commit_delay = 5.0;
-           upload_cancel_delay = 5.0;
-         })
+          (* TODO: load configuration *)
+          upload_delay = 5.0;
+          upload_commit_delay = 5.0;
+          upload_cancel_delay = 5.0;
+        }
+  end
+
+
+let is_anon ~ctxt () = 
+  ctxt.accnt = None
+
+let is_user ~ctxt () = 
+  ctxt.accnt <> None
+
+let admin_ids = 
+  (* TODO: configure *)
+  [0]
+
+let is_admin ~ctxt () = 
+  match ctxt.accnt with
+    | Some accnt when
+        List.mem accnt.OCAAccount.accnt_id admin_ids ->
+        true
+    | _ ->
+        false
 
 let get_user ~sp () = 
   get ~sp () 
   >>= fun ctxt -> 
-    match ctxt.role with 
-      | Account.User accnt | Account.Admin accnt ->
+    match ctxt.accnt with 
+      | Some accnt ->
           return (ctxt, accnt)
-      | Account.Anon ->
+      | None ->
           fail Common.RequiresAuth
 
 let get_admin ~sp () = 
-  get ~sp () 
-  >>= fun ctxt -> 
-    match ctxt.role with 
-      | Account.Admin accnt ->
-          return (ctxt, accnt)
-      | Account.Anon | Account.User _ ->
-          fail Common.RequiresAuth
+  get_user ~sp () 
+  >>= fun (ctxt, accnt) -> 
+    if is_admin ~ctxt () then 
+      return (ctxt, accnt)
+    else
+      fail Common.RequiresAuth

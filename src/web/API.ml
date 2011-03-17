@@ -32,7 +32,7 @@ let api_help =
     ~get_params:unit
     (fun sp path () ->
        Context.get ~sp () 
-       >|= fun ctxt ->
+       >>= fun ctxt ->
        template 
          ~ctxt 
          ~sp
@@ -41,26 +41,28 @@ let api_help =
          (RESTOcsigen.help_box ~sp  MarkdownExt.to_html ()))
 
 let login = 
-  Eliom_predefmod.Redirection.register_new_service
+  Eliom_predefmod.String_redirection.register_new_service
     ~path:(base_path @ ["login"])
     ~get_params:(string "login" ** string "password")
     (fun sp (login, password) () ->
-       return (preapply Account.login_get_ext (login, password)))
+       Context.get ~sp () 
+       >>= fun ctxt ->
+       return (Session.login_get_ext ~ctxt sp login password))
 
 let logout = 
-  Eliom_predefmod.Redirection.register_new_service
+  Eliom_predefmod.String_redirection.register_new_service
     ~path:(base_path @ ["logout"])
     ~get_params:unit
     (fun sp () () ->
-       return Account.logout_get_ext)
+       Context.get ~sp () 
+       >>= fun ctxt ->
+       return (Session.logout_get_ext ~ctxt sp))
 
 let pkg_ver_upload_no_post = 
   Eliom_predefmod.Unit.register_new_service
     ~path:(base_path @ ["upload"])
     ~get_params:unit
     (fun sp path () ->
-       Context.get ~sp () 
-       >>= fun ctxt ->
        fail (Failure (s_ "This page require POST params")))
 
 let pkg_ver_upload =
@@ -73,7 +75,7 @@ let pkg_ver_upload =
        Upload.upload_init_check tarball_fd publink
        >>= fun (tarball_fn, tarball_nm, publink) ->
        ODBUpload.upload_begin ~ctxt:ctxt.odb
-         (WebAPI accnt.Account.accnt_name)
+         (WebAPI accnt.OCAAccount.accnt_real_name)
          tarball_fn tarball_nm publink 
        >>= fun upload ->
        ODBUpload.upload_commit ~ctxt:ctxt.odb

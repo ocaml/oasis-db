@@ -23,11 +23,10 @@ let email_hide =
     Pcre.subst "$1$2...@...$3$4"
   in
     fun ~ctxt str ->
-      match ctxt.role with 
-        | Account.Admin _ | Account.User _ ->
-            str
-        | Account.Anon ->
-            Pcre.replace ~rex:email_re ~itempl:email_subst str
+      if is_admin ~ctxt () then
+        str
+      else
+        Pcre.replace ~rex:email_re ~itempl:email_subst str
 
 let oasis_fields ~ctxt ~sp pkg =
   (* TODO: link to packages that rev-depends
@@ -486,7 +485,7 @@ let page ~ctxt ~sp pkg_ver =
         | None -> 
             pkg_ver.pkg
     in
-      lwt_template 
+      template 
         ~ctxt
         ~sp 
         ~title:(BrowserAndPageTitle (browser_ttl, page_ttl)) 

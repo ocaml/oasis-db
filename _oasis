@@ -120,13 +120,12 @@ Library "oasis-db-ocsigen"
   Build$: flag(oasis_db_ocsigen)
   Modules: Common,
            Index,
-           AccountStub,
+           Session,
            Account,
            Template,
            MyAccount,
            NewAccount,
            Browse,
-           SQL,
            Log,
            Dist,
            LogBox,
@@ -149,7 +148,6 @@ Library "oasis-db-ocsigen"
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
-                pgocaml, 
                 netstring, 
                 threads, 
                 calendar,
@@ -157,7 +155,8 @@ Library "oasis-db-ocsigen"
                 cameleon.rss,
                 sexplib,
                 rest.ocsigen, 
-                sqlexpr
+                sqlexpr,
+                ocamlcore-api (>= 0.0.2)
 
 Executable test
   Path:   test
@@ -166,7 +165,7 @@ Executable test
   
 Test main
   Command: $test
-  TestTools: test, FakeIncoming
+  TestTools: test
   
 Executable inrestart 
   Path:         src/tools/inrestart

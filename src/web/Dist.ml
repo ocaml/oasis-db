@@ -147,36 +147,37 @@ let () =
               lst')
 
          >>= fun lst' ->
-         Xhtml.send ~sp
-           (template 
-              ~ctxt
-              ~sp
-              ~title:(BrowserAndPageTitle 
-                        (s_ "Dist", 
-                         Printf.sprintf
-                           (f_ "Index of /%s")
-                           (String.concat "/" lst)))
-              ~div_id:"dist"
-              [
-                table
-                  (tr
-                     (th [pcdata (s_ "Name")])
-                     [])
-                  (List.map
-                     (fun (classe, nm, path) ->
-                        tr 
-                          (td 
-                             ~a:[a_class [classe]]
-                             [Xhtml.a dist sp [pcdata nm] path])
-                          [])
+         template 
+           ~ctxt
+           ~sp
+           ~title:(BrowserAndPageTitle 
+                     (s_ "Dist", 
+                      Printf.sprintf
+                        (f_ "Index of /%s")
+                        (String.concat "/" lst)))
+           ~div_id:"dist"
+           [
+             table
+               (tr
+                  (th [pcdata (s_ "Name")])
+                  [])
+               (List.map
+                  (fun (classe, nm, path) ->
+                     tr 
+                       (td 
+                          ~a:[a_class [classe]]
+                          [Xhtml.a dist sp [pcdata nm] path])
+                       [])
 
-                     (match List.rev lst with 
-                        | _ :: tl ->
-                            (* We have an upper dir *)
-                            ("updir", "..", List.rev tl) :: lst'
-                        | [] ->
-                            lst'))
-              ])
+                  (match List.rev lst with 
+                     | _ :: tl ->
+                         (* We have an upper dir *)
+                         ("updir", "..", List.rev tl) :: lst'
+                     | [] ->
+                         lst'))
+           ]
+         >>= fun page ->
+         Xhtml.send ~sp page
        in
 
        let fn = 

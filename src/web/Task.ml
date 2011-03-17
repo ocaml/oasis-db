@@ -9,7 +9,7 @@ open Lwt_log
 
 type ('a, 'b) t =
     {
-      creator:    Account.t;
+      creator:    OCAAccount.t option;
       start_time: float;
       thrd:       ('b * float) Lwt.t;
       log:        LogBox.t;
@@ -29,7 +29,7 @@ let create ~ctxt f =
   in
     {
       start_time = Unix.gettimeofday ();
-      creator    = ctxt.role;
+      creator    = ctxt.accnt;
       thrd       = thrd;
       log        = log;
     }

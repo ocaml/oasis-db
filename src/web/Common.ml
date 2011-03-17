@@ -45,6 +45,7 @@ end
 
 exception Timeout of string
 exception RequiresAuth
+exception InsufficientAuth
 exception StateTransitionNotAllowed
 
 let home       = new_service ["home"] unit ()
@@ -52,9 +53,23 @@ let browse     = new_service ["browse"] unit ()
 let upload     = new_service ["upload"] unit ()
 let contribute = new_service ["contribute"] unit ()
 let about      = new_service ["about"] unit ()
-let view       = new_service ["view"] (suffix 
-                                         (string "pkg" ** 
-                                          ExtParams.version_option "ver")) ()
+
+let view = 
+  new_service ["view"] 
+    (suffix 
+       (string "pkg" ** 
+        ExtParams.version_option "ver")) 
+    ()
+
+let my_account =
+  new_service ["my_account"] 
+    (opt (string "redirect"))
+    ()
+
+let new_account = 
+  new_service ["new_account"]
+    (opt (string "redirect"))
+    ()
 
 (** Set style row in a table to be odd and even
   *)

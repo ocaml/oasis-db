@@ -47,7 +47,7 @@ let package_box ~ctxt ~sp pkg =
 
 let package_page ~ctxt ~sp pkg =  
   package_box ~ctxt ~sp pkg
-  >|= fun box ->
+  >>= fun box ->
   begin
     let ttl = 
       Printf.sprintf (f_ "Package %s") pkg.pkg_name

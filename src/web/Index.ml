@@ -18,7 +18,7 @@ let home_handler sp () () =
   info () 
   >>= fun t ->
   Mkd.load "introduction" 
-  >|= fun intro_html ->
+  >>= fun intro_html ->
   template 
     ~ctxt 
     ~sp 
@@ -104,7 +104,7 @@ let contribute_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
   Mkd.load "contribute"
-  >|= 
+  >>= 
   template 
     ~ctxt
     ~sp 
@@ -115,7 +115,7 @@ let about_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
   Mkd.load "about"
-  >|=
+  >>=
   template 
     ~ctxt
     ~sp 

@@ -116,9 +116,6 @@
 "src/lib/ODBSync.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBLog.ml": syntax_camlp4o, pkg_sexplib.syntax
 
-"src/web/Account.ml": syntax_camlp4o, pkg_pgocaml.syntax
-"src/web/AccountStub.ml": syntax_camlp4o, pkg_pgocaml.syntax
-
 "test/test.ml": syntax_camlp4o, pkg_camlp4.macro
 
 "test/test.byte": use_ocamlbuild
