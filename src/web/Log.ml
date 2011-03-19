@@ -143,20 +143,21 @@ let get ?offset ?limit sqle =
          (match offset, limit with 
             | None, None ->
                 exec 
-                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log"
+                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log ORDER BY timestamp DESC"
             | Some off, None ->
                 exec 
-                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log OFFSET %d"
+                  sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log ORDER BY timestamp DESC OFFSET %d"
                   off
             | None, Some lmt ->
                 exec 
-                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log LIMIT %d")
+                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log ORDER BY timestamp DESC LIMIT %d")
                   lmt
             | Some off, Some lmt ->
                 exec
-                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log LIMIT %d OFFSET %d")
-                  lmt off))
-
+                  (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+                  lmt off)
+          >>= fun lst ->
+          return (List.rev lst)) 
 
 (* TODO: move to an appropriate place? *)
 

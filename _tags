@@ -124,3 +124,4 @@
 "src/web/Sqlexpr.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 "src/web/MyAccount.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 "src/web/Log.ml": syntax_camlp4o, pkg_sqlexpr.syntax
+"src/web/Rating.ml": syntax_camlp4o, pkg_sqlexpr.syntax

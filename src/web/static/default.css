@@ -306,3 +306,117 @@ tr.even {
 #my_account .navigate span {
   margin-left: 1em;
 }
+
+/* Rating */
+.star-rating{
+  list-style:none;
+  margin: 0px;
+  padding:0px;
+  height: 16px;
+  position: relative;
+  background: url(rating-bgd.png) top left no-repeat;   
+}
+
+form.star-rating{
+  background: transparent;
+  display: block;
+}
+
+/*
+ul.star-rating{
+  float: right;
+}
+
+p.star-rating{
+  float: left;
+}
+*/
+
+.star-rating li{
+  padding:0px;
+  margin:0px;
+  height:16px;
+  width: 16px;    
+  /*\*/
+  float: left;
+  /* */
+}
+
+.star-rating li.vote-rating {
+  text-indent: 0px;
+  padding-left: 85px;
+  width: auto;    
+}
+
+.star-rating li button {
+  display:block;
+  width: 16px;
+  height: 16px;
+  line-height:16px;
+  background-color: transparent;
+  border: 0px;
+  z-index: 20;
+  position: absolute;
+  padding: 0px;
+  overflow:hidden;
+  text-indent: -9000px;
+}
+
+/*
+ * TODO: dynamic CSS to rate
+.star-rating li button:hover {
+  background: url(rating-fgd-green.png) left center;
+  z-index: 2;
+  left: 0px;
+  border:none;
+}
+
+.star-rating button.star1 {
+  left: 0px;
+}
+
+.star-rating button.star1:hover {
+  width:16px;
+}
+
+.star-rating button.star2 {
+  left:16px;
+}
+
+.star-rating button.star2:hover {
+  width: 32px;
+}
+
+.star-rating button.star3 {
+  left: 32px;
+}
+
+.star-rating button.star3:hover {
+  width: 48px;
+}
+
+.star-rating button.star4 {
+  left: 48px;
+} 
+
+.star-rating button.star4:hover {
+  width: 64px;
+}
+
+.star-rating button.star4 {
+  left: 64px;
+}
+
+.star-rating button.star4:hover {
+  width: 80px;
+}
+  */
+
+.star-rating li.current-rating {
+  background: url(rating-fgd.png) left bottom;
+  position: absolute;
+  height: 16px;
+  display: block;
+  text-indent: -9000px;
+  z-index: 1;
+}
