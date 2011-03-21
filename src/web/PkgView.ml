@@ -25,7 +25,9 @@ let package_box ~ctxt ~sp pkg =
        return (Some str))
     (fun () ->
        return None)
-  >|= fun watch_opt ->
+  >>= fun watch_opt ->
+  Comment.pkg_box ~sp ~ctxt pkg.pkg_name
+  >|= fun comment_box ->
   begin
    [
      h3 [pcdata "Uscan"];
@@ -41,7 +43,9 @@ let package_box ~ctxt ~sp pkg =
      h3 [pcdata "Versions"];
 
      p (Common.versions_field ~sp 
-          pkg_ver_lst None pkg_ver_latest)
+          pkg_ver_lst None pkg_ver_latest);
+
+     comment_box;
    ]
   end
 
