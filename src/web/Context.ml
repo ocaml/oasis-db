@@ -20,6 +20,9 @@ type context =
 
       upload_cancel_delay: float;
       (* Delay to cancel an upload *)
+
+      google_analytics_account: string option;
+      (* Google Analytics account code *)
     }
 
 let mk_var nm = 
@@ -36,6 +39,8 @@ let dist_dir     = mk_var "dist directory"
 let sqle_fn      = mk_var "SQLite DB"
 let sqle         = mk_var "SQLExpr context"
 let ocaw         = mk_var "OCamlCore Web context"
+
+let google_analytics_account = ref None
 
 let init_mutex   = Lwt_mutex.create () 
 let init_cond    = Lwt_condition.create () 
@@ -62,6 +67,9 @@ let read_config () =
                 | Element ("ocamlcore-api", _, _) ->
                     (* Processed by OCAWeb.create_from_config *)
                     ()
+                | Element ("google-analytics", ["account", code], []) ->
+                    google_analytics_account := Some code
+
                 | Element (nm, _, _) ->
                     failwith 
                       (spf
@@ -259,6 +267,8 @@ let get ~sp () =
           upload_delay = 5.0;
           upload_commit_delay = 5.0;
           upload_cancel_delay = 5.0;
+
+          google_analytics_account = !google_analytics_account;
         }
   end
 

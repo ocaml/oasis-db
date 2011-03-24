@@ -128,7 +128,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                [
                  (div ~a:[a_class ["copyright"]]
                     [
-                      pcdata (s_ "(C) Copyright 2010, ");
+                      pcdata (s_ "(C) Copyright 2010-2011, ");
                       ocamlcore_link;
                       pcdata ", ";
                       janest_link
@@ -143,11 +143,30 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                     [a about sp [pcdata (s_ "About this website")] ()]);
                ]]])
 
-let template ~ctxt ~sp ?extra_headers ~title ~div_id ctnt =
-  Session.action_box ctxt sp
-  >>= fun session_box ->
-  return 
-    (template_skeleton 
-       ~sp ?extra_headers ~title ~div_id 
-       session_box 
-       ctnt)
+let template ~ctxt ~sp ?(extra_headers=[]) ~title ~div_id ctnt =
+  let extra_headers = 
+    match ctxt.google_analytics_account with
+      | Some code ->
+          let js_code = 
+            Printf.sprintf
+              "var _gaq = _gaq || []; \n\
+               _gaq.push(['_setAccount', '%s']);\n\
+               _gaq.push(['_trackPageview']);\n\
+               (function() {\n\
+                  var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;\n\
+                  ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';\n\
+                  var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);\n\
+                })();\n"
+              code 
+          in
+            script ~contenttype:"text/javascript" (pcdata js_code) :: extra_headers
+       | None ->
+           extra_headers
+  in
+    Session.action_box ctxt sp
+    >>= fun session_box ->
+    return 
+      (template_skeleton 
+         ~sp ~extra_headers ~title ~div_id 
+         session_box 
+         ctnt)
