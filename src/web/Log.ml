@@ -7,6 +7,7 @@ open Lwt
 open ODBGettext
 open CalendarLib
 open ODBLog
+open ODBUtils
 
 module S = Sqlexpr
 
@@ -163,7 +164,7 @@ let add sqle ?timestamp (ev: ODBLog.event) =
                  S.execute db
                    (sql"INSERT INTO log (timestamp, sys, pkg, ver, event, sexp) \
                         VALUES (%s, %s?, %s?, %s?, %d, %s)")
-                   (CalendarLib.Printer.Calendar.to_string tm)
+                   (Printer.Calendar.to_string tm)
              | None ->
                  S.execute db
                    (sql"INSERT INTO log (sys, pkg, ver, event, sexp) \
@@ -302,6 +303,137 @@ let get_count ?filter sqle =
        end
        >>= fun count ->
        return count)
+
+let upload_stats sqle fst_date = 
+  let fold_decode ev = 
+    S.use sqle
+      (fun db ->
+         S.fold db
+           (fun acc (year_str, month_str, count) ->
+              year_str >>= fun year_str ->
+              month_str >>= fun month_str ->
+              count >>= fun count ->
+              return 
+                ((Calendar.lmake
+                    ~year:(int_of_string year_str)
+                    ~month:(int_of_string month_str)
+                    (),
+                  count) 
+                :: acc))
+           []
+           sql"SELECT @s{strftime('%%Y', timestamp) AS year}, \
+                      @s{strftime('%%m', timestamp) AS month}, \
+                      @d{count(*)} FROM log \
+               WHERE pkg NOT NULL AND event = %d AND timestamp >= %f \
+               GROUP BY year, month ORDER BY year DESC, month DESC"
+           (int_of_sevent ev)
+           (Calendar.to_unixfloat fst_date))
+  in
+    fold_decode `VersionCreated
+    >>= fun pkg_ver_created ->
+    fold_decode `Created
+    >>= fun pkg_created ->
+    fold_decode `Deleted
+    >>= fun pkg_deleted ->
+    begin
+      let comp_yearmonth c1 c2 = 
+        match (Calendar.year c1) - (Calendar.year c2) with 
+          | 0 ->
+              compare (Calendar.month c1) (Calendar.month c2)
+          | n ->
+              n
+      in
+
+      let lst_date =
+        let rec lst_date' = 
+          function 
+            | [] ->
+                lst_date' [Calendar.now ()]
+            | hd :: _ as lst ->
+                let nhd = 
+                  match Calendar.year hd, Calendar.month hd with 
+                    | year, Calendar.Jan ->
+                        Calendar.lmake ~year:(year - 1) ~month:12 ()
+                    | year, _ ->
+                        Calendar.lmake 
+                          ~year
+                          ~month:(let imonth = 
+                                    Date.int_of_month 
+                                      (Calendar.month hd)
+                                  in
+                                    imonth - 1)
+                          ()
+                in
+
+                let cmp = 
+                  comp_yearmonth nhd fst_date 
+                in
+                  if cmp = 0 then
+                    nhd :: lst
+                  else if cmp < 0 then 
+                    lst
+                  else
+                    lst_date' (nhd :: lst)
+        in
+          lst_date' []
+      in
+
+      let rec combine num_pkg lst_date pkg_ver_created pkg_created pkg_deleted =
+        let pick_match date lst f dflt = 
+          match lst with 
+            | (date', v) :: tl ->
+                if comp_yearmonth date date' = 0 then
+                  (f v), tl
+                else
+                  dflt, lst
+            | [] ->
+                dflt, lst
+        in
+
+          match lst_date with 
+            | cur_date :: tl_date ->
+                begin
+                  let num_pkg, pkg_created = 
+                    pick_match 
+                      cur_date 
+                      pkg_created 
+                      (fun v -> num_pkg + v)
+                      num_pkg
+                  in
+                  let num_pkg, pkg_deleted =
+                    pick_match
+                      cur_date
+                      pkg_deleted
+                      (fun v -> num_pkg - v)
+                      num_pkg
+                  in
+                  let uploads, pkg_ver_created =
+                    pick_match 
+                      cur_date
+                      pkg_ver_created
+                      (fun v -> v)
+                      0                      
+                  in
+                    (cur_date, num_pkg, uploads) :: 
+                    (combine 
+                       num_pkg 
+                       tl_date 
+                       pkg_ver_created 
+                       pkg_created 
+                       pkg_deleted)
+                end
+
+            | [] ->
+                (* TODO: warning if all lists are not empty *)
+                []
+      in
+
+      let res =
+        combine 0 lst_date pkg_ver_created pkg_created pkg_deleted
+      in
+        return res
+    end
+
 
 (* TODO: move to an appropriate place? *)
 

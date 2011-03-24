@@ -481,17 +481,9 @@ let start ~ctxt log prev_log_event =
          if Sys.is_directory fn then
            (* Maybe a version *)
            PkgVer.add ~ctxt pkg_str fn 
-           >>= fun (date, ev, pkg_ver) ->
-           begin
-             let min_date = 
-               if CalendarLib.Calendar.compare 
-                    min_date date > 0 then
-                 date
-               else
-                 min_date
-             in
-               return (min_date, (date, ev) :: acc)
-           end
+           >|= fun (date, ev, pkg_ver) ->
+           (min_calendar min_date date, 
+            (date, ev) :: acc)
          else
            return (min_date, acc))
       dn (min_date, acc)

@@ -21,4 +21,5 @@ And also: [ocaml-inotify](http://projects.snarc.org/ocaml-inotify/),
 [ocaml-gettext](https://forge.ocamlcore.org/projects/ocaml-gettext), 
 [lwt](http://ocsigen.org/lwt/)...
 
-We also use online webservices: [Google analytics](https://www.google.com/analytics)
+We also use online webservices: [Google analytics](https://www.google.com/analytics), 
+[Google Charts](http://code.google.com/intl/fr/apis/chart/)

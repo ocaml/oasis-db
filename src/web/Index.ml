@@ -12,6 +12,86 @@ open Template
 open Common
 open Feeds
 
+let upload_chart ~ctxt () = 
+  begin
+    let fst_date = 
+      let month_ago =
+        Calendar.rem
+          (Calendar.now ()) 
+          (Calendar.Period.month 11)
+      in
+        Calendar.lmake
+          ~year:(Calendar.year month_ago)
+          ~month:(Date.int_of_month (Calendar.month month_ago))
+          ()
+    in
+      Log.upload_stats ctxt.Context.sqle fst_date
+  end
+  >|= fun lst ->
+  begin
+    let catmap ?(sep=",") f = 
+      String.concat sep (List.map f lst)
+    in
+    let axis_month = 
+      catmap ~sep:"|"
+        (fun (date, _, _) -> 
+           Printer.Calendar.sprint "%b" date)
+    in
+    let axis_year =
+      let lst =
+        List.map
+          (fun (date, _, _) ->
+             Printer.Calendar.sprint "%Y" date)
+          lst
+      in
+      let rec dedup prev_opt lst = 
+        match prev_opt, lst with
+          | None, hd :: tl ->
+              hd :: (dedup (Some hd) tl)
+          | Some y, hd :: tl ->
+              if y = hd then
+                "" :: (dedup prev_opt tl)
+              else
+                hd :: (dedup (Some hd) tl)
+          | _, [] ->
+              []
+      in
+        String.concat "|" (dedup None lst)
+    in
+    let num_pkg = 
+      catmap 
+        (fun (_, num_pkg, _) ->
+           string_of_int num_pkg)
+    in
+    let uploads =
+      catmap
+        (fun (_, _, uploads) ->
+           string_of_int uploads)
+    in
+      img
+        ~alt:"Package uploads graph"
+        ~src:(uri_of_string
+                (Printf.sprintf
+                   "http://chart.googleapis.com/chart?\
+                      chxl=0:|%s|1:|%s|2:|10|20|30|50|100|&chxt=x,x,y&\
+                      cht=bvg&chs=401x187&\
+                      chd=t1:%s|%s&\
+                      chm=D,000000,1,0,3,1&\
+                      chco=E6E6E6&\
+                      chf=bg,s,EEEEEE00"
+                 axis_month axis_year
+                 uploads num_pkg))
+        ()
+  end
+        
+
+    (* TODO: activate when offline 
+          img 
+            ~alt:"Package uploads graph"
+            ~src:(mk_static_uri sp ["chart-upload.png"])
+            ();
+     *)
+
 let home_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
@@ -19,6 +99,8 @@ let home_handler sp () () =
   >>= fun t ->
   Mkd.load "introduction" 
   >>= fun intro_html ->
+  upload_chart ~ctxt ()
+  >>= fun upload_chart_box ->
   template 
     ~ctxt 
     ~sp 
@@ -71,10 +153,8 @@ let home_handler sp () () =
       div ~a:[a_class ["statistics"]]
         [
           h2 [pcdata "Statistics"];
-          img 
-            ~alt:"Package uploads graph"
-            ~src:(mk_static_uri sp ["chart-upload.png"])
-            ();
+          upload_chart_box;
+
           p 
             [pcdata 
               (Printf.sprintf 
