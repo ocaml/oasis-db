@@ -3,6 +3,7 @@ open Lwt
 open Eliom_parameters
 open Eliom_sessions
 open Eliom_services
+open ODBLog
 open ODBPkgVer
 open OASISVersion
 open CalendarLib
@@ -19,29 +20,68 @@ type t =
     no_oasis:     int;
   }
 
-let info () = 
-  (* Get the n elements in front of the list *)
-  let rec nhd n lst = 
-    if n > 0 then 
-      match lst with 
-      | hd :: tl ->
-          hd :: (nhd (n - 1) tl)
-      | [] ->
-          []
-    else
-      []
-  in
-
+let info ~ctxt () = 
   let nlatest = 
     20
   in
 
+  let sqle = 
+    ctxt.Context.sqle
+  in
+
+  begin
+    Log.get_rev ~filter:(`Event `VersionCreated) ~limit:1 sqle
+    >|= 
+      function 
+        | first :: _ ->
+            first.log_timestamp
+        | [] ->
+            CalendarLib.Calendar.now ()
+  end
+  >>= fun first_date ->
+
+  Log.get_count ~filter:(`Event `VersionCreated) sqle
+  >>= fun num_uploads ->
+
+  begin
+    Log.get ~filter:(`Event `VersionCreated) ~limit:nlatest sqle
+    >>= fun log_latest ->
+    let latest = 
+      (List.fold_left 
+         (fun acc ->
+            function
+              | {log_event = `Pkg (pkg_str, `VersionCreated ver)} ->
+                  (pkg_str, OASISVersion.string_of_version ver) :: acc
+              | _ ->
+                  acc)
+         []
+         log_latest)
+    in
+      Lwt_list.fold_left_s
+        (fun acc (pkg_str, ver_str) ->
+           catch 
+             (fun () ->
+                ODBStorage.PkgVer.find pkg_str ver_str
+                >>= fun pkg_ver ->
+                return (pkg_ver :: acc))
+             (function 
+                | Not_found ->
+                    ODBMessage.warning ~ctxt:ctxt.Context.odb 
+                      (f_ "Latest upload of package's version %s v%s not found")
+                      pkg_str ver_str
+                    >>= fun () ->
+                    return acc
+                | e ->
+                    fail e))
+        []
+        latest
+  end
+  >>= fun latest ->
+
   ODBStorage.Pkg.elements () 
   >>= fun pkg_lst -> 
-  Lwt_list.fold_left_s
-    (fun t {ODBPkg.pkg_name = pkg_str} ->
-      ODBStorage.PkgVer.elements pkg_str
-      >>= fun ver_lst ->
+  Lwt_list.filter_p
+    (fun {ODBPkg.pkg_name = pkg_str} ->
       ODBStorage.PkgVer.latest pkg_str
       >>= fun ver_latest ->
       ODBStorage.PkgVer.filename 
@@ -49,66 +89,17 @@ let info () =
         (OASISVersion.string_of_version ver_latest.ver)
         `OASIS
       >>= fun oasis_fn ->
-
-      (* Try to find a date older *)
-      let first_date = 
-        List.fold_left 
-          (fun frst ver ->
-            if Calendar.compare ver.upload_date frst < 0 then
-              ver.upload_date
-            else
-              frst)
-          t.first_date
-          ver_lst
-      in
-
-      (* We are interested in the most recent
-       * version of a package, in term of date
-       * and among this among the most recent
-       * in term of date for all packages
-       *)
-      let higher_versions = 
-        nhd nlatest (List.rev ver_lst)
-      in
-      let latest = 
-        nhd nlatest
-          (List.sort 
-            (fun v1 v2 ->
-              Calendar.compare v2.upload_date v1.upload_date)
-            (t.latest @ higher_versions))
-      in
-
-      (* Number of uploads = number of versions, no reason
-       * to upload twice the same 
-       *)
-      let num_uploads = 
-        t.num_uploads + List.length ver_lst
-      in
-
-      (* Count the number of missing oasis files 
-       *)
-      let no_oasis =
-        if Sys.file_exists oasis_fn then
-          t.no_oasis
-        else
-          t.no_oasis + 1 
-      in
-
-        return 
-          {t with 
-            num_uploads = num_uploads; 
-            latest      = latest;
-            first_date  = first_date;
-            no_oasis    = no_oasis})
-
-    {
-      num_packages = List.length pkg_lst;
-      num_uploads  = 0;
-      latest       = [];
-      first_date   = Calendar.now ();
-      no_oasis     = 0;
-    }
+      return (not (Sys.file_exists oasis_fn)))
     pkg_lst
+  >|= fun pkg_without_oasis_lst ->
+
+  {
+    num_packages = List.length pkg_lst;
+    num_uploads  = num_uploads;
+    latest       = latest;
+    first_date   = first_date;
+    no_oasis     = List.length pkg_without_oasis_lst;
+  }
 
 let rss2 = 
   new_service
@@ -126,7 +117,9 @@ let rss2_handler =
   Eliom_predefmod.Text.register
     rss2
     (fun sp _ _ ->
-       info () 
+       Context.get ~sp ()
+       >>= fun ctxt ->
+       info ~ctxt () 
        >>= fun t ->
        begin
          try 

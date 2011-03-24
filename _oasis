@@ -87,8 +87,6 @@ Library "oasis-db"
            ODBInotify,
            ODBCompletion,
            ODBIncoming,
-           ODBMain,
-           ODBRunner,
            ODBOASIS,
            ODBProvides,
            ODBDeps,

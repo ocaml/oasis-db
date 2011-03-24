@@ -168,6 +168,14 @@ let get_odb () =
       (!incoming_dir ())
 
 let init () = 
+  let () = 
+    read_config ()
+  in
+
+  let log ~timestamp ev = 
+    Log.add ~timestamp (!sqle ()) ev
+  in
+
   Lwt_mutex.with_lock init_mutex
     (fun () ->
        begin
@@ -182,8 +190,38 @@ let init () =
          init_val := true;
          return ()
        end)
-  >|= 
-  Lwt_condition.broadcast init_cond
+  >>= fun () ->
+  return (Lwt_condition.broadcast init_cond ())
+  >>= fun () ->
+
+  (* Initialize storage and only generate log event that are not already
+   * in the DB 
+   *)
+  Log.get ~filter:(`Event `Created) (!sqle ())
+  >>= fun pkg_created_evs ->
+  Log.get ~filter:(`Event `VersionCreated) (!sqle ())
+  >>= fun pkg_ver_created_evs ->
+  ODBStorage.start
+    ~ctxt:(get_odb ()) 
+    log
+    (List.rev_append pkg_created_evs pkg_ver_created_evs)
+  >>= fun () ->
+
+  (* Start incoming watch *)
+  begin
+    let _bkgrd_job = 
+    (* TODO: get a semaphore to stop this background job *)
+    ODBIncoming.start
+      ~ctxt:(get_odb ()) 
+      log
+    in
+      return ()
+  end 
+  >>= fun () ->
+
+  Log.add (!sqle ()) 
+    (`Sys ("oasis-db web context", `Started))
+
 
 let get ~sp () = 
   Lwt_mutex.with_lock init_mutex

@@ -184,13 +184,18 @@ struct
           }
         in
           HLS.add all pkg_str t
-          >>= fun () ->
-          return t
       end
-      >>= fun t ->
-      info ~ctxt (f_ "New package %s") pkg_str
       >>= fun () ->
-      return t.pkg
+      begin
+        let date =
+          CalendarLib.Calendar.from_unixfloat
+            (Unix.stat storage_fn).Unix.st_mtime
+        in
+          return
+            (date,
+             `Pkg (pkg_str, `Created),
+             pkg)
+      end
 
   (** Create a package *)
   let create ~ctxt pkg = 
@@ -357,13 +362,15 @@ struct
           }
         in
           HLS.add pkg_vers ver_str t
-          >>= fun () ->
-          return t 
       end 
-      >>= fun t ->
-      info ~ctxt (f_ "New version %s/%s") pkg_str ver_str
       >>= fun () ->
-      return t.pkg_ver
+      begin
+        return 
+          (pkg_ver.ODBPkgVer.upload_date,
+           `Pkg (pkg_ver.ODBPkgVer.pkg, 
+                 `VersionCreated pkg_ver.ODBPkgVer.ver),
+           pkg_ver)
+      end
 
   (** Create a package version 
     *)
@@ -441,35 +448,97 @@ struct
 end
 
 
-let init ~ctxt () = 
+let start ~ctxt log prev_log_event = 
 
-  let add_versions pkg_str dn =
+  let module SetMergeLog = 
+    Set.Make
+      (struct
+         type t = CalendarLib.Calendar.t * ODBLog.event
+
+         let compare (_, ev1) (_, ev2) = 
+           Pervasives.compare ev1 ev2
+       end)
+  in
+
+  (* Merge two log event lists, used to synchronize logs returned by package and
+   * package_version addition with the content of the DB.  Return a set of
+   * elements that are new in the first lst.
+   *)
+  let merge_log lst lst' = 
+    let to_set = 
+      List.fold_left 
+        (fun st e -> SetMergeLog.add e st) 
+        SetMergeLog.empty
+    in
+    let st  = to_set lst in
+    let st' = to_set lst' in
+      SetMergeLog.diff st st'
+  in
+
+  let add_versions pkg_str dn (min_date, acc) =
     ODBFileUtil.fold_dir 
-      (fun fn bn () ->
+      (fun fn bn (min_date, acc) ->
          if Sys.is_directory fn then
            (* Maybe a version *)
            PkgVer.add ~ctxt pkg_str fn 
-           >>= fun _ ->
-           return ()
+           >>= fun (date, ev, pkg_ver) ->
+           begin
+             let min_date = 
+               if CalendarLib.Calendar.compare 
+                    min_date date > 0 then
+                 date
+               else
+                 min_date
+             in
+               return (min_date, (date, ev) :: acc)
+           end
          else
-           return ())
-      dn ()
+           return (min_date, acc))
+      dn (min_date, acc)
   in
 
-  let add_packages dn = 
+  let add_packages dn acc = 
     ODBFileUtil.fold_dir 
-      (fun fn bn () ->
+      (fun fn bn acc ->
          if Sys.is_directory fn then
            (* Maybe a package *)
            Pkg.add ~ctxt fn
-           >>= fun {ODBPkg.pkg_name = pkg_str} ->
-           add_versions pkg_str fn
+           >>= fun (date, ev, {ODBPkg.pkg_name = pkg_str}) ->
+           add_versions pkg_str fn (date, acc)
+           >>= fun (min_date, acc) ->
+           return ((min_date, ev) :: acc)
          else
-           return ())
-      dn ()
+           return acc)
+      dn acc
   in
 
-    add_packages ctxt.dist_dir 
+    add_packages ctxt.dist_dir []
+    >>= fun new_evs ->
+    (* Only log real new events *)
+    begin
+      let st_new = 
+        merge_log new_evs 
+          (List.rev_map 
+             (fun log ->
+                log.ODBLog.log_timestamp,
+                log.ODBLog.log_event)
+             prev_log_event)
+      in
+      let tasks =
+        SetMergeLog.fold 
+          (fun (timestamp, ev) acc ->
+             (log ~timestamp ev) :: acc)
+          st_new
+          []
+      in
+        Lwt.join tasks
+    end
+    >>= fun () ->
+    log 
+      ~timestamp:(CalendarLib.Calendar.now ())
+      (`Sys 
+         (Printf.sprintf "ODBStorage(%s)" ctxt.dist_dir, 
+          `Started))
 
 
 let check ~ctxt () = 

@@ -151,16 +151,18 @@ let upload_commit ~ctxt t =
     begin
       function 
         | true ->
-            return ()
+            return []
         | false ->
             ODBStorage.Pkg.create ~ctxt pkg_ver.ODBPkgVer.pkg
-            >>= fun _ ->
-            return ()
+            >>= fun (timestamp, ev, _) ->
+            return [timestamp, ev]
     end 
-    >>= fun () ->
+    >>= fun evs ->
 
     ODBStorage.PkgVer.create ~ctxt pkg_ver t.tarball_fd
-    >>= fun pkg_ver ->
+    >>= fun (timestamp, ev, pkg_ver) ->
+    return ((timestamp, ev) :: evs)
+    >>= fun evs ->
 
     (* Create _oasis and _oasis.pristine *)
     begin
@@ -189,7 +191,7 @@ let upload_commit ~ctxt t =
     >>= fun () ->
     begin
       safe_clean t;
-      return pkg_ver
+      return (List.rev evs, pkg_ver)
     end
 
 let upload_rollback ~ctxt t = 

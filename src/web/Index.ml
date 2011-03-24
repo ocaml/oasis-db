@@ -15,7 +15,7 @@ open Feeds
 let home_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
-  info () 
+  info ~ctxt () 
   >>= fun t ->
   Mkd.load "introduction" 
   >>= fun intro_html ->

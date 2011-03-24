@@ -45,8 +45,10 @@ let tests =
          >>= fun sync ->
 
          (* Scan all the storage and add files to sync *)
-         ODBStorage.init ~ctxt () 
-         >>= fun () ->
+         ODBStorage.start ~ctxt 
+           (fun ~timestamp _ -> return ())
+           []
+         >>= fun _ ->
          ODBStorage.Pkg.elements () 
          >>=
          Lwt_list.fold_left_s
