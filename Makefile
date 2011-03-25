@@ -101,18 +101,23 @@ ocsigen-run:
 db-create:
 	./src/sql/install.sh
 
-# Sync dev
-DEV_HOST=ssh.ocamlcore.org
-DEV_DIR=/home/groups/oasis/oasis-server-dev/
-DEV_SYNC_DEST=$(DEV_HOST):$(DEV_DIR)
-dev-sync: build
-	ssh $(DEV_HOST) "cd $(DEV_DIR) && ./src/tools/oasis-server-stop.sh || true"
-	rsync -av Makefile src etc _build/src/web/oasis-server $(DEV_SYNC_DEST)
-	ssh $(DEV_HOST) "cd $(DEV_DIR) && ./src/tools/oasis-server-start.sh"
+# Deploy dev
+OCSIGEN_BUNDLER=ocsigen-bundler
+deploy-dev:
+	$(OCSIGEN_BUNDLER) \
+		--verbose \
+		--conf etc/ocsigen-dev.conf \
+		--target _build/tgt-dev \
+		--mkdir data/incoming \
+		--mkdir data/dist \
+		--mkdir tmp \
+		--copy-dir src/web/static static \
+		--copy-dir src/web/mkd mkd \
+		--port 8080 \
+		--copy-file patches/META.cameleon lib/ocaml/METAS \
+		--copy-file patches/META.sqlexpr  lib/ocaml/sqlexpr/META \
+		--copy-file patches/META.sexplib  lib/ocaml/sexplib/META \
+		--deploy-host ssh.ocamlcore.org \
+		--deploy-dir /home/groups/oasis/ocsigen/dev/ 
 
-dev-stop: 
-	./src/tools/oasis-server-stop.sh || true
-
-dev-restart:
-	./src/tools/oasis-server-stop.sh || true
-	./src/tools/oasis-server-start.sh
+.PHONY: deploy-dev

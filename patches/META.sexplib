@@ -1,0 +1,19 @@
+name = "sexplib"
+version = "4.2.16"
+description = "Sexplib - automated S-expression conversions"
+
+requires = "sexplib.core"
+requires(toploop) = "sexplib.top"
+
+package "core" (
+  requires = "unix, bigarray, num"
+  archive(byte) = "sexplib.cma"
+  archive(native) = "sexplib.cmxa"
+)
+
+package "top" (
+  requires = "sexplib.core"
+  archive(byte) = "sexplib_top.cma"
+  archive(native) = "sexplib_top.cmxa"
+)
+

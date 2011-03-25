@@ -1,0 +1,10 @@
+# META for cameleon
+version="1.9.19"
+directory="+cameleon"
+
+package "rss" (
+  requires = "unix xml-light"
+  version = "1.9.19"
+  archive(byte)="rss.cma"
+  archive(native)="rss.cmxa"
+)
