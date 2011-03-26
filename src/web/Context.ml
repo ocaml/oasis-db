@@ -9,6 +9,7 @@ type context =
       odb:   ODBContext.t;
       sqle:  Sqlexpr.t;
       ocaw:  OCAWeb.t;
+      mkd:   Mkd.t;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
 
@@ -42,6 +43,8 @@ let ocaw         = mk_var "OCamlCore Web context"
 
 let google_analytics_account = ref None
 
+let mkd_dir      = ref "src/web/mkd"
+
 let init_mutex   = Lwt_mutex.create () 
 let init_cond    = Lwt_condition.create () 
 let init_val     = ref false
@@ -62,6 +65,8 @@ let read_config () =
                     incoming_dir := fun () -> dn
                 | Element ("dir", ["rel", "dist"], [PCData dn]) ->
                     dist_dir := fun () -> dn
+                | Element ("dir", ["rel", "mkd"], [PCData dn]) ->
+                    mkd_dir := dn
                 | Element ("db", [], [PCData fn]) ->
                     sqle_fn := fun () -> fn
                 | Element ("ocamlcore-api", _, _) ->
@@ -260,6 +265,7 @@ let get ~sp () =
           odb   = get_odb ();
           sqle  = !sqle ();
           ocaw  = ocaw;
+          mkd   = {Mkd.mkd_dir = !mkd_dir};
           sess  = sess;
           accnt = accnt;
 

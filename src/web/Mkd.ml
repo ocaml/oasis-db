@@ -3,11 +3,14 @@ open Lwt
 open Markdown
 open XHTML.M
 
-let mkd_dir = "src/web/mkd"
+type t =
+    {
+      mkd_dir: string;
+    }
 
-let load nm = 
+let load t nm = 
   LwtExt.IO.with_file_content 
-    (FilePath.concat mkd_dir (nm^".mkd")) 
+    (FilePath.concat t.mkd_dir (nm^".mkd")) 
   >>= fun txt ->
   return 
     (MarkdownHTML.to_html

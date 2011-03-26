@@ -97,7 +97,7 @@ let home_handler sp () () =
   >>= fun ctxt ->
   info ~ctxt () 
   >>= fun t ->
-  Mkd.load "introduction" 
+  Mkd.load ctxt.Context.mkd "introduction" 
   >>= fun intro_html ->
   upload_chart ~ctxt ()
   >>= fun upload_chart_box ->
@@ -183,7 +183,7 @@ let home_handler sp () () =
 let contribute_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
-  Mkd.load "contribute"
+  Mkd.load ctxt.Context.mkd "contribute"
   >>= 
   template 
     ~ctxt
@@ -194,7 +194,7 @@ let contribute_handler sp () () =
 let about_handler sp () () =
   Context.get ~sp () 
   >>= fun ctxt ->
-  Mkd.load "about"
+  Mkd.load  ctxt.Context.mkd "about"
   >>=
   template 
     ~ctxt
