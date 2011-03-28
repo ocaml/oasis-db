@@ -12,6 +12,7 @@ type context =
       mkd:   Mkd.t;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
+      admin: int list;
 
       upload_delay: float; 
       (* Delay for upload (wait for completion and refresh) *)   
@@ -45,6 +46,8 @@ let google_analytics_account = ref None
 
 let mkd_dir      = ref "src/web/mkd"
 
+let admin        = ref []
+
 let init_mutex   = Lwt_mutex.create () 
 let init_cond    = Lwt_condition.create () 
 let init_val     = ref false
@@ -69,6 +72,8 @@ let read_config () =
                     mkd_dir := dn
                 | Element ("db", [], [PCData fn]) ->
                     sqle_fn := fun () -> fn
+                | Element ("user", ["role", "admin"], [PCData id_str]) ->
+                    admin := (int_of_string id_str) :: !admin
                 | Element ("ocamlcore-api", _, _) ->
                     (* Processed by OCAWeb.create_from_config *)
                     ()
@@ -268,6 +273,7 @@ let get ~sp () =
           mkd   = {Mkd.mkd_dir = !mkd_dir};
           sess  = sess;
           accnt = accnt;
+          admin = !admin;
 
           (* TODO: load configuration *)
           upload_delay = 5.0;
@@ -285,17 +291,18 @@ let is_anon ~ctxt () =
 let is_user ~ctxt () = 
   ctxt.accnt <> None
 
-let admin_ids = 
-  (* TODO: configure *)
-  [0]
-
-let is_admin ~ctxt () = 
-  match ctxt.accnt with
-    | Some accnt when
-        List.mem accnt.OCAAccount.accnt_id admin_ids ->
-        true
-    | _ ->
-        false
+let is_admin ~ctxt ?accnt () = 
+  let accnt =
+    match accnt with
+      | Some accnt -> accnt
+      | None -> ctxt.accnt
+  in
+    match accnt with
+      | Some accnt when
+          List.mem accnt.OCAAccount.accnt_id ctxt.admin ->
+          true
+      | _ ->
+          false
 
 let get_user ~sp () = 
   get ~sp () 
