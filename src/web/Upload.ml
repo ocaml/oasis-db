@@ -288,7 +288,7 @@ let upload_preview_box ~ctxt ~sp id upload =
       let pkg_ver = 
         pkg_ver_of_upload upload
       in
-        PkgVerView.box ~ctxt ~sp
+        PkgVerView.box ~ctxt:(Context.anonymize ctxt) ~sp
           pkg_ver 
           (fun () ->
              return 

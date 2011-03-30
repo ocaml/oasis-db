@@ -320,3 +320,7 @@ let get_admin ~sp () =
       return (ctxt, accnt)
     else
       fail Common.RequiresAuth
+
+(* Make a context belong to anon *)
+let anonymize ctxt =
+  {ctxt with accnt = None; sess = None}
