@@ -1,0 +1,3 @@
+tarball=ocaml-data-notation-0.0.3.tar.gz
+deps=oUnit,type-conv
+is_library=true

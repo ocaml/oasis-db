@@ -225,9 +225,7 @@ let pkg_box_handler ~sp ~ctxt pkg ver_opt =
     mkd >>= fun mkd ->
     timestamp >>= fun timestamp ->
 
-    OCAAccount.of_id 
-      ~ctxt:(OCAWeb.to_oca_context ctxt.Context.ocaw)
-      user_id
+    Account.of_id ~ctxt user_id
     >>= fun user_accnt ->
 
     begin

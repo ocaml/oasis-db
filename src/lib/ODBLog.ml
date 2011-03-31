@@ -29,6 +29,7 @@ type sys_event =
     | `Stopped
     | `Failure of string 
     | `Message of sys_event_level * string
+    | `VersionSet of string * string * (version option)
     ] with sexp
 
 type event =
@@ -91,5 +92,15 @@ let to_string t =
                         | `Debug   -> "Debug"
                     in
                       spf "%s: %s" lvl_str str
+                  end
+              | `VersionSet (pkg, repo, ver_opt) ->
+                  begin
+                    match ver_opt with
+                      | Some ver ->
+                          spf "Version %s set for package %s in repository %s"
+                            (sov ver) pkg repo
+                      | None ->
+                          spf "Remove pkg %s from repository %s"
+                            pkg repo
                   end
           end

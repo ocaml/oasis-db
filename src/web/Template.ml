@@ -19,6 +19,7 @@ let mk_static_uri sp path =
 type title =
   | OneTitle of string 
   | BrowserAndPageTitle of string * string 
+  | NoTitle
 
 let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt = 
   let mk_static_uri path =
@@ -51,16 +52,20 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
       ["jane-street-logo_badge.png"]
   in
 
-  let browser_ttl, page_ttl =
+  let browser_ttl, page_ttl_opt =
     match title with
-      | OneTitle ttl -> ttl, ttl
-      | BrowserAndPageTitle (bttl, pttl) -> bttl, pttl
+      | OneTitle (bttl as pttl) 
+      | BrowserAndPageTitle (bttl, pttl) -> 
+          Printf.sprintf (f_ "OASIS DB: %s") bttl,
+          Some pttl
+      | NoTitle ->
+          s_ "OASIS DB", 
+          None
   in
     html 
       (head 
          (XHTML.M.title 
-            (pcdata 
-               (Printf.sprintf "OASIS DB: %s" browser_ttl)))
+            (pcdata browser_ttl))
          (link ~a:[a_rel [`Stylesheet];
                    a_href (mk_static_uri ["default.css"]);
                    a_type "text/css"] ()
@@ -81,17 +86,6 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
              account_box;
 
              div ~a:[a_id "menu"]
-             (*
-               [Eliom_tools.menu
-                  ~id:"menu"
-                  (home (), [pcdata (s_ "Home")])
-                  [
-                    browse (),     [pcdata (s_ "Browse")];
-                    upload (),     [pcdata (s_ "Upload")];
-                    contribute (), [pcdata (s_ "Contribute")];
-                  ]
-                  ~sp ()];
-              *)
                [ul
                   (li [a home sp       [pcdata (s_ "Home")] ()])
                   [li [a browse sp     [pcdata (s_ "Browse")] ()];
@@ -122,7 +116,11 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
 
              div ~a:[a_id "content"]
                [div ~a:[a_id div_id]
-                  ((h1 [pcdata page_ttl]) :: ctnt)];
+                  (match page_ttl_opt with 
+                     | Some page_ttl ->
+                         (h1 [pcdata page_ttl]) :: ctnt
+                     | None ->
+                         ctnt)];
 
              div ~a:[a_id "footer"]
                [

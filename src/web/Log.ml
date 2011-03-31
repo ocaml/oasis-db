@@ -49,6 +49,7 @@ type sevent =
   | `VersionDeleted
   | `Message of sys_event_level
   | `Failure
+  | `VersionSet
   ]
 
 let int_of_sevent = 
@@ -69,47 +70,7 @@ let int_of_sevent =
     | `Message `Info         -> 14
     | `Message `Debug        -> 15
     | `Failure               -> 16
-
-(* TODO: remove
-let sevent_of_int = 
-  let max, assoc = 
-    List.fold_left
-      (fun (mx, assoc) ev -> 
-         let i = 
-           int_of_sevent ev
-         in
-           max mx i,
-           (i, ev) :: assoc)
-      (0, [])
-      [`Created; 
-       `Deleted; 
-       `Rated; 
-       `Commented; 
-       `UscanChanged; 
-       `Started; 
-       `Stopped;
-       `VersionCreated;
-       `VersionDeleted;
-       `Message `Fatal;
-       `Message `Error;
-       `Message `Warning;
-       `Message `Notice;
-       `Message `Info;
-       `Message `Debug;
-       `Failure;
-      ]
-  in
-  let arr = 
-    Array.make (max + 1) `Undefined
-  in
-  let () =
-    List.iter 
-      (fun (i, ev) ->
-         arr.(i) <- ev)
-      assoc
-  in
-    fun i -> arr.(i)
- *)
+    | `VersionSet            -> 17
 
 let add sqle ?timestamp (ev: ODBLog.event) =  
   let sevent_of_xxx_event = 
@@ -119,6 +80,7 @@ let add sqle ?timestamp (ev: ODBLog.event) =
       | `VersionDeleted _ -> `VersionDeleted
       | `Failure _        -> `Failure
       | `Message (lvl, _) -> `Message lvl
+      | `VersionSet _     -> `VersionSet
       | `Created
       | `Deleted
       | `UscanChanged

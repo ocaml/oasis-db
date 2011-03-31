@@ -90,7 +90,79 @@ let odd_even_table ?caption ?columns hd tl =
       ?columns 
       (addto_class1 "odd" hd)
       (set_class false tl)
+
+(** Split into n-column, using table 
+  *)
+let ncol_table ?a ?(mk_table=odd_even_table ?caption:None ?columns:None) n empty_tr lst =
+  let () =
+    if n <= 0 then
+      invalid_arg "ncol_table(0)"
+  in
+
+  let rec split prev_acc hd_acc next_acc lst = 
+    let e, tl =
+      match lst with
+        | hd :: tl -> hd, tl
+        | [] -> empty_tr, []
+    in
+    let prev_acc = 
+      (e :: hd_acc) :: prev_acc
+    in
+      match next_acc, tl with
+        | hd_acc :: next_acc, _ ->
+            split prev_acc hd_acc next_acc tl
+        | [], [] ->
+            List.rev_map List.rev prev_acc
+
+        | [], tl ->
+            begin 
+              match List.rev prev_acc with 
+                | hd_acc :: next_acc ->
+                    split [] hd_acc next_acc tl
+                | [] ->
+                    invalid_arg "ncol_table(1)"
+            end
+  in
+  
+  let col_lst =
+    split 
+      [] (* prev *)
+      [] (* cur *)
+      (Array.to_list (Array.make (n - 1) [])) (* next *)
+      lst
+  in
+
+  let table =
+    match col_lst with 
+      | hd :: tl ->
+          let classe =
+            Printf.sprintf 
+              "col-%02dpercent"
+              (100 / n)
+          in
+          let mk_td lst =
+            let ctnt =
+              match lst with 
+                | hd :: tl ->
+                    mk_table hd tl
+                | [] ->
+                    invalid_arg "ncol_table(3)"
+            in
+              td ~a:[a_class [classe]] [ctnt]
+          in
+            table 
+              ?a
+              (tr
+                 (mk_td hd)
+                 (List.map mk_td tl))
+              []
+
+      | [] ->
+          invalid_arg "ncol_table(4)"
+  in
+    table
         
+
 let rec html_flatten sep =
   function
     | e1 :: ((_ :: _) as tl) ->

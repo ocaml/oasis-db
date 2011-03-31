@@ -462,3 +462,49 @@ div.postActions {
   width: 100%;
   height: 7em;
 }
+
+#odb-list {
+  width: 100%;
+}
+
+#odb-list td {
+  vertical-align: top;
+}
+#odb-col-left, #odb-col-right {
+  width: 50%;
+}
+
+#odb-col-left table, #odb-col-right table {
+  width: 100%;
+}
+
+#odb-list th { text-align: left; }
+#odb-list td { text-align: center; }
+#odb-list th.col-pkg    { width: 46%; }
+#odb-list th.col-repo   { width: 18%; text-align: center; }
+
+#odb-admin-user-list {width: 100%}
+
+#odb-admin-package th { text-align: left; }
+#odb-admin-package td { text-align: center; }
+#odb-admin-package th.col-pkg    {width: 23%}
+#odb-admin-package th.col-repo   {width: 9%; text-align: center}
+#odb-admin-package th.col-action {width: 14%; text-align: left}
+#odb-admin-package select { width: 8em }
+
+#odb-admin-program-list {width: 100%}
+#odb-admin-library-list {width: 100%}
+
+.odb-dep-error img { border: 0px; padding-left: auto }
+.odb-dep-error { text-align: right; }
+
+td.odb-not-latest { background-color: yellow; }
+td.odb-none       { background-color: pink; }
+
+.col-50percent {width: 50%}
+.col-33percent {width: 33%}
+.col-25percent {width: 25%}
+
+.col-50percent table {width: 100%}
+.col-33percent table {width: 100%}
+.col-25percent table {width: 100%}

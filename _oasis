@@ -143,6 +143,7 @@ Library "oasis-db-ocsigen"
            Monitor,
            Comment,
            Rating,
+           ExtODB,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

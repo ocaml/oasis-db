@@ -104,7 +104,7 @@ let home_handler sp () () =
   template 
     ~ctxt 
     ~sp 
-    ~title:(OneTitle (s_ "Home"))
+    ~title:NoTitle
     ~div_id:"home"
     ~extra_headers:[link 
                       ~a:[a_rel [`Alternate];

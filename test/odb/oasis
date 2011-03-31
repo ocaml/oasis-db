@@ -1,0 +1,4 @@
+deps=fileutils,pcre,extlib,odn,ocamlgraph,ocamlify,oUnit,expect
+tarball=oasis-0.2.0.tar.gz
+is_library=true
+is_program=true

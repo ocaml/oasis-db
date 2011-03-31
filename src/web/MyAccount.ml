@@ -63,7 +63,7 @@ let account_settings =
 
 let admin =
   register_new_service
-    ~path:["admin"]
+    ~path:["admin"; "oasis-db"]
     ~get_params:unit
     (fun sp () () ->
        Context.get_admin ~sp ()

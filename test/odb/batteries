@@ -1,0 +1,3 @@
+deps=camomile(>=0.7.0)
+tarball=batteries-1.3.0.tar.gz
+is_library=true

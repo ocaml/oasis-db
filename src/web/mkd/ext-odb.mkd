@@ -1,0 +1,26 @@
+
+*odb* is a simple package installer for OCaml. It aims to be a 80% solution for
+automated OCaml package installation.
+
+To install odb: 
+{{
+curl -O https://github.com/thelema/odb/raw/master/odb.ml
+}}
+
+You can then get the list of available package:
+{{
+ocaml odb.ml
+}}
+
+And install package:
+{{
+ocaml odb.ml <packagename>
+}}
+
+
+For further installation instruction go to [odb website](https://github.com/thelema/odb). 
+
+We provide three flavors of packages:
+* [stable](stable/pkg) which have been tagged as validated by the odb team
+* [testing](testing/pkg) which are under review by the odb team
+* [unstable](unstable/pkg) which are the latest version on OASIS-DB even not yet validated

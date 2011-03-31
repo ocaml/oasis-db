@@ -1,0 +1,3 @@
+tarball=ocaml-expect-0.0.2.tar.gz
+deps=extlib
+is_library=true
