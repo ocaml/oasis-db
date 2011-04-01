@@ -1508,10 +1508,31 @@ let () =
                      map_info_name ~ctxt mp_repo
                      >>= fun (_, mp_info_name) ->
                      dir_list nm
+                       ~hd:["00list"]
                        (MapString.fold 
                           (fun nm _ acc -> nm :: acc) 
                           mp_info_name 
                           [])
+                   end
+
+               | ["pkg"; "info"; "00list"] ->
+                   begin
+                     map_info_name ~ctxt mp_repo
+                     >>= fun (_, mp_info_name) ->
+                     let lst = 
+                       MapString.fold
+                         (fun nm vl acc -> 
+                            match vl with 
+                              | `PkgVerOASIS _ | `PkgVer _ ->
+                                  nm :: acc
+                              | `Library _ | `Program _ ->
+                                  acc)
+                         mp_info_name
+                         []
+                     in
+                       Text.send ~sp 
+                         (String.concat " " (List.rev lst),
+                          "text/plain")
                    end
 
                | [] ->
