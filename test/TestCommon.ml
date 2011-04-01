@@ -403,7 +403,8 @@ let bracket_ocsigen conf pre_start f post_stop () =
          <database file=\"%s/ocsidb\"/>
        </extension>
        <extension findlib-package=\"ocsigen.ext.eliom\"/>
-       <uploaddir>%s</uploaddir>"
+       <uploaddir>%s</uploaddir>
+       <maxuploadfilesize>4MB</maxuploadfilesize>"
       (string_of_inet_addr addr)
       port rootdir command_fn rootdir rootdir
   in
@@ -549,7 +550,6 @@ let bracket_oasis_db pre_start f post_stop =
      "<ocsigen>
         <server>
           $std_conf
-          <extension findlib-package=\"pgocaml\" />
           <extension findlib-package=\"oasis\" />
           <extension findlib-package=\"sexplib\" />
           <extension findlib-package=\"inotify\" />
@@ -559,6 +559,7 @@ let bracket_oasis_db pre_start f post_stop =
           <extension findlib-package=\"yojson\" />
           <extension findlib-package=\"curl\" />
           <extension findlib-package=\"sqlexpr\" />
+          <extension findlib-package=\"ocamlcore-api.ocsigen\" />
 
           <host charset=\"utf-8\" >
             <site path=\"\">
@@ -569,7 +570,12 @@ let bracket_oasis_db pre_start f post_stop =
               <eliom module=\"$curdir/_build/src/web/oasis-db-ocsigen.cma\">
                 <dir rel=\"incoming\">$rootdir/incoming</dir>
                 <dir rel=\"dist\">$rootdir/dist</dir>
+                <dir rel=\"mkd\">$curdir/src/web/mkd\"</dir>
                 <db>test/data/storage/db.sql</db>
+                <ocamlcore-api>
+                  <stub>true</stub>
+                  <base-path>stub</base-path>
+                </ocamlcore-api>
               </eliom>
               <static dir=\"$curdir/src/web/static\" /> 
             </site>
