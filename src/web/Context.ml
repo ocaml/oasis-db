@@ -10,6 +10,7 @@ type context =
       sqle:  Sqlexpr.t;
       ocaw:  OCAWeb.t;
       mkd:   Mkd.t;
+      stor:  [`RW|`RO] ODBStorage.t;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
       admin: int list;
@@ -39,8 +40,10 @@ let mk_var nm =
 let incoming_dir = mk_var "incoming directory"
 let dist_dir     = mk_var "dist directory"
 let sqle_fn      = mk_var "SQLite DB"
-let sqle         = mk_var "SQLExpr context"
+
 let ocaw         = mk_var "OCamlCore Web context"
+let sqle         = mk_var "SQLExpr context"
+let storage      = mk_var "Storage context"
 
 let google_analytics_account = ref None
 
@@ -181,9 +184,7 @@ let get_odb () =
            join [task_stdout; task_logfile; task_db])
       ~close:(fun () -> return ())
   in
-    ODBContext.default ~logger 
-      (!dist_dir ()) 
-      (!incoming_dir ())
+    ODBContext.default ~logger (!incoming_dir ())
 
 let init () = 
   let () = 
@@ -196,33 +197,52 @@ let init () =
 
   Lwt_mutex.with_lock init_mutex
     (fun () ->
-       begin
-         let log =
-           ODBMessage.info ~ctxt:(get_odb ()) "%s"
-         in
-           Sqlexpr.create ~log (!sqle_fn ())
-       end
-       >>= fun sqle' ->
-       begin
-         sqle := (fun () -> sqle');
-         init_val := true;
-         return ()
-       end)
+       if not !init_val then 
+         begin
+           (* Initialize SQL context *)
+           begin
+             let log =
+               ODBMessage.info ~ctxt:(get_odb ()) "%s"
+             in
+               Sqlexpr.create ~log (!sqle_fn ())
+           end
+           >>= fun sqle' ->
+           return (sqle := (fun () -> sqle'))
+           >>= fun () ->
+
+           (* Initialize storage and only generate log event that are not already
+            * in the DB 
+            *)
+           begin
+             Log.get ~filter:(`Event `Created) (!sqle ())
+             >>= fun pkg_created_evs ->
+             Log.get ~filter:(`Event `VersionCreated) (!sqle ())
+             >>= fun pkg_ver_created_evs ->
+             begin 
+               let fs = 
+                new ODBFilesystem.rwlock (!dist_dir ())
+               in
+                 ODBFilesystem.spy fs
+                 >>= fun () ->
+                 ODBStorage.create_rw
+                   ~ctxt:(get_odb ()) 
+                   fs
+                   log
+                   (List.rev_append pkg_created_evs pkg_ver_created_evs)
+             end
+           end
+           >>= fun storage' ->
+           return (storage := (fun () -> storage'))
+
+           >>= fun () ->
+           return (init_val := true)
+         end
+       else
+         begin
+           return ()
+         end)
   >>= fun () ->
   return (Lwt_condition.broadcast init_cond ())
-  >>= fun () ->
-
-  (* Initialize storage and only generate log event that are not already
-   * in the DB 
-   *)
-  Log.get ~filter:(`Event `Created) (!sqle ())
-  >>= fun pkg_created_evs ->
-  Log.get ~filter:(`Event `VersionCreated) (!sqle ())
-  >>= fun pkg_ver_created_evs ->
-  ODBStorage.start
-    ~ctxt:(get_odb ()) 
-    log
-    (List.rev_append pkg_created_evs pkg_ver_created_evs)
   >>= fun () ->
 
   (* Start incoming watch *)
@@ -231,6 +251,7 @@ let init () =
     (* TODO: get a semaphore to stop this background job *)
     ODBIncoming.start
       ~ctxt:(get_odb ()) 
+      (!storage ())
       log
     in
       return ()
@@ -271,6 +292,7 @@ let get ~sp () =
           sqle  = !sqle ();
           ocaw  = ocaw;
           mkd   = {Mkd.mkd_dir = !mkd_dir};
+          stor  = !storage ();
           sess  = sess;
           accnt = accnt;
           admin = !admin;

@@ -2,7 +2,6 @@
 open ODBTypes
 open ODBMessage
 open ODBGettext
-open ODBFileUtil
 open Inotify
 open Lwt
 
@@ -116,23 +115,23 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
     if Sys.file_exists fn && Sys.is_directory fn then
       begin
         if recurse then 
-          ODBFileUtil.fold_fs 
+          FileUtilExt.fold
             (fun ev t ->
               match ev with
-              | PreDir fn ->
+              | FileUtilExt.PreDir fn ->
                   watch_dir_aux fn t
 
-              | PostDir _ ->
+              | FileUtilExt.PostDir _ ->
                   return t
               
-              | ODBFileUtil.File fn ->
+              | FileUtilExt.File fn ->
                   monitor (File (Created fn)) t.acc
                   >>= fun acc ->
                   monitor (File (Changed fn)) t.acc
                   >>= fun acc ->
                   return {t with acc = acc}
 
-              | Symlink fn ->
+              | FileUtilExt.Symlink fn ->
                   debug ~ctxt (f_ "Ignoring symlink '%s'") fn
                   >>= fun () ->
                   return t)
@@ -140,7 +139,7 @@ let monitor_low ~ctxt ~recurse monitor topdir acc =
         else
           watch_dir_aux fn t
           >>= fun t ->
-          ODBFileUtil.fold_dir
+          FileUtilExt.fold_dir
             (fun full _ t ->
               monitor (File (Created full)) t.acc
               >>= fun acc ->

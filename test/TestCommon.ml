@@ -107,9 +107,7 @@ let odb =
     FilePath.make_filename ["test"; "data"; "storage"; fn]
   in
     ref 
-      (ODBContext.default 
-         (rebase "dist")
-         (rebase "incoming"))
+      (ODBContext.default (rebase "incoming"))
 
 let ocsigen = ref "ocsigen"
 let ocsigen_args = ref ["-s"]
@@ -571,7 +569,7 @@ let bracket_oasis_db pre_start f post_stop =
                 <dir rel=\"incoming\">$rootdir/incoming</dir>
                 <dir rel=\"dist\">$rootdir/dist</dir>
                 <dir rel=\"mkd\">$curdir/src/web/mkd\"</dir>
-                <db>test/data/storage/db.sql</db>
+                <db>$rootdir/db.sql</db>
                 <ocamlcore-api>
                   <stub>true</stub>
                   <base-path>stub</base-path>

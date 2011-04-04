@@ -3,6 +3,11 @@ open ODBGettext
 open OASISVersion
 open Lwt
 
+type t =
+    {
+      rst_stor: [`RW|`RO] ODBStorage.t;
+    }
+
 (** Current version of the API *)
 let current_version =
   chop (version_of_string ODBConf.version)
@@ -29,7 +34,7 @@ let mk ~ctxt api_fun base_url params =
   in
   let ctxt = 
     RESTCurl.create 
-      ~dbug_print:(fun s -> Lwt_main.run (ODBMessage.debug ~ctxt "%s" s))
+      ~dbug_print:(fun s -> ignore_result (ODBMessage.debug ~ctxt "%s" s))
       base_url curl_socket
   in
   let res =
@@ -97,11 +102,12 @@ struct
           };
         ]
       ]
-      ODBStorage.Pkg.elements 
+      (fun t () -> 
+         ODBStorage.Pkg.elements t.rst_stor)
       (RESTConv.list conv_t)
 
   let list = 
-    mk def_list
+    mk def_list 
 
 end
 
@@ -182,8 +188,8 @@ struct
         "oasis",
         List.map version_of_string ["0.1.0"; "0.2.0"]
       ]
-      (fun pkg ->
-         ODBStorage.PkgVer.elements pkg
+      (fun t pkg ->
+         ODBStorage.PkgVer.elements t.rst_stor pkg
          >|=
          List.map (fun ver -> ver.ODBPkgVer.ver))
       (list version)
@@ -206,8 +212,8 @@ struct
         "oasis",
         OASISVersion.version_of_string "0.2.0"
       ]
-      (fun pkg ->
-         (ODBStorage.PkgVer.latest pkg)
+      (fun t pkg ->
+         (ODBStorage.PkgVer.latest t.rst_stor pkg)
          >|= fun ver ->
          ver.ODBPkgVer.ver)
       version
@@ -241,8 +247,8 @@ struct
               "https://forge.ocamlcore.org/frs/download.php/501/oasis-0.2.0.tar.gz";
         }
       ]
-      (fun (pkg, ver) ->
-         ODBStorage.PkgVer.find pkg ver)
+      (fun t (pkg, ver) ->
+         ODBStorage.PkgVer.find t.rst_stor pkg ver)
       conv_t
 
   let show = 
@@ -251,4 +257,3 @@ struct
          f base_url (pkg, ver))
 
 end
-

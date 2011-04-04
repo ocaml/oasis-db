@@ -12,7 +12,12 @@ let base_path =
   ["api"]
 
 let register_new_service api_fun = 
-  RESTOcsigen.register_new_service base_path api_fun
+  RESTOcsigen.register_new_service 
+    (fun sp ->
+       Context.get ~sp ()
+       >>= fun ctxt ->
+       return {rst_stor = ctxt.stor})
+    base_path api_fun
 
 let pkg_list = 
   register_new_service Pkg.def_list
@@ -75,6 +80,7 @@ let pkg_ver_upload =
        Upload.upload_init_check tarball_fd publink
        >>= fun (tarball_fn, tarball_nm, publink) ->
        ODBUpload.upload_begin ~ctxt:ctxt.odb
+         ctxt.stor
          (WebAPI accnt.OCAAccount.accnt_real_name)
          tarball_fn tarball_nm publink 
        >>= fun upload ->

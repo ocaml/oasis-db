@@ -25,9 +25,8 @@ let info ~ctxt () =
     20
   in
 
-  let sqle = 
-    ctxt.Context.sqle
-  in
+  let sqle = ctxt.Context.sqle in
+  let stor = ctxt.Context.stor in
 
   begin
     Log.get_rev ~filter:(`Event `VersionCreated) ~limit:1 sqle
@@ -61,7 +60,7 @@ let info ~ctxt () =
         (fun acc (pkg_str, ver_str) ->
            catch 
              (fun () ->
-                ODBStorage.PkgVer.find pkg_str ver_str
+                ODBStorage.PkgVer.find stor pkg_str ver_str
                 >>= fun pkg_ver ->
                 return (pkg_ver :: acc))
              (function 
@@ -78,19 +77,36 @@ let info ~ctxt () =
   end
   >>= fun latest ->
 
-  ODBStorage.Pkg.elements () 
+  ODBStorage.Pkg.elements stor
   >>= fun pkg_lst -> 
-  Lwt_list.filter_p
-    (fun {ODBPkg.pkg_name = pkg_str} ->
-      ODBStorage.PkgVer.latest pkg_str
+  begin
+    Lwt_list.fold_left_s
+      (fun acc {ODBPkg.pkg_name = pkg_str} ->
+         catch
+           (fun () ->
+              ODBStorage.PkgVer.latest stor pkg_str
+              >|= fun ver_latest ->
+              ver_latest :: acc)
+           (function
+              | Not_found ->
+                  return acc
+              | e ->
+                  fail e))
+      []
+      pkg_lst
       >>= fun ver_latest ->
-      ODBStorage.PkgVer.filename 
-        pkg_str
-        (OASISVersion.string_of_version ver_latest.ver)
-        `OASIS
-      >>= fun oasis_fn ->
-      return (not (Sys.file_exists oasis_fn)))
-    pkg_lst
+      Lwt_list.filter_p
+        (fun ver_latest ->
+          ODBStorage.PkgVer.filename 
+            stor
+            ver_latest.pkg
+            (OASISVersion.string_of_version ver_latest.ver)
+            `OASIS
+          >>= fun oasis_fn ->
+          return (not (Sys.file_exists oasis_fn)))
+        ver_latest
+  end
+
   >|= fun pkg_without_oasis_lst ->
 
   {

@@ -4,8 +4,6 @@ open Unix
 open Lwt_unix
 open Lwt_io
 open ODBGettext
-open ODBMessage
-open ODBContext
 
 type filename = string
 
@@ -73,7 +71,7 @@ let fold_dir f fn a =
              fail exc)
 
 
-let fold_fs f fn a = 
+let fold f fn a = 
   let rec fold_aux f fn _ a = 
     try 
       match FileUtil.stat fn with 
@@ -112,63 +110,51 @@ let fold_fs f fn a =
     fold_aux f fn "" a
   
 
-let iter_fs f fn = 
-  fold_fs (fun fn () -> f fn) fn ()
-
+let iter f fn = 
+  fold (fun fn () -> f fn) fn ()
 
 exception RmDirNoRecurse of string
 
-let rm ~ctxt ?(recurse=false) lst = 
-  Lwt_list.iter_s
-    (iter_fs 
-       (function
-          | PreDir fn ->
-              begin
-                if recurse then
-                  return ()
-                else
-                  fail (RmDirNoRecurse fn)
-              end
+let rm ?(recurse=false) lst = 
+  Lwt_list.fold_left_s
+    (fun acc fn ->
+       if Sys.file_exists fn then
+         fold
+           (fun fnt acc ->
+              match fnt with
+                | PreDir fn ->
+                    begin
+                      if recurse then
+                        return acc 
+                      else
+                        fail (RmDirNoRecurse fn)
+                    end
 
-          | PostDir fn ->
-              begin
-                debug ~ctxt (f_ "Remove directory '%s'") fn
-                >>= fun () -> 
-                begin
-                  try 
-                    Unix.rmdir fn;
-                    return ()
-                  with e ->
-                    fail e 
-                end
-              end
+                | PostDir fn ->
+                    begin
+                      try 
+                        Unix.rmdir fn;
+                        return (fn :: acc)
+                      with e ->
+                        fail e 
+                    end
 
-          | File fn ->
-              begin
-                debug ~ctxt (f_ "Remove file '%s'") fn
-                >>= fun () ->
-                begin
-                  try 
-                    Unix.unlink fn;
-                    return ()
-                  with e ->
-                    fail e
-                end
-              end
-
-          | Symlink fn ->
-              begin
-                debug ~ctxt (f_ "Remove symlink '%s'") fn
-                >>= fun () ->
-                begin
-                  try 
-                    Unix.unlink fn;
-                    return ();
-                  with e ->
-                    fail e
-                end
-              end))
+                | File fn 
+                | Symlink fn ->
+                    begin
+                      try 
+                        Unix.unlink fn;
+                        return (fn :: acc)
+                      with e ->
+                        fail e
+                    end)
+           fn acc
+       else
+         return acc)
+    []
     lst
+    >|= fun lst ->
+    List.rev lst
 
 let mkdir ?(ignore_exist=false) dn perm = 
   try 
@@ -180,7 +166,7 @@ let mkdir ?(ignore_exist=false) dn perm =
   | e ->
       fail e 
 
-let temp_dir ~ctxt pre suf = 
+let temp_dir pre suf = 
   let rec temp_dir_aux n = 
     let dn =
       FilePath.concat 
@@ -204,21 +190,19 @@ let temp_dir ~ctxt pre suf =
   in
     temp_dir_aux start
 
-let with_temp_dir ~ctxt pre suf f = 
-  temp_dir ~ctxt pre suf 
+let with_temp_dir pre suf f = 
+  temp_dir pre suf 
   >>= fun dn ->
   (finalize
      (fun () -> 
         f dn)
      (fun () ->
-        rm ~ctxt ~recurse:true [dn]))
+        rm ~recurse:true [dn]
+        >|= 
+        ignore))
 
-let cp ~ctxt lst tgt =
+let cp lst tgt =
   let cp_one src tgt =
-    debug ~ctxt
-      (f_ "Copy file '%s' to '%s'")
-      src tgt
-    >>= fun () ->
     with_file ~mode:input src 
       (fun src_chn ->
         with_file ~mode:output ~perm:0o644 tgt
@@ -239,16 +223,21 @@ let cp ~ctxt lst tgt =
               cp_aux ()))
   in
     if Sys.file_exists tgt && Sys.is_directory tgt then
-      Lwt_list.iter_s 
+      Lwt_list.map_s
         (fun src ->
-           cp_one 
-             src 
-             (Filename.concat tgt (Filename.basename src)))
+           let tgt =
+             Filename.concat tgt (Filename.basename src)
+           in
+             cp_one src tgt
+             >>= fun () ->
+             return (src, tgt))
         lst
     else
       match lst with 
         | [src] ->
             cp_one src tgt
+            >>= fun () ->
+            return [src, tgt]
         | lst ->
             fail
               (Failure
@@ -261,7 +250,58 @@ let cp ~ctxt lst tgt =
                     tgt))
 
 
-let mv ~ctxt lst tgt =
-  (* TODO: convert to Lwt *)
-  FileUtil.mv lst tgt;
-  return ()
+let mv src tgt =
+  let pwd = FileUtil.pwd () in
+  let rec mv' acc fln_src fln_dst =
+    let acc_del_src, acc_del_tgt, acc_mv = acc in
+    let fln_src_abs =  FilePath.make_absolute pwd fln_src in
+    let fln_dst_abs =  FilePath.make_absolute pwd fln_dst in
+      if compare fln_src_abs fln_dst_abs <> 0 then
+        begin
+          if Sys.is_directory fln_dst_abs then
+            begin
+              mv' 
+                acc
+                fln_src_abs
+                (FilePath.make_absolute 
+                   fln_dst_abs 
+                   (FilePath.basename fln_src_abs))
+            end
+
+          else if Sys.file_exists fln_dst_abs then
+            begin
+              rm [fln_dst_abs]
+              >>= fun del_lst ->
+              mv' 
+                (acc_del_src, del_lst @ acc_del_tgt, acc_mv) 
+                fln_src_abs fln_dst_abs
+            end
+
+          else if Sys.file_exists fln_src_abs then
+            begin
+              let acc_mv = (fln_src_abs, fln_dst_abs) :: acc_mv in 
+                try 
+                  begin
+                    Sys.rename fln_src_abs fln_dst_abs;
+                    return (acc_del_src, acc_del_tgt, acc_mv) 
+                  end
+
+                with Sys_error _ ->
+                  begin
+                    cp [fln_src_abs] fln_dst_abs
+                    >>= fun (_lst : (filename * filename) list) ->
+                    rm ~recurse:true [fln_src_abs]
+                    >>= fun del_lst ->
+                    return (del_lst @ acc_del_src, acc_del_tgt, acc_mv)
+                  end
+            end
+          else
+            begin
+              fail FileUtil.MvNoSourceFile
+            end
+        end
+      else
+        return acc
+  in
+    mv' ([], [], []) src tgt
+;;

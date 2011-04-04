@@ -59,25 +59,34 @@ let browse_authors =
     ()
 
 let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () = 
-  ODBStorage.Pkg.elements () 
+  ODBStorage.Pkg.elements ctxt.stor 
   >>= 
-  Lwt_list.map_s
-    (fun {ODBPkg.pkg_name = pkg_str} ->
-       ODBStorage.PkgVer.latest pkg_str
-       >>= fun ver ->
+  Lwt_list.fold_left_s
+    (fun acc {ODBPkg.pkg_name = pkg_str} ->
        catch 
          (fun () ->
-            ODBStorage.PkgVer.filename 
-              ver.pkg
-              (string_of_version ver.ver)
-              `OASIS
-            >>= 
-            ODBOASIS.from_file 
-              ~ctxt:ctxt.odb
-            >>= fun oasis ->
-            return (pkg_str, ver, Some oasis))
-         (fun e ->
-            return (pkg_str, ver, None)))
+            ODBStorage.PkgVer.latest ctxt.stor pkg_str
+            >>= fun ver ->
+            catch 
+              (fun () ->
+                 ODBStorage.PkgVer.filename 
+                   ctxt.stor
+                   ver.pkg
+                   (string_of_version ver.ver)
+                   `OASIS
+                 >>= 
+                 ODBOASIS.from_file 
+                   ~ctxt:ctxt.odb
+                 >>= fun oasis ->
+                 return ((pkg_str, ver, Some oasis) :: acc))
+              (fun e ->
+                 return ((pkg_str, ver, None) :: acc)))
+         (function
+            | Not_found ->
+                return acc
+            | e ->
+                fail e))
+    []
   >>= fun pkg_lst ->
 
   (* Build a map after extracting categories from package version *)

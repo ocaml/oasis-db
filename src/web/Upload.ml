@@ -455,6 +455,7 @@ let upload_init_action =
              ~ctxt 
              (fun ctxt ->
                 upload_begin ~ctxt:ctxt.odb
+                  ctxt.stor
                   (Web accnt.OCAAccount.accnt_real_name)
                   tarball_fn tarball_nm publink)
          in

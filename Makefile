@@ -35,7 +35,7 @@ CONFIGUREFLAGS += --override ocamlbuildflags -classic-display
 default: test
 #TESTFLAGS      += -not-long 
 #TESTFLAGS      += -verbose
-#TESTFLAGS      += -only-test OASIS-DB:2:API
+#TESTFLAGS      += -only-test OASIS-DB:3:Sync
 
 # OASIS_START
 # DO NOT EDIT (digest: bc1e05bfc8b39b664f29dae8dbd3ebbb)

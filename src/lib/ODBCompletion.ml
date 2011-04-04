@@ -54,7 +54,7 @@ let tarname_regexp =
 (** Define the top directory
   *)
 let topdir ~ctxt fn dn = 
-  ODBFileUtil.fold_dir 
+  FileUtilExt.fold_dir 
    (fun full base (acc, count) ->
      return 
       (if Sys.is_directory full then 
@@ -83,7 +83,7 @@ let find ~ctxt fn dn files f acc =
   >>= function
     | Some (topdir, _) ->
         (** Find configure.{in,ac} *)
-        ODBFileUtil.fold_dir 
+        FileUtilExt.fold_dir 
           (fun full base acc ->
             if List.mem base files then
               f full acc
@@ -278,13 +278,13 @@ let is_sure =
 (** Try to determine order, using guessed answer for 
     package and version
  *)
-let order ~ctxt a_pkg a_ver =
+let order ~ctxt str a_pkg a_ver =
   match value a_pkg, value a_ver with 
   | Some pkg_s, Some ver ->
       begin
         catch 
           (fun () ->
-            ODBStorage.PkgVer.elements pkg_s
+            ODBStorage.PkgVer.elements str pkg_s
             >>= fun lst ->
             (* Try to insert this version between two. If version = latest -> sure
              * otherwise -> unsure.
@@ -332,7 +332,7 @@ let order ~ctxt a_pkg a_ver =
 
                 | [] ->
                     begin
-                      return NotFound
+                      return (Sure 0)
                     end
             in
               find_position lst)
@@ -351,7 +351,7 @@ let order ~ctxt a_pkg a_ver =
 
 (** Try to guess parameter for a tarball
  *)
-let run ~ctxt fn an dn =
+let run ~ctxt str fn an dn =
   let completions = 
     [
       "tarball_name", tarball_name;
@@ -442,7 +442,7 @@ let run ~ctxt fn an dn =
           | Unsure (q, s) -> Unsure (q, vos s)
           | NotFound -> NotFound
         in
-          order ~ctxt a_pkg a_ver
+          order ~ctxt str a_pkg a_ver
           >>= fun a_ord ->
           return 
             {

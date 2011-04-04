@@ -368,20 +368,15 @@ let dump ~ctxt t =
     >>= fun () ->
     entries
     >>= fun entries ->
-    begin
-      if entries <> [] then
-        Lwt_io.with_file
-          ~flags:[Unix.O_WRONLY; Unix.O_CREAT; Unix.O_APPEND; 
-                  Unix.O_NONBLOCK]
-          ~mode:Lwt_io.output fn
-          (fun chn ->
-             Lwt_list.fold_left_s
-               (dump_entries chn)
-               0
-               entries)
-      else
-        return 0
-    end
+    Lwt_io.with_file
+      ~flags:[Unix.O_WRONLY; Unix.O_CREAT; Unix.O_APPEND; 
+              Unix.O_NONBLOCK]
+      ~mode:Lwt_io.output fn
+      (fun chn ->
+         Lwt_list.fold_left_s
+           (dump_entries chn)
+           0
+           entries)
     >>= fun cnt ->
     debug ~ctxt (f_ "Added %d entries to file '%s'") cnt fn
     >>= fun () ->
@@ -561,7 +556,7 @@ struct
             let url = 
               url_concat t.sync_uri (String.concat "/" (explode_filename fn))
             in
-              ODBFileUtil.mkdir ~ignore_exist:true 
+              FileUtilExt.mkdir ~ignore_exist:true 
                 (FilePath.dirname fn_disk) 0o755
               >>= fun () ->
               download_fn ~ctxt ?curl url fn_disk 
@@ -575,11 +570,12 @@ struct
 
   (* Remove empty directory *)
   let clean_empty_dir ~ctxt t =
-    ODBFileUtil.iter_fs
+    FileUtilExt.iter
       (function
-         | ODBFileUtil.PostDir dn ->
+         | FileUtilExt.PostDir dn ->
              if Sys.readdir dn = [||] then
-               ODBFileUtil.rm ~ctxt ~recurse:true [dn]
+               FileUtilExt.rm ~recurse:true [dn]
+               >|= ignore
              else
                return ()
          | _ ->
@@ -589,10 +585,10 @@ struct
 
   (* Remove files that don't match their digest *)
   let clean_file_digest ~ctxt t = 
-    ODBFileUtil.fold_fs
+    FileUtilExt.fold
       (fun e lst ->
          match e with 
-           | ODBFileUtil.File fn ->
+           | FileUtilExt.File fn ->
                digest_ok ~ctxt ~trust_digest:false t 
                  (relative_fn t.sync_cache_dir fn)
                >>= fun ok ->
@@ -605,7 +601,8 @@ struct
       t.sync_cache_dir
       []
     >>=
-    ODBFileUtil.rm ~ctxt 
+    FileUtilExt.rm 
+    >|= ignore
 
   let filter_sync_method t fn = 
     match t.sync_method with 
@@ -632,10 +629,10 @@ struct
      *)
     begin
       if remove_extra then
-        ODBFileUtil.fold_fs
+        FileUtilExt.fold
           (fun e lst ->
              match e with 
-               | ODBFileUtil.File fn ->
+               | FileUtilExt.File fn ->
                    begin
                      let rel_fn = 
                        relative_fn t.sync_cache_dir fn 
@@ -654,7 +651,8 @@ struct
           t.sync_cache_dir 
           []
         >>= 
-        ODBFileUtil.rm ~ctxt 
+        FileUtilExt.rm 
+        >|= ignore
       else
         return ()
     end
@@ -718,7 +716,8 @@ struct
       in
         safe_close chn_meta_tmp;
         safe_close chn_tmp;
-        ODBFileUtil.rm ~ctxt [fn_meta_tmp; fn_tmp]
+        FileUtilExt.rm [fn_meta_tmp; fn_tmp]
+        >|= ignore
     in
 
     let check_sync_tmp meta fn_tmp = 
@@ -914,8 +913,8 @@ struct
             *)
            Lwt.join
              [
-               ODBFileUtil.cp ~ctxt [fn_meta_tmp] fn_meta;
-               ODBFileUtil.cp ~ctxt [fn_tmp] fn;
+               FileUtilExt.cp [fn_meta_tmp] fn_meta >|= ignore;
+               FileUtilExt.cp [fn_tmp] fn >|= ignore;
              ]
         )
 
@@ -961,10 +960,9 @@ struct
         in
 
           (* Remove old files *)
-          ODBFileUtil.rm
-            ~ctxt
+          FileUtilExt.rm
             (List.rev_map (FilePath.concat t.sync_cache_dir) deletes)
-          >>= fun () ->
+          >>= fun _ ->
           Lwt_list.iter_s 
             (fun fn ->
                if filter_sync_method t fn then

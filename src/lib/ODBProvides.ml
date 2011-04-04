@@ -22,12 +22,13 @@ let of_oasis_package pkg =
     []
 
 
-let map ~ctxt () = 
-  ODBStorage.Pkg.elements () 
+let map ~ctxt str = 
+  ODBStorage.Pkg.elements str
   >>= 
   begin
     let one_ver ver = 
       ODBStorage.PkgVer.filename 
+        str
         ver.pkg 
         (OASISVersion.string_of_version ver.ver) 
         `OASIS
@@ -44,7 +45,9 @@ let map ~ctxt () =
     in
 
     let one_pkg pkg = 
-      ODBStorage.PkgVer.elements pkg.pkg_name
+      ODBStorage.PkgVer.elements 
+        str
+        pkg.pkg_name
       >>=
       Lwt_list.rev_map_p one_ver 
     in

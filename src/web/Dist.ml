@@ -32,24 +32,18 @@ let mk_ver_fn ~ctxt fn_t ver =
     OASISVersion.string_of_version
       ver.ver
   in
-    ODBStorage.PkgVer.filename pkg ver_str fn_t
+    ODBStorage.PkgVer.filename ctxt.stor pkg ver_str fn_t
     >>= fun fn ->
-      let pwd =
-        FileUtil.pwd ()
-      in
-      let fn' =
-        FilePath.make_relative 
-          (FilePath.make_absolute pwd ctxt.odb.dist_dir)
-          (FilePath.make_absolute pwd fn)
-      in
+    ctxt.stor.ODBStorage.fs#file_exists fn
+    >>= fun exists ->
       let path =
         (* TODO: create something in FilePath to handle 
          * this 
          *)
-        ExtString.String.nsplit fn' "/"
+        ExtString.String.nsplit fn "/"
       in
       let bn = 
-        FilePath.basename fn'
+        FilePath.basename fn
       in
       let classe = 
         match fn_t with 
@@ -58,10 +52,10 @@ let mk_ver_fn ~ctxt fn_t ver =
           | `PluginData _ -> "sexp"
           | `Other _ -> "other"
       in
-        if Sys.file_exists fn then
+        if exists then
           return (classe, bn, path)
         else
-          fail Not_found 
+          fail Not_found
 
 let () = 
   Any.register 
@@ -75,7 +69,7 @@ let () =
              | [] ->
                  begin
                    (* Access to / -> return list of package + top files *)
-                   ODBStorage.Pkg.elements () 
+                   ODBStorage.Pkg.elements ctxt.stor
                    >|= 
                    (List.map 
                       (fun {ODBPkg.pkg_name = pkg_str} ->
@@ -85,7 +79,7 @@ let () =
              | [pkg] ->
                  begin
                    (* Access to a package  -> list version + package files *)
-                   ODBStorage.PkgVer.elements pkg
+                   ODBStorage.PkgVer.elements ctxt.stor pkg
                    >|= fun lst ->
                    ("dir", "download", [pkg; "download"])
                    ::
@@ -103,7 +97,7 @@ let () =
 
              | [pkg; "download"] ->
                  begin
-                   ODBStorage.PkgVer.elements pkg
+                   ODBStorage.PkgVer.elements ctxt.stor pkg
                    >>= 
                    Lwt_list.map_s (mk_ver_fn ~ctxt `Tarball)
                  end
@@ -111,7 +105,7 @@ let () =
              | [pkg; ver_str] ->
                  (* Access to a package's version file *)
                  begin
-                   ODBStorage.PkgVer.find pkg ver_str
+                   ODBStorage.PkgVer.find ctxt.stor pkg ver_str
                    >>= fun ver ->
                    Lwt_list.fold_left_s
                      (fun acc fn_t ->
@@ -180,25 +174,20 @@ let () =
          Xhtml.send ~sp page
        in
 
-       let fn = 
-         FilePath.make_filename 
-           (ctxt.odb.dist_dir :: lst)
-       in
-
-         if FilePath.is_subdir ctxt.odb.dist_dir fn then
+         try 
            begin
-             fail Eliom_common.Eliom_404
-           end
-
-         else
-           begin
-             let fn_abs = 
-               FilePath.make_absolute (FileUtil.pwd ()) fn
+             let fn = 
+               ctxt.stor.ODBStorage.fs#rebase (FilePath.make_filename lst)
              in
-               if Sys.file_exists fn_abs && not (Sys.is_directory fn_abs) then
-                 Files.send ~sp fn_abs
+               if Sys.file_exists fn && not (Sys.is_directory fn) then
+                 Files.send ~sp fn
                else
                  generate_index lst 
+           end
+
+         with ODBFilesystem.NotSubdir _ ->
+           begin
+             fail Eliom_common.Eliom_404
            end)
 
 let a_dist ~sp ~ctxt ver fcontent fn_t = 

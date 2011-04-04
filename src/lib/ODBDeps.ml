@@ -96,9 +96,9 @@ let of_oasis_package pkg =
 let fold = 
   MapString.fold 
 
-let solve ~ctxt t = 
+let solve ~ctxt t str = 
   (* 1. Build a map of findlib_name -> package versions *)
-  ODBProvides.map ~ctxt () 
+  ODBProvides.map ~ctxt str
   >|= fun provides -> 
 
   (* 2. Solve the build dependencies *)

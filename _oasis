@@ -72,13 +72,14 @@ Library "rest-curl"
 Library "oasis-db"
   Path: src/lib
   CompiledObject: Best
-  Modules: ODBUtils,
+  Modules: FileUtilExt,
+           LwtExt,
+           ODBUtils,
            ODBConf,
            ODBGettext,
            ODBContext,
            ODBMessage,
            ODBTypes,
-           ODBFileUtil,
            ODBProcess,
            ODBArchive,
            ODBPkg,
@@ -92,9 +93,11 @@ Library "oasis-db"
            ODBDeps,
            ODBREST,
            ODBLog,
-           LwtExt,
            ODBSync,
-           ODBUpload
+           ODBUpload,
+           ODBRWLock,
+           ODBFilesystem,
+           ODBHLS
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,

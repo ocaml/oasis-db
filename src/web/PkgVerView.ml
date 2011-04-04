@@ -33,7 +33,10 @@ let oasis_fields ~ctxt ~sp pkg =
    *)
 
   (* Compute dependencies *)
-  ODBDeps.solve ~ctxt:ctxt.odb (ODBDeps.of_oasis_package pkg)
+  ODBDeps.solve 
+    ~ctxt:ctxt.odb 
+    (ODBDeps.of_oasis_package pkg)
+    ctxt.stor 
   >|= fun deps ->
 
   begin
@@ -311,7 +314,10 @@ let oasis_fields ~ctxt ~sp pkg =
 let box ~ctxt ~sp pkg_ver backup_link oasis_opt = 
   (catch 
      (fun () ->
-        ODBStorage.PkgVer.elements ~extra:pkg_ver pkg_ver.pkg)
+        ODBStorage.PkgVer.elements 
+          ~extra:pkg_ver 
+          ctxt.stor
+          pkg_ver.pkg)
      (function 
         | Not_found ->
             return [pkg_ver]
@@ -320,7 +326,10 @@ let box ~ctxt ~sp pkg_ver backup_link oasis_opt =
   >>= fun pkg_ver_lst ->
   catch 
     (fun () ->
-       ODBStorage.PkgVer.latest ~extra:pkg_ver pkg_ver.pkg)
+       ODBStorage.PkgVer.latest 
+         ~extra:pkg_ver 
+         ctxt.stor
+         pkg_ver.pkg)
     (function 
        | Not_found ->
            return pkg_ver
@@ -435,6 +444,7 @@ let page ~ctxt ~sp pkg_ver =
   begin
     let oasis_fn = 
       ODBStorage.PkgVer.filename 
+        ctxt.stor
         pkg_ver.pkg 
         (string_of_version pkg_ver.ver)
         `OASIS
@@ -514,17 +524,17 @@ let view_handler sp (pkg, ver_opt) () =
     (fun () ->
        match pkg, ver_opt with 
          | pkg_str, NoVersion ->
-             ODBStorage.Pkg.find pkg_str
+             ODBStorage.Pkg.find ctxt.stor pkg_str
              >>= 
              PkgView.package_page ~ctxt ~sp 
 
          | pkg_str, Version ver ->
-             ODBStorage.PkgVer.find pkg_str (string_of_version ver)
+             ODBStorage.PkgVer.find ctxt.stor pkg_str (string_of_version ver)
              >>= 
              page ~ctxt ~sp 
 
          | pkg_str, LatestVersion ->
-             ODBStorage.PkgVer.latest pkg_str
+             ODBStorage.PkgVer.latest ctxt.stor pkg_str
              >>= 
              page ~ctxt ~sp)
     (function

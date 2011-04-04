@@ -22,6 +22,7 @@ open ODBGettext
 open ODBPkgVer
 open Template
 open Common
+open Context
 
 module S = Sqlexpr
 
@@ -105,12 +106,12 @@ let is_odb_admin ~ctxt () =
   match Account.get_id ~ctxt () with 
     | Some id -> 
         begin
-          if Context.is_admin ~ctxt () then
+          if is_admin ~ctxt () then
             return true
           else
             catch 
               (fun () ->
-                 S.use ctxt.Context.sqle 
+                 S.use ctxt.sqle 
                    (fun db ->
                       S.select_one db 
                         sql"SELECT @d{user_id} FROM odb_user WHERE user_id = %d"
@@ -157,16 +158,13 @@ let is_bs_buildable oasis bs =
    | _ -> false
 
 let get_odb_admin ~sp () =
-  Context.get_user ~sp () 
+  get_user ~sp () 
   >>= fun (ctxt, accnt) ->
   is_odb_admin ~ctxt ()
   >>= 
     function
       | true -> return (ctxt, accnt)
       | false -> fail InsufficientAuth
-
-let filename_of_ver ver = 
-  ODBStorage.PkgVer.filename ver.pkg (string_of_version ver.ver)
 
 module MapString = Map.Make(String)
 module SetString = Set.Make(String)
@@ -181,7 +179,7 @@ let list_tarball ~ctxt mp =
   in
     Lwt_list.fold_left_s
       (fun mp (pkg_str, ver_str) ->
-         ODBStorage.PkgVer.filename pkg_str ver_str `Tarball
+         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
          >>= fun tarball_fn ->
          return 
            (MapString.add
@@ -193,7 +191,7 @@ let list_tarball ~ctxt mp =
 
 (* Return a listing of the repository *)
 let list_repo ~ctxt nm = 
-  S.use ctxt.Context.sqle
+  S.use ctxt.sqle
     (fun db ->
        S.fold db
          (fun mp (pkg, ver) ->
@@ -205,13 +203,22 @@ let list_repo ~ctxt nm =
 
 (* Return a listing of latest version *)
 let list_latest ~ctxt () = 
-  ODBStorage.Pkg.elements () 
+  ODBStorage.Pkg.elements ctxt.stor
   >>= fun pkg_lst ->
-  Lwt_list.rev_map_p 
-    (fun {ODBPkg.pkg_name = pkg_str} ->
-       ODBStorage.PkgVer.latest pkg_str
-       >|= fun pkg_ver ->
-       pkg_str, string_of_version (pkg_ver.ODBPkgVer.ver))
+  Lwt_list.fold_left_s 
+    (fun acc {ODBPkg.pkg_name = pkg_str} ->
+       catch 
+         (fun () ->
+            ODBStorage.PkgVer.latest ctxt.stor pkg_str
+           >|= fun pkg_ver ->
+           (pkg_str, string_of_version (pkg_ver.ODBPkgVer.ver))
+           :: acc)
+         (function
+            | Not_found ->
+                return acc
+            | e ->
+                fail e))
+    []
     pkg_lst
   >>= fun lst ->
   Lwt_list.fold_left_s
@@ -229,7 +236,7 @@ let reg_sql_action ~name ~post_params f f' =
     (fun sp () p ->
        get_odb_admin ~sp () 
        >>= fun (ctxt, accnt) ->
-       S.use ctxt.Context.sqle 
+       S.use ctxt.sqle 
          (fun db -> f ctxt sp accnt p db)
        >>= fun res ->
        f' ctxt sp accnt p res)
@@ -300,7 +307,7 @@ let repo_pkg_ver_set =
               >>= fun () ->
               fail e))
       (fun ctxt sp accnt (pkg_str, (repo, ver_opt)) () ->
-         Log.add ctxt.Context.sqle 
+         Log.add ctxt.sqle 
            (`Sys("odb", 
                  `VersionSet (pkg_str, 
                               repo, 
@@ -408,7 +415,7 @@ let repo_pkg_clone =
                     | Some v -> Some (version_of_string v)
                     | None -> None
                 in
-                  Log.add ctxt.Context.sqle
+                  Log.add ctxt.sqle
                     (`Sys("odb", `VersionSet (pkg, repo_tgt, ver_opt))))
              update_lst)
 
@@ -436,7 +443,7 @@ let program_add =
 
 (* List external programs *)
 let program_list ~ctxt () =
-  S.use ctxt.Context.sqle
+  S.use ctxt.sqle
     (fun db ->
        S.fold db
          (fun acc program -> 
@@ -469,7 +476,7 @@ let library_add =
 
 (* List external libraries *)
 let library_list ~ctxt () =
-  S.use ctxt.Context.sqle
+  S.use ctxt.sqle
     (fun db ->
        S.fold db
          (fun acc library -> 
@@ -680,11 +687,11 @@ let map_info_name ~ctxt mp_repo =
 
     Lwt_list.rev_map_p 
       (fun (pkg_str, ver_str) ->
-         ODBStorage.PkgVer.filename pkg_str ver_str `OASIS
+         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `OASIS
          >>= fun oasis_fn ->
          catch 
            (fun () ->
-              ODBOASIS.from_file ~ctxt:ctxt.Context.odb oasis_fn
+              ODBOASIS.from_file ~ctxt:ctxt.odb oasis_fn
               >>= fun oasis ->
               return (pkg_str, ver_str, Some oasis))
            (fun _ ->
@@ -730,8 +737,9 @@ let map_info_name ~ctxt mp_repo =
 
 (* Compute non optional dependency out of t datastructure *)
 let non_optional_deps ~ctxt oasis = 
-  ODBDeps.solve ~ctxt:ctxt.Context.odb 
+  ODBDeps.solve ~ctxt:ctxt.odb 
     (ODBDeps.of_oasis_package oasis)
+    ctxt.stor 
   >>= fun deps ->
   let non_optional_deps = 
     (* TODO: move this to ODBDeps *)
@@ -888,11 +896,11 @@ let table_packages_box ~ctxt ~sp () =
 
 (* Compute dependency errors for package *)
 let packager_dependency_error ~ctxt mp_info_name pkg_str ver_str =
-  ODBStorage.PkgVer.filename pkg_str ver_str `OASIS
+  ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `OASIS
   >>= fun oasis_fn ->
   catch 
     (fun () ->
-       ODBOASIS.from_file ~ctxt:ctxt.Context.odb oasis_fn
+       ODBOASIS.from_file ~ctxt:ctxt.odb oasis_fn
        >>= fun oasis ->
        non_optional_deps ~ctxt oasis
        >|= fun non_optional_deps ->
@@ -1016,7 +1024,7 @@ let table_packages_edit_box ~ctxt ~sp repo =
   Lwt_list.rev_map_p
     (fun table_t ->
        (* Build the select for testing change *)
-       ODBStorage.PkgVer.elements table_t.pkg_str 
+       ODBStorage.PkgVer.elements ctxt.stor table_t.pkg_str 
        >>= fun pkg_ver_lst ->
 
        (* Compute errors *)
@@ -1171,7 +1179,7 @@ let library_management_box ~ctxt ~sp () =
 let user_management_box ~ctxt ~sp () = 
   Account.list ~ctxt () 
   >>= fun accnt_lst ->
-  S.use ctxt.Context.sqle
+  S.use ctxt.sqle
     (fun db ->
        S.fold db
          (fun st id -> id >>= fun id -> return (SetInt.add id st))
@@ -1181,7 +1189,7 @@ let user_management_box ~ctxt ~sp () =
   let lst_admin, lst_other = 
     List.fold_left
       (fun (adm, oth) accnt ->
-         if Context.is_admin ~ctxt ~accnt:(Some accnt) () ||
+         if is_admin ~ctxt ~accnt:(Some accnt) () ||
             SetInt.mem accnt.accnt_id admin_st then
            (accnt :: adm) , oth
          else
@@ -1197,7 +1205,7 @@ let user_management_box ~ctxt ~sp () =
       let real_name = 
         accnt.accnt_real_name
       in
-      if Context.is_admin ~ctxt ~accnt:(Some accnt) () then
+      if is_admin ~ctxt ~accnt:(Some accnt) () then
         (* OASIS-DB admin, cannot remove *)
         tr
           (td 
@@ -1414,7 +1422,7 @@ let mk_info ~ctxt pkg_str ver_str t_opt =
     in
       return content
   in
-    ODBStorage.PkgVer.filename pkg_str ver_str `Tarball
+    ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
     >>= fun tarball_fn ->
     begin
       let tarball_bn = FilePath.basename tarball_fn in
@@ -1547,7 +1555,7 @@ let () =
                        let (pkg_str, ver_str) = 
                          MapString.find tarball_bn mp_tarball
                        in
-                         ODBStorage.PkgVer.find pkg_str ver_str 
+                         ODBStorage.PkgVer.find ctxt.stor pkg_str ver_str 
                          >>= fun pkg_ver ->
                          begin
                            match pkg_ver.publink with 
@@ -1555,7 +1563,7 @@ let () =
                                  String_redirection.send ~sp 
                                    (uri_of_string uri_str)
                              | None ->
-                                 ODBStorage.PkgVer.filename pkg_str ver_str `Tarball
+                                 ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
                                  >>= fun fn -> 
                                  Files.send ~sp 
                                    (FilePath.make_absolute 
@@ -1575,7 +1583,7 @@ let () =
                        let (pkg_str, ver_str) = 
                          MapString.find tarball_bn mp_tarball
                        in
-                         ODBStorage.PkgVer.filename pkg_str ver_str `Tarball
+                         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
                          >>= fun fn -> 
                          Files.send ~sp 
                            (FilePath.make_absolute 
@@ -1626,7 +1634,7 @@ let () =
 
            match path with 
              | [] ->
-                 Mkd.load ctxt.Context.mkd "ext-odb"              
+                 Mkd.load ctxt.mkd "ext-odb"              
                  >>= fun intro ->
                  table_packages_box ~ctxt ~sp ()
                  >>= fun tbl_pkg_box ->

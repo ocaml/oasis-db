@@ -7,68 +7,7 @@ open ODBContext
 open ODBUtils
 open Lwt
 
-(* TODO: using Lwt for almost every function seem overkilling, try to 
- * use something more lightweight (e.g. don't use Lwt except for blocking
- * call)
- *)
-
-(** A container that mix a Hashtbl with a way to fast 
-    enumerate elements (based on Queue)
-  *)
-module HLS = 
-struct
-
-  let key_equal = 
-    ( = ) 
-
-  module HashString = 
-    Hashtbl.Make
-      (struct
-         type t = string
-         let equal = key_equal
-         let hash = Hashtbl.hash
-       end)
-
-  type 'a t = 
-      {
-        tbl: 'a HashString.t;
-        que: string Queue.t;
-      }
-
-  let create () = 
-    {
-      tbl = HashString.create 13;
-      que = Queue.create ();
-    }
-
-  (* TODO: considering locking/notification *)
-
-  let add t k v = 
-    if not (HashString.mem t.tbl k) then
-      Queue.add k t.que;
-    HashString.replace t.tbl k v;
-    return ()
-
-  let find t k =
-    try 
-      return (HashString.find t.tbl k)
-    with e ->
-      fail e 
-
-  let mem t k =
-    return (HashString.mem t.tbl k)
-
-  let elements t = 
-    let lst = 
-      Queue.fold 
-        (fun acc k ->
-           (k, HashString.find t.tbl k) :: acc)
-        []
-        t.que
-    in
-      return lst
-
-end
+module HLS = ODBHLS
 
 (** Storage information for a version 
   *)
@@ -86,6 +25,13 @@ type pkg_t =
     pkg_dir:  dirname;
     pkg_vers: pkg_ver_t HLS.t
   }
+
+(** Main datastructure *)
+type 'a t = 
+    {
+      fs:  ODBFilesystem.std;
+      all: pkg_t HLS.t;
+    }
 
 let storage_filename dn =
   Filename.concat dn "storage.sexp"
@@ -115,37 +61,35 @@ module Pkg =
 struct
   open ODBPkg 
 
-  (** All packages reference *)
-  let all = 
-    HLS.create ()
-
   (** All available packages
     *)
-  let elements () = 
-    HLS.elements all
+  let elements t = 
+    HLS.elements t.all
     >|= 
-    List.map (fun (_, t) -> t.pkg)
+    List.map (fun (_, pkg_t) -> pkg_t.pkg)
 
   (** Check the existence of a package
    *)
-  let mem k = 
-    HLS.mem all k
+  let mem t k = 
+    HLS.mem t.all k
 
   (** Get a specific package
     *)
-  let find k =
-    HLS.find all k
-    >|= 
-    fun t -> t.pkg
+  let find t k =
+    HLS.find t.all k
+    >|= fun t -> 
+    t.pkg
 
-  (* Add a package that is already in the dist_dir *)
-  let add ~ctxt dn =  
+  (* Add a package that is already in the filesystem *)
+  let add ~ctxt t dn =  
     let storage_fn = 
-      storage_filename dn
+      storage_filename dn 
     in
-      ODBPkg.from_file ~ctxt storage_fn
+      t.fs#with_file_in
+        storage_fn
+        (ODBPkg.from_chn ~ctxt ~fn:storage_fn)
       >>= fun ({pkg_name = pkg_str} as pkg) ->
-      HLS.mem all pkg_str
+      HLS.mem t.all pkg_str
       >>= fun pkg_exists ->
       begin
         let bn = 
@@ -156,11 +100,6 @@ struct
                (f_ "Adding package '%s' from directory '%s'")
                pkg_str dn)
             [
-              FilePath.is_subdir ctxt.dist_dir dn,
-              false,
-              spf (f_ "Directory '%s' is not a subdirectory of dist dir '%s'")
-                dn ctxt.dist_dir;
-
               bn <> pkg_str,
               false,
               spf (f_ "Storage file '%s' matches package '%s' but is in \
@@ -175,52 +114,53 @@ struct
             ]
       end 
       >>= fun () ->
+      t.fs#stat storage_fn
+      >>= fun stat ->
       begin
-        let t = 
+        let date =
+          CalendarLib.Calendar.from_unixfloat
+            stat.Unix.st_mtime
+        in
+        let pkg_t = 
           {
             pkg      = pkg;
             pkg_dir  = dn;
             pkg_vers = HLS.create ();
           }
         in
-          HLS.add all pkg_str t
-      end
-      >>= fun () ->
-      begin
-        let date =
-          CalendarLib.Calendar.from_unixfloat
-            (Unix.stat storage_fn).Unix.st_mtime
-        in
-          return
-            (date,
-             `Pkg (pkg_str, `Created),
-             pkg)
+          HLS.add t.all pkg_str pkg_t
+          >|= fun () ->
+          (date, `Pkg (pkg_str, `Created), pkg)
       end
 
   (** Create a package *)
-  let create ~ctxt pkg = 
-    let dn = 
-      Filename.concat ctxt.dist_dir pkg
-    in
-      ODBFileUtil.mkdir dn 0o755
-      >>= fun () ->
-      catch 
-        (fun () ->
-           ODBPkg.to_file ~ctxt (storage_filename dn) pkg
-           >>= fun () ->
-           add ~ctxt dn)
-        (fun e ->
-           ODBFileUtil.rm ~ctxt ~recurse:true [dn]
-           >>= fun () ->
-           fail e)
+  let create ~ctxt t pkg = 
+    t.fs#mkdir pkg 0o755
+    >>= fun () ->
+    catch 
+      (fun () ->
+         begin
+           let fn = 
+             storage_filename pkg
+           in
+             t.fs#with_file_out
+               fn
+               (ODBPkg.to_chn ~ctxt ~fn pkg)
+         end
+         >>= fun () ->
+         add ~ctxt t pkg)
+      (fun e ->
+         t.fs#rm ~recurse:true [pkg]
+         >>= fun () ->
+         fail e)
   
-  let dirname k = 
-    HLS.find all k
+  let dirname t k = 
+    HLS.find t.all k
     >>= fun t ->
     return t.pkg_dir
 
-  let filename k fn =
-    dirname k 
+  let filename t k fn =
+    dirname t k 
     >|= fun dn ->
     begin
       let bn = 
@@ -233,14 +173,13 @@ struct
         Filename.concat dn bn
     end
 
-  let with_file_in k fn read dflt =
-    filename k fn 
+  let with_file_in t k fn read dflt =
+    filename t k fn 
     >>= fun fn ->
-    if Sys.file_exists fn then
-      Lwt_io.with_file
-        ~mode:Lwt_io.input
-        fn
-        read
+    t.fs#file_exists fn
+    >>= fun exists ->
+    if exists then
+      t.fs#with_file_in fn read
     else
       dflt ()
 end
@@ -249,18 +188,18 @@ module PkgVer =
 struct 
   (** Get the [pkg_ver_t HLS.t] out of [Pkg.all].
     *)
-  let get pkg_str = 
-    HLS.find Pkg.all pkg_str
+  let get t pkg_str = 
+    HLS.find t.all pkg_str
     >>= fun pkg_strg ->
     return pkg_strg.pkg_vers
 
   (** All available version of a package, beginning with the older
       one.
     *)
-  let elements ?extra pkg_str = 
-    get pkg_str
+  let elements ?extra t pkg_str = 
+    get t pkg_str
     >>= 
-    HLS.elements 
+    HLS.elements
     >|= 
     List.rev_map (fun (_, t) -> t.pkg_ver) 
     >|= fun lst ->
@@ -283,23 +222,23 @@ struct
     
   (** Check the existence of a package's version
    *)
-  let mem pkg_str k = 
-    get pkg_str
+  let mem t pkg_str k = 
+    get t pkg_str
     >>= fun pkg_vers ->
     HLS.mem pkg_vers k
 
   (** Get a specific version
     *)
-  let find pkg_str k =
-    get pkg_str 
+  let find t pkg_str k =
+    get t pkg_str 
     >>= fun pkg_vers ->
     HLS.find pkg_vers k
     >|= (fun t -> t.pkg_ver)
 
   (** Get the latest version
     *)
-  let latest ?extra pkg_str = 
-    elements ?extra pkg_str 
+  let latest ?extra t pkg_str = 
+    elements ?extra t pkg_str 
     >|= List.rev
     >>= function
       | [] -> 
@@ -308,19 +247,20 @@ struct
           return e
 
   (** Add a package version that is already in the dist_dir *)
-  let add ~ctxt pkg_str dn = 
+  let add ~ctxt t pkg_str dn = 
     let storage_fn = 
       storage_filename dn 
     in
-      ODBPkgVer.from_file ~ctxt storage_fn 
+      t.fs#with_file_in storage_fn 
+        (ODBPkgVer.from_chn ~ctxt ~fn:storage_fn)
       >>= fun pkg_ver ->
       return (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
       >>= fun ver_str ->
-      get pkg_str 
+      get t pkg_str 
       >>= fun pkg_vers ->
       HLS.mem pkg_vers ver_str
       >>= fun ver_exists ->
-      Pkg.dirname pkg_str 
+      Pkg.dirname t pkg_str 
       >>= fun pkg_dn ->
       begin
         let bn = 
@@ -362,10 +302,7 @@ struct
           }
         in
           HLS.add pkg_vers ver_str t
-      end 
-      >>= fun () ->
-      begin
-        return 
+          >|= fun () ->
           (pkg_ver.ODBPkgVer.upload_date,
            `Pkg (pkg_ver.ODBPkgVer.pkg, 
                  `VersionCreated pkg_ver.ODBPkgVer.ver),
@@ -374,10 +311,10 @@ struct
 
   (** Create a package version 
     *)
-  let create ~ctxt pkg_ver tarball_fd = 
+  let create ~ctxt t pkg_ver tarball_fd = 
     catch 
       (fun () -> 
-         Pkg.dirname pkg_ver.ODBPkgVer.pkg)
+         Pkg.dirname t pkg_ver.ODBPkgVer.pkg)
       (function
          | Not_found as e -> 
              error ~ctxt 
@@ -394,34 +331,38 @@ struct
           (OASISVersion.string_of_version 
              pkg_ver.ODBPkgVer.ver)
       in
-        ODBFileUtil.mkdir dn 0o755 
+        t.fs#mkdir dn 0o755 
         >>= fun () ->
         catch 
           (fun () ->
              (* Create storage.sexp *)
-             ODBPkgVer.to_file ~ctxt 
-               (storage_filename dn) pkg_ver
+             begin
+               let fn =  storage_filename dn in
+                 t.fs#with_file_out
+                   fn
+                   (ODBPkgVer.to_chn ~ctxt ~fn pkg_ver)
+             end
              >>= fun () ->
 
              (* Copy the tarball *)
-             LwtExt.IO.copy_fd 
+             t.fs#copy_fd
                tarball_fd 
                (Filename.concat dn pkg_ver.ODBPkgVer.tarball)
              >>= fun () ->
 
              (* Notify installation of a new package version *)
-             add ~ctxt pkg_ver.ODBPkgVer.pkg dn)
+             add ~ctxt t pkg_ver.ODBPkgVer.pkg dn)
 
           (fun e ->
-             ODBFileUtil.rm ~ctxt ~recurse:true [dn]
-             >>= fun () ->
+             t.fs#rm ~recurse:true [dn]
+             >>= fun _ ->
              fail e)
     end
 
   (** Return the directory name of a version 
     *)
-  let dirname pkg_str k = 
-    get pkg_str
+  let dirname t pkg_str k = 
+    get t pkg_str
     >>= fun pkg_vers ->
     HLS.find pkg_vers k
     >>= fun t ->
@@ -429,8 +370,8 @@ struct
 
   (** Resolve the name of a file for a particular version
     *)
-  let filename pkg_str k fn = 
-    get pkg_str
+  let filename t pkg_str k fn = 
+    get t pkg_str
     >>= fun pkg_vers ->
     HLS.find pkg_vers k
     >>= fun t ->
@@ -445,10 +386,26 @@ struct
       in
         return (Filename.concat t.pkg_ver_dir bn)
     end
+
+  let with_file_out t pkg_str k fn f =
+    filename t pkg_str k fn 
+    >>= fun fn ->
+    t.fs#with_file_out fn f 
+
+  let with_file_in t pkg_str k fn f = 
+    filename t pkg_str k fn
+    >>= fun fn ->
+    t.fs#with_file_in fn f
 end
 
-
-let start ~ctxt log prev_log_event = 
+(* Create the datastructure, using the content of the filesystem *)
+let create ~ctxt fs log prev_log_event =
+  let res =
+    {
+      fs  = fs;
+      all = HLS.create ();
+    }
+  in
 
   let module SetMergeLog = 
     Set.Make
@@ -476,35 +433,39 @@ let start ~ctxt log prev_log_event =
   in
 
   let add_versions pkg_str dn (min_date, acc) =
-    ODBFileUtil.fold_dir 
+    fs#fold_dir 
       (fun fn bn (min_date, acc) ->
-         if Sys.is_directory fn then
-           (* Maybe a version *)
-           PkgVer.add ~ctxt pkg_str fn 
-           >|= fun (date, ev, pkg_ver) ->
-           (min_calendar min_date date, 
-            (date, ev) :: acc)
-         else
-           return (min_date, acc))
+         fs#is_directory fn
+         >>= fun is_dir ->
+           if is_dir then
+             (* Maybe a version *)
+             PkgVer.add ~ctxt res pkg_str fn 
+             >|= fun (date, ev, pkg_ver) ->
+             (min_calendar min_date date, 
+              (date, ev) :: acc)
+           else
+             return (min_date, acc))
       dn (min_date, acc)
   in
 
   let add_packages dn acc = 
-    ODBFileUtil.fold_dir 
+    fs#fold_dir 
       (fun fn bn acc ->
-         if Sys.is_directory fn then
-           (* Maybe a package *)
-           Pkg.add ~ctxt fn
-           >>= fun (date, ev, {ODBPkg.pkg_name = pkg_str}) ->
-           add_versions pkg_str fn (date, acc)
-           >>= fun (min_date, acc) ->
-           return ((min_date, ev) :: acc)
-         else
-           return acc)
+         fs#is_directory fn
+         >>= fun is_dir ->
+           if is_dir then
+             (* Maybe a package *)
+             Pkg.add ~ctxt res fn
+             >>= fun (date, ev, {ODBPkg.pkg_name = pkg_str}) ->
+             add_versions pkg_str fn (date, acc)
+             >>= fun (min_date, acc) ->
+             return ((min_date, ev) :: acc)
+           else
+             return acc)
       dn acc
   in
 
-    add_packages ctxt.dist_dir []
+    add_packages "" []
     >>= fun new_evs ->
     (* Only log real new events *)
     begin
@@ -529,16 +490,14 @@ let start ~ctxt log prev_log_event =
     log 
       ~timestamp:(CalendarLib.Calendar.now ())
       (`Sys 
-         (Printf.sprintf "ODBStorage(%s)" ctxt.dist_dir, 
+         (Printf.sprintf "ODBStorage(%s)" fs#root, 
           `Started))
+    >>= fun () ->
+    return res
 
+let create_ro =
+  create
 
-let check ~ctxt () = 
-  (* TODO: check that ver.pkg = pkg in the packages
-   * data structure 
-   *)
-  (* TODO: check that reloading data is possible 
-   * and lead to the same result.
-   *)
-  ()
+let create_rw =
+  create
 

@@ -40,3 +40,10 @@ let from_file =
 let to_file =
   LwtExt.IO.sexp_dump sexp_of_vt (fun t -> V1 t)
 
+(** Load from channel *)
+let from_chn ~fn chn =
+  LwtExt.IO.sexp_load_chn ~fn vt_of_sexp upgrade chn
+
+(** Dump to channel *)
+let to_chn ~fn chn =
+  LwtExt.IO.sexp_dump_chn ~fn sexp_of_vt (fun t -> V1 t) chn

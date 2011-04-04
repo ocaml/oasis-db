@@ -68,6 +68,14 @@ let from_file =
 let to_file =
   LwtExt.IO.sexp_dump sexp_of_vt (fun t -> V1 t)
 
+(** Load from file *)
+let from_chn ~fn chn =
+  LwtExt.IO.sexp_load_chn ~fn vt_of_sexp upgrade chn
+
+(** Dump to file *)
+let to_chn ~fn chn =
+  LwtExt.IO.sexp_dump_chn ~fn sexp_of_vt (fun t -> V1 t) chn
+
 let compare t1 t2 = 
   match t1.ord - t2.ord with 
     | 0 ->

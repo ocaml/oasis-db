@@ -24,7 +24,7 @@ type section_t =
       sct_base:  path_atom list;
     }
 
-type ('a, 'b) function_t =
+type ('a, 'b, 'c) function_t =
     {
       fun_section:        section_t;
       fun_title:          string;
@@ -35,7 +35,7 @@ type ('a, 'b) function_t =
       fun_status:         status;
       fun_help:           mkd;
       fun_examples:       (mkd * 'a * 'b) list;
-      fun_act:            'a -> 'b Lwt.t;
+      fun_act:            'c -> 'a -> 'b Lwt.t;
       fun_convert:        'b RESTConv.t;
     }
 

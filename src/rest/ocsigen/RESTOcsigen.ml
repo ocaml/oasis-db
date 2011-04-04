@@ -24,7 +24,7 @@ type help =
 let help_data =
   ref []
 
-let register_new_service base_path api_fun = 
+let register_new_service get_t base_path api_fun = 
 
   let get_params =
     let rec get_params' p = 
@@ -56,7 +56,9 @@ let register_new_service base_path api_fun =
         ~path:(base_path @ path)
         ~get_params
         (fun sp p () ->
-           api_fun.fun_act p  
+           get_t sp 
+           >>= fun t ->
+           api_fun.fun_act t p  
            >|= fun data ->
            (conv data, 
             mime_of_fmt fmt))

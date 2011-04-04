@@ -8,12 +8,11 @@ type t =
     logger:            logger;
     tar:               program;
     unzip:             program;
-    dist_dir:          dirname;
     incoming_dir:      dirname;
   }
 
 
-let default ?logger dist_dir incoming_dir = 
+let default ?logger incoming_dir = 
   let logger =
     match logger with 
       | Some l -> l
@@ -24,7 +23,6 @@ let default ?logger dist_dir incoming_dir =
       logger           = logger;
       tar              = "tar";
       unzip            = "unzip";
-      dist_dir         = dist_dir;
       incoming_dir     = incoming_dir;
     }
 

@@ -32,6 +32,9 @@ type t =
 
       upload_method: ODBPkgVer.upload_method;
       (* Method of upload *)
+
+      storage: [`RW|`RO] ODBStorage.t;
+      (* Where the package's version will be stored *)
     }
 
 let safe_clean t = 
@@ -67,7 +70,7 @@ let pkg_ver_of_upload t =
       publink           = t.publink;
     }
 
-let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =  
+let upload_begin ~ctxt str upload_method tarball_fn tarball_nm publink =  
   let upload_date =
     CalendarLib.Calendar.from_unixfloat
       (Unix.stat tarball_fn).Unix.st_mtime
@@ -113,7 +116,7 @@ let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =
     >>= fun () ->
     ODBArchive.uncompress_tmp_dir ~ctxt tarball_fd tarball_nm 
     (fun nm an dn ->
-      ODBCompletion.run ~ctxt nm an dn )
+      ODBCompletion.run ~ctxt str nm an dn )
     >>= fun ct ->
     begin
       let t = 
@@ -125,6 +128,7 @@ let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =
           completion     = ct;
           upload_date    = upload_date;
           upload_method  = upload_method;
+          storage        = str;
         }
       in
         Gc.finalise safe_clean t;
@@ -132,67 +136,64 @@ let upload_begin ~ctxt upload_method tarball_fn tarball_nm publink =
     end
 
 let upload_commit ~ctxt t = 
-  let pkg_ver_filename pkg_ver = 
-    ODBStorage.PkgVer.filename 
-      pkg_ver.ODBPkgVer.pkg
-      (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
-  in
+  begin
+    try 
+      return (pkg_ver_of_upload t)
+    with e ->
+      fail e 
+  end
+  >>= fun pkg_ver ->
+  (* Inject the newly created package version into the storage *)
+  ODBStorage.Pkg.mem t.storage pkg_ver.ODBPkgVer.pkg
+  >>= 
+  begin
+    function 
+      | true ->
+          return []
+      | false ->
+          ODBStorage.Pkg.create 
+            ~ctxt 
+            t.storage 
+            pkg_ver.ODBPkgVer.pkg
+          >>= fun (timestamp, ev, _) ->
+          return [timestamp, ev]
+  end 
+  >>= fun evs ->
 
-    begin
-      try 
-        return (pkg_ver_of_upload t)
-      with e ->
-        fail e 
-    end
-    >>= fun pkg_ver ->
-    (* Inject the newly created package version into the storage *)
-    ODBStorage.Pkg.mem pkg_ver.ODBPkgVer.pkg
-    >>= 
-    begin
-      function 
-        | true ->
-            return []
-        | false ->
-            ODBStorage.Pkg.create ~ctxt pkg_ver.ODBPkgVer.pkg
-            >>= fun (timestamp, ev, _) ->
-            return [timestamp, ev]
-    end 
-    >>= fun evs ->
+  ODBStorage.PkgVer.create ~ctxt t.storage pkg_ver t.tarball_fd
+  >>= fun (timestamp, ev, pkg_ver) ->
+  return ((timestamp, ev) :: evs)
+  >>= fun evs ->
 
-    ODBStorage.PkgVer.create ~ctxt pkg_ver t.tarball_fd
-    >>= fun (timestamp, ev, pkg_ver) ->
-    return ((timestamp, ev) :: evs)
-    >>= fun evs ->
+  (* Create _oasis and _oasis.pristine *)
+  begin
+    match t.completion.ct_oasis with 
+      | Some str ->
+          begin
+            let dump fn = 
+              ODBStorage.PkgVer.with_file_out
+                t.storage
+                pkg_ver.ODBPkgVer.pkg
+                (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
+                fn
+                (fun chn ->
+                   Lwt_io.write chn str)
+            in
+              Lwt.join 
+                [dump `OASIS; 
+                 dump `OASISPristine]
+          end
 
-    (* Create _oasis and _oasis.pristine *)
-    begin
-      match t.completion.ct_oasis with 
-        | Some str ->
-            begin
-              let dump fn = 
-                pkg_ver_filename pkg_ver fn
-                >>= fun fn ->
-                Lwt_io.with_file 
-                  ~mode:Lwt_io.output
-                  fn 
-                  (fun chn ->
-                     Lwt_io.write chn str)
-              in
-                Lwt.join 
-                  [dump `OASIS; 
-                   dump `OASISPristine]
-            end
+      | None ->
+          return ()
+  end
 
-        | None ->
-            return ()
-    end
-
-    (* Clean environment *)
-    >>= fun () ->
-    begin
-      safe_clean t;
-      return (List.rev evs, pkg_ver)
-    end
+  (* Clean environment *)
+  >>= fun () ->
+  begin
+    safe_clean t;
+    return (List.rev evs, pkg_ver)
+  end
 
 let upload_rollback ~ctxt t = 
   safe_clean t;

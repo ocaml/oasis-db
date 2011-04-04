@@ -1,7 +1,6 @@
 
 open ODBProcess
 open ODBGettext
-open ODBFileUtil
 open ODBContext
 open Lwt
 
@@ -64,12 +63,12 @@ let uncompress ~ctxt fd nm dn =
     (* Uncompress the tarball *)
     find_handler handlers 
     >>= fun res ->
-    ODBFileUtil.rm ~ctxt [tarball_fn]
-    >|= fun () ->
+    FileUtilExt.rm [tarball_fn]
+    >|= fun _ ->
     res
 
 let uncompress_tmp_dir ~ctxt fd nm f = 
-  with_temp_dir ~ctxt "oasis-db-" "" 
+  FileUtilExt.with_temp_dir "oasis-db-" "" 
     (fun dn ->
        uncompress ~ctxt fd nm dn
        >>= fun an ->

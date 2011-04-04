@@ -6,79 +6,28 @@ open Lwt
 let tests = 
   "Sync" >::
   bracket_ocsigen 
-    (Printf.sprintf
-       "<ocsigen>
-          <server>
-            $std_conf
-            <host>
-              <site path=\"\">
-                <static dir=\"$curdir/%s\" />
-              </site>
-            </host>
-          </server>
-        </ocsigen>"
-       !odb.ODBContext.dist_dir)
+    ("<ocsigen>
+        <server>
+          $std_conf
+          <host>
+            <site path=\"\">
+              <static dir=\"$rootdir\" />
+            </site>
+          </host>
+        </server>
+      </ocsigen>")
 
     (* Pre start *)
-    (fun _ ->
+    (fun ocs ->
        let ctxt = !odb in
-       (* Put in place the synchronization data *)
-
-       let add_exists pkg_str ver_str sync fn =
-         ODBStorage.PkgVer.filename pkg_str ver_str fn 
-         >>= fun fn ->
-           if Sys.file_exists fn then
-             ODBSync.add fn sync
-           else
-             return sync
-       in
 
        let job =
          (* Load synchonization data *)
-         ODBFileUtil.rm 
-           ~ctxt
-           (List.map 
-              (FilePath.concat ctxt.ODBContext.dist_dir) 
-              ["sync-meta.sexp"; "sync.sexp"])
-         >>= fun () ->
-         ODBSync.load ~ctxt ctxt.ODBContext.dist_dir
+         ODBSync.load ~ctxt ocs.ocs_rootdir
          >>= fun sync ->
-
-         (* Scan all the storage and add files to sync *)
-         ODBStorage.start ~ctxt 
-           (fun ~timestamp _ -> return ())
-           []
-         >>= fun _ ->
-         ODBStorage.Pkg.elements () 
-         >>=
-         Lwt_list.fold_left_s
-           (fun sync {ODBPkg.pkg_name = pkg_str} ->
-              ODBStorage.Pkg.filename pkg_str (`PluginData "storage")
-              >>= fun fn ->
-              ODBSync.add fn sync
-              >>= fun sync ->
-              
-              (* Iterate in package version *)
-              ODBStorage.PkgVer.elements pkg_str 
-              >>= 
-              Lwt_list.fold_left_s
-                (fun sync ver ->
-                   Lwt_list.fold_left_s 
-                     (add_exists pkg_str 
-                        (OASISVersion.string_of_version ver.ODBPkgVer.ver))
-                     sync
-                     [`OASIS; 
-                      `OASISPristine; 
-                      `Tarball; 
-                      `PluginData "storage"])
-                sync)
-           sync
-         >>= fun sync ->
-
          (* Dump synchronization data *)
          ODBSync.dump ~ctxt sync
        in
-
          Lwt_unix.run job)
 
     (* Main *)
@@ -116,20 +65,15 @@ let tests =
                           cache_dir
                           (FilePath.make_filename mkfn)))
               in
-              let () = 
-                assert_fn ["oasis"; "storage.sexp"] true;
-                assert_fn ["ounit"; "1.1.0"; "ounit-1.1.0.tar.gz"] true
-              in
 
-              let extra_fn = 
-                "test.update"
-              in
+              let extra_fn = "extra.fn" in
+
               let update_job =
                 let abs_fn = 
-                  FilePath.concat ctxt.ODBContext.dist_dir extra_fn
+                  FilePath.concat ocs.ocs_rootdir extra_fn
                 in
                   FileUtil.touch abs_fn;
-                  ODBSync.load ~ctxt ctxt.ODBContext.dist_dir
+                  ODBSync.load ~ctxt ocs.ocs_rootdir
                   >>=
                   ODBSync.add abs_fn
                   >>=
