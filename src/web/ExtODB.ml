@@ -1194,9 +1194,6 @@ let user_management_box ~ctxt ~sp () =
       ([], [])
       accnt_lst
   in
-  let () = 
-    List.iter (fun accnt -> prerr_endline accnt.accnt_real_name) accnt_lst
-  in
   let tab = 
     let mk_tr accnt = 
       let real_name = 
