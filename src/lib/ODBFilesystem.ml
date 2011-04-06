@@ -29,17 +29,22 @@ let string_of_event fn =
       | FSCopiedFrom fn' ->
           spf "%s copied from %s" fn fn'
 
-exception NotSubdir of filename 
+exception Not_subdir of (filename * filename)
 
-class std root = 
+let () = 
+  Printexc.register_printer
+    (function
+       | Not_subdir (root, fn) ->
+           Some 
+             (Printf.sprintf
+                "Filename '%s' is not a subdirectory of '%s'"
+                fn root)
+       | _ -> 
+           None)
+
+(** Read-only filesystem *)
+class std_ro root = 
 object (self) 
-
-  initializer 
-    begin
-      (* TODO: Really lock the filesystem for our own usage (lockf?) *)
-      ()
-    end
-
 
   val root = 
     if FilePath.is_relative root then
@@ -47,21 +52,135 @@ object (self)
     else
       root
 
-  val mutex_watcher = Lwt_mutex.create ()
-  val mutable watcher = []
-
   method root = root
 
   (** Make the file absolute to root *)
   method rebase fn =
-(*       TODO: activate this test  
-        if FilePath.is_subdir ctxt.odb.dist_dir fn then *)
-    (* TODO: Check fn is a subdir of root *)
-    FilePath.make_absolute root fn
+    let abs_fn = 
+      FilePath.make_absolute root fn
+    in
+      if FilePath.compare root abs_fn = 0 || FilePath.is_subdir abs_fn root then
+        abs_fn
+      else
+        raise (Not_subdir (root, abs_fn))
+
+  method rebase_lwt fn =
+    try 
+      return (self#rebase fn)
+    with e ->
+      fail e
 
   (** Make the file relative to root *)
   method unbase fn =
     FilePath.make_relative root fn
+
+  (** Acquire read resources *)
+  method read_begin = 
+    return ()
+
+  (** Release read resources *)
+  method read_end =
+    return ()
+
+  (** Acquire and release resources *)
+  method do_read: 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t  =
+    fun f ->
+      self#read_begin 
+      >>= 
+      f 
+      >>= fun res -> 
+      self#read_end 
+      >|= fun () ->
+      res
+
+  (** Test file existence *)
+  method file_exists fn =
+    self#do_read
+      (fun () ->
+         self#rebase_lwt fn >|= Sys.file_exists)
+
+  (** Test if it is a directory *)
+  method is_directory fn =
+    self#do_read
+      (fun () ->
+         self#rebase_lwt fn >|= Sys.is_directory)
+
+  (** Open a file for reading *)
+  method open_in fn =
+    self#read_begin 
+    >>= fun () ->
+    self#rebase_lwt fn
+    >|= fun fn' ->
+    (fn,
+     Lwt_io.open_file ~mode:Lwt_io.input fn')
+
+  (** Close an input channel *)
+  method close_in ((_, chn): filename * Lwt_io.input Lwt_io.channel) =
+    Lwt_io.close chn
+    >>= fun () ->
+    self#read_end
+
+  (** Return Unix stat of a file *)
+  method stat fn =
+    self#do_read
+      (fun () ->
+         try 
+           let res = 
+             Unix.stat (self#rebase fn)
+           in
+             return res
+         with e ->
+           fail e)
+
+end
+
+(* Do an operation on an input channel *)
+let with_file_in fs fn f = 
+  fs#open_in fn
+  >>= fun ((_, chn) as chn') ->
+  f chn
+  >>= fun res ->
+  fs#close_in chn'
+  >|= fun () ->
+  res
+
+(** Traverse a whole filesystem tree *)
+let fold f fs fn a =
+  fs#read_begin
+  >>= fun () ->
+  (* TODO: maybe the fn can change at each level,
+   * maybe call again self#rebase 
+   * (e.g. unionfs)
+   *)
+  fs#rebase_lwt fn
+  >>= fun fn' ->
+  FileUtilExt.fold f fn' a
+  >>= fun res ->
+  fs#read_end 
+  >|= fun () ->
+  res 
+
+(** Traverse a directory *)
+let fold_dir f fs fn a =
+  fs#read_begin
+  >>= fun () ->
+  (* TODO: see the TODO of fold *)
+  fs#rebase_lwt fn
+  >>= fun fn' ->
+  FileUtilExt.fold_dir f fn' a
+  >>= fun res ->
+  fs#read_end
+  >|= fun () ->
+  res
+
+(** Read-write filesystem *)
+class std_rw root = 
+object (self) 
+
+  inherit std_ro root
+
+  val mutex_watcher = Lwt_mutex.create ()
+  val mutable watcher = []
 
   (** Watchers *)
 
@@ -92,78 +211,49 @@ object (self)
     >>= 
     Lwt_list.iter_s (fun (_, f) -> f fn ev)
 
+  (** Acquire write resources *)
+  method write_begin =
+    return ()
 
-  (** File management *)
-
-  (** Acquire read resources *)
-  method do_read: 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t  =
-    fun f -> f ()
+  (** Release write resources *)
+  method write_end ev_lst =
+    Lwt_list.iter_s 
+      (fun (fn, ev) ->
+         self#watch_notify fn ev)
+      ev_lst
 
   (** Acquire write resources and notify watchers of changes *)
   method do_write: 'a. (unit -> ('a * (filename * event) list) Lwt.t) -> 'a Lwt.t =
     fun f ->
-      f () 
+      self#write_begin
+      >>= 
+      f  
       >>= fun (res, ev_lst) ->
-      Lwt_list.iter_s 
-        (fun (fn, ev) ->
-           self#watch_notify fn ev)
-        ev_lst
+      self#write_end ev_lst
       >>= fun () ->
       return res
 
-  (** Test file existence *)
-  method file_exists fn =
-    self#do_read
-      (fun () ->
-         return (Sys.file_exists (self#rebase fn)))
+  (** Open a file for writing *)
+  method open_out fn =
+    self#file_exists fn 
+    >>= fun exists_before ->
+    self#rebase_lwt fn
+    >>= fun fn' ->
+    self#write_begin 
+    >|= fun () ->
+    ((exists_before, fn),
+     Lwt_io.open_file ~mode:Lwt_io.output fn')
 
-  (** Test if it is a directory *)
-  method is_directory fn =
-    self#do_read
-      (fun () ->
-         return (Sys.is_directory (self#rebase fn)))
-
-  (** Traverse a whole filesystem tree *)
-  method fold:
-      'a. (FileUtilExt.iter_t -> 'a -> 'a Lwt.t) ->
-      filename -> 'a -> 'a Lwt.t =
-    fun f fn a ->
-      self#do_read
-        (fun () ->
-           FileUtilExt.fold f (self#rebase fn) a)
-
-  (** Traverse a directory *)
-  method fold_dir:
-      'a. (filename -> filename ->'a -> 'a Lwt.t) ->
-      filename -> 'a -> 'a Lwt.t =
-    fun f fn a ->
-      self#do_read
-        (fun () ->
-           FileUtilExt.fold_dir f (self#rebase fn) a)
-
-  (** Read from a file *)
-  method with_file_in: 'a. filename -> 
-      (Lwt_io.input Lwt_io.channel -> 'a Lwt.t) -> 'a Lwt.t = 
-    fun fn f ->
-      self#do_read 
-        (fun () ->
-           Lwt_io.with_file ~mode:Lwt_io.input (self#rebase fn) f)
-
-  (** Write to a file *)
-  method with_file_out: 'a. filename ->
-      (Lwt_io.output Lwt_io.channel -> 'a Lwt.t) -> 'a Lwt.t = 
-    fun fn f ->
-      self#file_exists fn 
-      >>= fun exists_before ->
-      self#do_write 
-        (fun () -> 
-           Lwt_io.with_file ~mode:Lwt_io.output (self#rebase fn) f
-           >|= fun res ->
-           res, [fn, 
-                 if exists_before then 
-                   FSChanged 
-                 else 
-                   FSCreated])
+  (** Close a output channel *)
+  method close_out ((exists_before, fn), (chn: Lwt_io.output Lwt_io.channel)) =
+    Lwt_io.close chn
+    >>= fun () ->
+    self#write_end 
+      [fn, 
+       if exists_before then 
+         FSChanged 
+       else 
+         FSCreated]
 
   (** Create a directory with given permissions *)
   method mkdir ?(ignore_exist=false) dn perm =
@@ -171,7 +261,9 @@ object (self)
       (fun () ->
          catch 
            (fun () ->
-              FileUtilExt.mkdir (self#rebase dn) perm
+              self#rebase_lwt dn 
+              >>= fun fn' ->
+              FileUtilExt.mkdir fn' perm
               >|= fun () ->
               (), [dn, FSCreated])
            (function
@@ -184,16 +276,20 @@ object (self)
   method rm ?recurse lst =
      self#do_write
       (fun () ->
-         FileUtilExt.rm ?recurse (List.map self#rebase lst)
+         Lwt_list.map_s self#rebase_lwt lst
+         >>= fun lst' ->
+         FileUtilExt.rm ?recurse lst'
          >|= fun fn_lst ->
          (), List.map (fun fn -> self#unbase fn, FSDeleted) fn_lst)
 
   (** Move files to the filesystem *)
   method mv other src tgt =
     let mv_op () =
-      FileUtilExt.mv 
-        (other#rebase src)
-        (self#rebase tgt)
+      other#rebase_lwt src
+      >>= fun src' ->
+      other#rebase_lwt tgt
+      >>= fun tgt' ->
+      FileUtilExt.mv src' tgt'
       >|= fun (rm_src_lst, rm_tgt_lst, mv_lst) ->
       (List.map
          (fun fn ->
@@ -246,9 +342,11 @@ object (self)
   (** Copy files to the filesystem *)
   method cp other lst tgt =
     let cp_op () =
-      FileUtilExt.cp 
-        (List.map other#rebase lst)
-        (self#rebase tgt)
+      Lwt_list.map_s other#rebase_lwt lst
+      >>= fun lst' ->
+      self#rebase_lwt tgt
+      >>= fun tgt' ->
+      FileUtilExt.cp lst' tgt'
     in
       self#do_write
         (fun () ->
@@ -278,42 +376,53 @@ object (self)
   method copy_fd fd tgt =
     self#do_write 
       (fun () ->
-         LwtExt.IO.copy_fd fd (self#rebase tgt)
-         >>= fun () ->
-         return ((), [tgt, FSCreated]))
-
-  (** Return Unix stat of a file *)
-  method stat fn =
-    self#do_read
-      (fun () ->
-         try 
-           let res = 
-             Unix.stat (self#rebase fn)
+         self#rebase_lwt tgt
+         >>= fun tgt' ->
+         begin
+           let exists_before = 
+             Sys.file_exists tgt'
            in
-             return res
-         with e ->
-           fail e)
+             LwtExt.IO.copy_fd fd tgt'
+             >>= fun () ->
+             return ((), [tgt, if exists_before then FSChanged else FSCreated])
+         end)
 
 end
 
+(** Write to a file *)
+let with_file_out fs fn f =
+  fs#open_out fn
+  >>= fun ((_, chn) as chn') ->
+  f chn
+  >>= fun res ->
+  fs#close_out chn'
+  >|= fun () ->
+  res
+
+
+(** Filesystem that uses a rwlock *)
 class rwlock root =
 object
-  inherit std root as super
+  inherit std_rw root as super
 
   val rwlock = ODBRWLock.create ()
 
-  method do_read f =
-    ODBRWLock.with_read_lock rwlock 
-      (fun () ->
-         super#do_read f)
+  method read_begin =
+    ODBRWLock.read_lock rwlock 
 
-  method do_write f =
-    ODBRWLock.with_write_lock rwlock
-      (fun () ->
-         super#do_write f)
+  method read_end =
+    ODBRWLock.read_unlock rwlock 
+
+  method write_begin =
+    ODBRWLock.write_lock rwlock
+
+  method write_end ev_lst =
+    ODBRWLock.write_unlock rwlock
+    >>= fun () ->
+    super#write_end ev_lst
 end
 
-let spy (fs: std) = 
+let spy (fs: std_rw) = 
   fs#watch_add 
     (fun fn ev ->
        Lwt_io.eprintl (string_of_event fn ev))

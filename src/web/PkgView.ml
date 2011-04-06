@@ -14,11 +14,11 @@ open ODBPkg
 open Context
 
 let package_box ~ctxt ~sp pkg = 
-  ODBStorage.PkgVer.elements ctxt.stor pkg.pkg_name
+  ODBStorage.PkgVer.elements ctxt.stor (`Pkg pkg)
   >>= fun pkg_ver_lst ->
   catch 
     (fun () ->
-       ODBStorage.PkgVer.latest ctxt.stor pkg.pkg_name
+       ODBStorage.PkgVer.latest ctxt.stor (`Pkg pkg)
        >|= fun v ->
        Some v)
     (function 
@@ -27,15 +27,6 @@ let package_box ~ctxt ~sp pkg =
        | e ->
            fail e)
   >>= fun pkg_ver_latest_opt ->
-  ODBStorage.Pkg.with_file_in ctxt.stor 
-    pkg.pkg_name (`Other "watch")
-    (fun chn ->
-       Lwt_io.read chn
-       >>= fun str ->
-       return (Some str))
-    (fun () ->
-       return None)
-  >>= fun watch_opt ->
   Comment.pkg_box ~sp ~ctxt pkg.pkg_name
   >|= fun comment_box ->
   begin
@@ -43,7 +34,7 @@ let package_box ~ctxt ~sp pkg =
      h3 [pcdata "Uscan"];
 
      begin
-       match watch_opt with 
+       match pkg.pkg_watch with 
          | Some str ->
              pre [pcdata str];
          | None ->

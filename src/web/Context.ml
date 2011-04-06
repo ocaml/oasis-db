@@ -10,7 +10,7 @@ type context =
       sqle:  Sqlexpr.t;
       ocaw:  OCAWeb.t;
       mkd:   Mkd.t;
-      stor:  [`RW|`RO] ODBStorage.t;
+      stor:  ODBStorage.rw_t;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
       admin: int list;
@@ -224,7 +224,7 @@ let init () =
                in
                  ODBFilesystem.spy fs
                  >>= fun () ->
-                 ODBStorage.create_rw
+                 ODBStorage.create
                    ~ctxt:(get_odb ()) 
                    fs
                    log

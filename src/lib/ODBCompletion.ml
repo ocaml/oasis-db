@@ -278,13 +278,13 @@ let is_sure =
 (** Try to determine order, using guessed answer for 
     package and version
  *)
-let order ~ctxt str a_pkg a_ver =
+let order ~ctxt stor a_pkg a_ver =
   match value a_pkg, value a_ver with 
   | Some pkg_s, Some ver ->
       begin
         catch 
           (fun () ->
-            ODBStorage.PkgVer.elements str pkg_s
+            ODBStorage.PkgVer.elements stor (`Str pkg_s)
             >>= fun lst ->
             (* Try to insert this version between two. If version = latest -> sure
              * otherwise -> unsure.
@@ -351,7 +351,7 @@ let order ~ctxt str a_pkg a_ver =
 
 (** Try to guess parameter for a tarball
  *)
-let run ~ctxt str fn an dn =
+let run ~ctxt stor fn an dn =
   let completions = 
     [
       "tarball_name", tarball_name;
@@ -442,7 +442,7 @@ let run ~ctxt str fn an dn =
           | Unsure (q, s) -> Unsure (q, vos s)
           | NotFound -> NotFound
         in
-          order ~ctxt str a_pkg a_ver
+          order ~ctxt stor a_pkg a_ver
           >>= fun a_ord ->
           return 
             {

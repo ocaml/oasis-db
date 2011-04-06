@@ -22,34 +22,26 @@ let of_oasis_package pkg =
     []
 
 
-let map ~ctxt str = 
-  ODBStorage.Pkg.elements str
+let map ~ctxt stor = 
+  ODBStorage.Pkg.elements stor
   >>= 
   begin
-    let one_ver ver = 
-      ODBStorage.PkgVer.filename 
-        str
-        ver.pkg 
-        (OASISVersion.string_of_version ver.ver) 
-        `OASIS
-      >>= fun fn -> 
-      catch 
-        (fun () ->
-           ODBOASIS.from_file ~ctxt fn
-           >|= 
-           of_oasis_package
-           >|=
-           List.rev_map (fun prvd -> prvd, ver))
-        (fun _ -> 
-           return [])
+    let one_pkg_ver pkg_ver = 
+      ODBStorage.PkgVer.oasis stor (`PkgVer pkg_ver) 
+      >|= 
+        function 
+          | Some oasis ->
+              List.rev_map 
+                (fun prvd -> prvd, pkg_ver)
+                (of_oasis_package oasis)
+          | None ->
+              []
     in
 
     let one_pkg pkg = 
-      ODBStorage.PkgVer.elements 
-        str
-        pkg.pkg_name
+      ODBStorage.PkgVer.elements stor (`Pkg pkg)
       >>=
-      Lwt_list.rev_map_p one_ver 
+      Lwt_list.rev_map_p one_pkg_ver 
     in
 
       Lwt_list.rev_map_p one_pkg 

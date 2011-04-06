@@ -60,7 +60,7 @@ let info ~ctxt () =
         (fun acc (pkg_str, ver_str) ->
            catch 
              (fun () ->
-                ODBStorage.PkgVer.find stor pkg_str ver_str
+                ODBStorage.PkgVer.find stor (`Str (pkg_str, ver_str))
                 >>= fun pkg_ver ->
                 return (pkg_ver :: acc))
              (function 
@@ -81,10 +81,10 @@ let info ~ctxt () =
   >>= fun pkg_lst -> 
   begin
     Lwt_list.fold_left_s
-      (fun acc {ODBPkg.pkg_name = pkg_str} ->
+      (fun acc pkg ->
          catch
            (fun () ->
-              ODBStorage.PkgVer.latest stor pkg_str
+              ODBStorage.PkgVer.latest stor (`Pkg pkg)
               >|= fun ver_latest ->
               ver_latest :: acc)
            (function
@@ -94,17 +94,14 @@ let info ~ctxt () =
                   fail e))
       []
       pkg_lst
-      >>= fun ver_latest ->
+      >>=
       Lwt_list.filter_p
-        (fun ver_latest ->
-          ODBStorage.PkgVer.filename 
-            stor
-            ver_latest.pkg
-            (OASISVersion.string_of_version ver_latest.ver)
-            `OASIS
-          >>= fun oasis_fn ->
-          return (not (Sys.file_exists oasis_fn)))
-        ver_latest
+        (fun pkg_ver_latest ->
+          ODBStorage.PkgVer.oasis_status stor (`PkgVer pkg_ver_latest)
+          >|= 
+            function
+              | `OK -> false
+              | `Not_found | `Error -> true)
   end
 
   >|= fun pkg_without_oasis_lst ->

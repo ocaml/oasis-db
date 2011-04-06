@@ -179,7 +179,10 @@ let list_tarball ~ctxt mp =
   in
     Lwt_list.fold_left_s
       (fun mp (pkg_str, ver_str) ->
-         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
+         ODBStorage.PkgVer.filename 
+           ctxt.stor 
+           (`Str (pkg_str, ver_str)) 
+           `Tarball
          >>= fun tarball_fn ->
          return 
            (MapString.add
@@ -206,10 +209,10 @@ let list_latest ~ctxt () =
   ODBStorage.Pkg.elements ctxt.stor
   >>= fun pkg_lst ->
   Lwt_list.fold_left_s 
-    (fun acc {ODBPkg.pkg_name = pkg_str} ->
+    (fun acc ({ODBPkg.pkg_name = pkg_str} as pkg) ->
        catch 
          (fun () ->
-            ODBStorage.PkgVer.latest ctxt.stor pkg_str
+            ODBStorage.PkgVer.latest ctxt.stor (`Pkg pkg)
            >|= fun pkg_ver ->
            (pkg_str, string_of_version (pkg_ver.ODBPkgVer.ver))
            :: acc)
@@ -687,15 +690,9 @@ let map_info_name ~ctxt mp_repo =
 
     Lwt_list.rev_map_p 
       (fun (pkg_str, ver_str) ->
-         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `OASIS
-         >>= fun oasis_fn ->
-         catch 
-           (fun () ->
-              ODBOASIS.from_file ~ctxt:ctxt.odb oasis_fn
-              >>= fun oasis ->
-              return (pkg_str, ver_str, Some oasis))
-           (fun _ ->
-              return (pkg_str, ver_str, None)))
+         ODBStorage.PkgVer.oasis ctxt.stor (`Str (pkg_str, ver_str))
+         >>= fun oasis_opt ->
+         return (pkg_str, ver_str, oasis_opt))
       lst_repo
     >>= fun lst_repo_pkgver ->
     program_list ~ctxt ()
@@ -896,92 +893,92 @@ let table_packages_box ~ctxt ~sp () =
 
 (* Compute dependency errors for package *)
 let packager_dependency_error ~ctxt mp_info_name pkg_str ver_str =
-  ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `OASIS
-  >>= fun oasis_fn ->
-  catch 
-    (fun () ->
-       ODBOASIS.from_file ~ctxt:ctxt.odb oasis_fn
-       >>= fun oasis ->
-       non_optional_deps ~ctxt oasis
-       >|= fun non_optional_deps ->
-       MapString.fold
-         (fun dep_str ver_cmp_opt errors ->
-            try
-              match MapString.find dep_str mp_info_name with 
-                | `PkgVerOASIS ((pkg_str', ver_str'), _) 
-                | `PkgVer (pkg_str', ver_str') ->
-                    begin
-                      match ver_cmp_opt with 
-                        | Some cmp ->
-                            let ver_ok = 
-                              comparator_apply 
-                                (version_of_string ver_str')
-                                cmp
-                            in
-                              if not ver_ok then
-                                (Printf.sprintf 
-                                   (f_ "Package %s v%s need %s (%s) \
-                                        but only v%s is provided")
-                                   pkg_str ver_str dep_str
-                                   (string_of_comparator cmp)
-                                   ver_str')
-                                :: errors
-                              else
-                                errors
+  ODBStorage.PkgVer.oasis ctxt.stor (`Str (pkg_str, ver_str))
+  >>=  
+    function 
+      | Some oasis ->
+          begin
+            non_optional_deps ~ctxt oasis
+            >|= fun non_optional_deps ->
+            MapString.fold
+              (fun dep_str ver_cmp_opt errors ->
+                 try
+                   match MapString.find dep_str mp_info_name with 
+                     | `PkgVerOASIS ((pkg_str', ver_str'), _) 
+                     | `PkgVer (pkg_str', ver_str') ->
+                         begin
+                           match ver_cmp_opt with 
+                             | Some cmp ->
+                                 let ver_ok = 
+                                   comparator_apply 
+                                     (version_of_string ver_str')
+                                     cmp
+                                 in
+                                   if not ver_ok then
+                                     (Printf.sprintf 
+                                        (f_ "Package %s v%s need %s (%s) \
+                                             but only v%s is provided")
+                                        pkg_str ver_str dep_str
+                                        (string_of_comparator cmp)
+                                        ver_str')
+                                     :: errors
+                                   else
+                                     errors
 
-                        | None ->
-                            errors
-                    end
-                | `Program _ ->
-                    begin
-                      match ver_cmp_opt with 
-                        | Some cmp ->
-                            (Printf.sprintf 
-                               (f_ "Package %s v%s need %s (%s) \
-                                    but only a program is provided")
-                               pkg_str ver_str dep_str
-                               (string_of_comparator cmp))
-                            :: errors
+                             | None ->
+                                 errors
+                         end
+                     | `Program _ ->
+                         begin
+                           match ver_cmp_opt with 
+                             | Some cmp ->
+                                 (Printf.sprintf 
+                                    (f_ "Package %s v%s need %s (%s) \
+                                         but only a program is provided")
+                                    pkg_str ver_str dep_str
+                                    (string_of_comparator cmp))
+                                 :: errors
 
-                        | None ->
-                            errors
-                    end
+                             | None ->
+                                 errors
+                         end
 
-                | `Library _ ->
-                    begin
-                      match ver_cmp_opt with 
-                        | Some cmp ->
-                            (Printf.sprintf 
-                               (f_ "Package %s v%s need %s (%s) \
-                                    but only a library is provided")
-                               pkg_str ver_str dep_str
-                               (string_of_comparator cmp))
-                            :: errors
+                     | `Library _ ->
+                         begin
+                           match ver_cmp_opt with 
+                             | Some cmp ->
+                                 (Printf.sprintf 
+                                    (f_ "Package %s v%s need %s (%s) \
+                                         but only a library is provided")
+                                    pkg_str ver_str dep_str
+                                    (string_of_comparator cmp))
+                                 :: errors
 
-                        | None ->
-                            errors
-                    end
+                             | None ->
+                                 errors
+                         end
 
-            with Not_found ->
-              begin
-                match ver_cmp_opt with 
-                  | Some cmp ->
-                      (Printf.sprintf 
-                         (f_ "Package %s v%s need %s (%s)")
-                         pkg_str ver_str dep_str
-                         (string_of_comparator cmp))
-                      :: errors
-                  | None ->
-                      (Printf.sprintf
-                         (f_ "Package %s v%s need %s")
-                         pkg_str ver_str dep_str)
-                      :: errors
-              end)
-         non_optional_deps
-         [])
-    (fun _ ->
-       (* No _oasis to reason about *)
-       return [])
+                 with Not_found ->
+                   begin
+                     match ver_cmp_opt with 
+                       | Some cmp ->
+                           (Printf.sprintf 
+                              (f_ "Package %s v%s need %s (%s)")
+                              pkg_str ver_str dep_str
+                              (string_of_comparator cmp))
+                           :: errors
+                       | None ->
+                           (Printf.sprintf
+                              (f_ "Package %s v%s need %s")
+                              pkg_str ver_str dep_str)
+                           :: errors
+                   end)
+              non_optional_deps
+              []
+          end
+      | None ->
+          (* No _oasis to reason about *)
+          return []
 
 (* Build a table that allow to edit the state of "testing" repository
  *)
@@ -1024,7 +1021,7 @@ let table_packages_edit_box ~ctxt ~sp repo =
   Lwt_list.rev_map_p
     (fun table_t ->
        (* Build the select for testing change *)
-       ODBStorage.PkgVer.elements ctxt.stor table_t.pkg_str 
+       ODBStorage.PkgVer.elements ctxt.stor (`Str table_t.pkg_str)
        >>= fun pkg_ver_lst ->
 
        (* Compute errors *)
@@ -1422,7 +1419,7 @@ let mk_info ~ctxt pkg_str ver_str t_opt =
     in
       return content
   in
-    ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
+    ODBStorage.PkgVer.filename ctxt.stor (`Str (pkg_str, ver_str)) `Tarball
     >>= fun tarball_fn ->
     begin
       let tarball_bn = FilePath.basename tarball_fn in
@@ -1555,7 +1552,7 @@ let () =
                        let (pkg_str, ver_str) = 
                          MapString.find tarball_bn mp_tarball
                        in
-                         ODBStorage.PkgVer.find ctxt.stor pkg_str ver_str 
+                         ODBStorage.PkgVer.find ctxt.stor (`Str (pkg_str, ver_str))
                          >>= fun pkg_ver ->
                          begin
                            match pkg_ver.publink with 
@@ -1563,12 +1560,13 @@ let () =
                                  String_redirection.send ~sp 
                                    (uri_of_string uri_str)
                              | None ->
-                                 ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
+                                 ODBStorage.PkgVer.filename 
+                                   ctxt.stor 
+                                   (`Str (pkg_str, ver_str)) 
+                                   `Tarball
                                  >>= fun fn -> 
                                  Files.send ~sp 
-                                   (FilePath.make_absolute 
-                                      (FileUtil.pwd ())
-                                      fn)
+                                   ((ODBStorage.fs ctxt.stor)#rebase fn)
                          end
 
                      with Not_found ->
@@ -1583,12 +1581,13 @@ let () =
                        let (pkg_str, ver_str) = 
                          MapString.find tarball_bn mp_tarball
                        in
-                         ODBStorage.PkgVer.filename ctxt.stor pkg_str ver_str `Tarball
+                         ODBStorage.PkgVer.filename 
+                           ctxt.stor 
+                           (`Str (pkg_str, ver_str)) 
+                           `Tarball
                          >>= fun fn -> 
                          Files.send ~sp 
-                           (FilePath.make_absolute 
-                              (FileUtil.pwd ())
-                              fn)
+                           ((ODBStorage.fs ctxt.stor)#rebase fn)
 
                      with Not_found ->
                        fail Eliom_common.Eliom_404

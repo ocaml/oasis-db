@@ -5,7 +5,7 @@ open Lwt
 
 type t =
     {
-      rst_stor: [`RW|`RO] ODBStorage.t;
+      rst_stor: ODBFilesystem.std_ro ODBStorage.t;
     }
 
 (** Current version of the API *)
@@ -188,8 +188,8 @@ struct
         "oasis",
         List.map version_of_string ["0.1.0"; "0.2.0"]
       ]
-      (fun t pkg ->
-         ODBStorage.PkgVer.elements t.rst_stor pkg
+      (fun t pkg_str ->
+         ODBStorage.PkgVer.elements t.rst_stor (`Str pkg_str)
          >|=
          List.map (fun ver -> ver.ODBPkgVer.ver))
       (list version)
@@ -212,8 +212,8 @@ struct
         "oasis",
         OASISVersion.version_of_string "0.2.0"
       ]
-      (fun t pkg ->
-         (ODBStorage.PkgVer.latest t.rst_stor pkg)
+      (fun t pkg_str ->
+         (ODBStorage.PkgVer.latest t.rst_stor (`Str pkg_str))
          >|= fun ver ->
          ver.ODBPkgVer.ver)
       version
@@ -247,8 +247,8 @@ struct
               "https://forge.ocamlcore.org/frs/download.php/501/oasis-0.2.0.tar.gz";
         }
       ]
-      (fun t (pkg, ver) ->
-         ODBStorage.PkgVer.find t.rst_stor pkg ver)
+      (fun t (pkg_str, ver_str) ->
+         ODBStorage.PkgVer.find t.rst_stor (`Str (pkg_str, ver_str)))
       conv_t
 
   let show = 

@@ -62,25 +62,14 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
   ODBStorage.Pkg.elements ctxt.stor 
   >>= 
   Lwt_list.fold_left_s
-    (fun acc {ODBPkg.pkg_name = pkg_str} ->
+    (fun acc ({ODBPkg.pkg_name = pkg_str} as pkg) ->
        catch 
          (fun () ->
-            ODBStorage.PkgVer.latest ctxt.stor pkg_str
-            >>= fun ver ->
-            catch 
-              (fun () ->
-                 ODBStorage.PkgVer.filename 
-                   ctxt.stor
-                   ver.pkg
-                   (string_of_version ver.ver)
-                   `OASIS
-                 >>= 
-                 ODBOASIS.from_file 
-                   ~ctxt:ctxt.odb
-                 >>= fun oasis ->
-                 return ((pkg_str, ver, Some oasis) :: acc))
-              (fun e ->
-                 return ((pkg_str, ver, None) :: acc)))
+            ODBStorage.PkgVer.latest ctxt.stor (`Pkg pkg)
+            >>= fun pkg_ver ->
+            ODBStorage.PkgVer.oasis ctxt.stor (`PkgVer pkg_ver)
+            >|= fun oasis_opt -> 
+            (pkg_str, pkg_ver, oasis_opt) :: acc)
          (function
             | Not_found ->
                 return acc

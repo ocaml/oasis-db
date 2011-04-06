@@ -16,7 +16,7 @@ let register_new_service api_fun =
     (fun sp ->
        Context.get ~sp ()
        >>= fun ctxt ->
-       return {rst_stor = ctxt.stor})
+       return {rst_stor = ODBStorage.to_ro ctxt.stor})
     base_path api_fun
 
 let pkg_list = 

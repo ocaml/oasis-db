@@ -33,7 +33,7 @@ type t =
       upload_method: ODBPkgVer.upload_method;
       (* Method of upload *)
 
-      storage: [`RW|`RO] ODBStorage.t;
+      storage: ODBStorage.rw_t;
       (* Where the package's version will be stored *)
     }
 
@@ -70,7 +70,7 @@ let pkg_ver_of_upload t =
       publink           = t.publink;
     }
 
-let upload_begin ~ctxt str upload_method tarball_fn tarball_nm publink =  
+let upload_begin ~ctxt (stor: ODBStorage.rw_t) upload_method tarball_fn tarball_nm publink =  
   let upload_date =
     CalendarLib.Calendar.from_unixfloat
       (Unix.stat tarball_fn).Unix.st_mtime
@@ -116,7 +116,7 @@ let upload_begin ~ctxt str upload_method tarball_fn tarball_nm publink =
     >>= fun () ->
     ODBArchive.uncompress_tmp_dir ~ctxt tarball_fd tarball_nm 
     (fun nm an dn ->
-      ODBCompletion.run ~ctxt str nm an dn )
+      ODBCompletion.run ~ctxt stor nm an dn )
     >>= fun ct ->
     begin
       let t = 
@@ -128,7 +128,7 @@ let upload_begin ~ctxt str upload_method tarball_fn tarball_nm publink =
           completion     = ct;
           upload_date    = upload_date;
           upload_method  = upload_method;
-          storage        = str;
+          storage        = stor;
         }
       in
         Gc.finalise safe_clean t;
@@ -144,7 +144,7 @@ let upload_commit ~ctxt t =
   end
   >>= fun pkg_ver ->
   (* Inject the newly created package version into the storage *)
-  ODBStorage.Pkg.mem t.storage pkg_ver.ODBPkgVer.pkg
+  ODBStorage.Pkg.mem t.storage (`PkgVer pkg_ver)
   >>= 
   begin
     function 
@@ -154,7 +154,8 @@ let upload_commit ~ctxt t =
           ODBStorage.Pkg.create 
             ~ctxt 
             t.storage 
-            pkg_ver.ODBPkgVer.pkg
+            {ODBPkg.pkg_name  = pkg_ver.ODBPkgVer.pkg;
+             ODBPkg.pkg_watch = None}
           >>= fun (timestamp, ev, _) ->
           return [timestamp, ev]
   end 
@@ -173,8 +174,7 @@ let upload_commit ~ctxt t =
             let dump fn = 
               ODBStorage.PkgVer.with_file_out
                 t.storage
-                pkg_ver.ODBPkgVer.pkg
-                (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
+                (`PkgVer pkg_ver)
                 fn
                 (fun chn ->
                    Lwt_io.write chn str)

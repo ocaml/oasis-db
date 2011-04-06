@@ -316,8 +316,8 @@ let box ~ctxt ~sp pkg_ver backup_link oasis_opt =
      (fun () ->
         ODBStorage.PkgVer.elements 
           ~extra:pkg_ver 
-          ctxt.stor
-          pkg_ver.pkg)
+          ctxt.stor 
+          (`PkgVer pkg_ver))
      (function 
         | Not_found ->
             return [pkg_ver]
@@ -329,7 +329,7 @@ let box ~ctxt ~sp pkg_ver backup_link oasis_opt =
        ODBStorage.PkgVer.latest 
          ~extra:pkg_ver 
          ctxt.stor
-         pkg_ver.pkg)
+         (`PkgVer pkg_ver))
     (function 
        | Not_found ->
            return pkg_ver
@@ -441,27 +441,10 @@ let box ~ctxt ~sp pkg_ver backup_link oasis_opt =
     ]
 
 let page ~ctxt ~sp pkg_ver = 
-  begin
-    let oasis_fn = 
-      ODBStorage.PkgVer.filename 
-        ctxt.stor
-        pkg_ver.pkg 
-        (string_of_version pkg_ver.ver)
-        `OASIS
-    in
-      (* Load OASIS file *)
-      catch 
-        (fun () ->
-           oasis_fn
-           >>= 
-           ODBOASIS.from_file 
-             ~ctxt:ctxt.odb
-           >>= fun pkg ->
-           return (Some pkg))
-        (fun e ->
-           return None)
-  end 
+  (* Load OASIS file *)
+  ODBStorage.PkgVer.oasis ctxt.stor (`PkgVer pkg_ver) 
   >>= fun oasis_opt ->
+
   begin
     let backup_link () = 
       (* Backup download link *)
@@ -524,17 +507,17 @@ let view_handler sp (pkg, ver_opt) () =
     (fun () ->
        match pkg, ver_opt with 
          | pkg_str, NoVersion ->
-             ODBStorage.Pkg.find ctxt.stor pkg_str
+             ODBStorage.Pkg.find ctxt.stor (`Str pkg_str)
              >>= 
              PkgView.package_page ~ctxt ~sp 
 
          | pkg_str, Version ver ->
-             ODBStorage.PkgVer.find ctxt.stor pkg_str (string_of_version ver)
+             ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
              >>= 
              page ~ctxt ~sp 
 
          | pkg_str, LatestVersion ->
-             ODBStorage.PkgVer.latest ctxt.stor pkg_str
+             ODBStorage.PkgVer.latest ctxt.stor (`Str pkg_str)
              >>= 
              page ~ctxt ~sp)
     (function
