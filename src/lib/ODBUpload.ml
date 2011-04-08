@@ -116,7 +116,7 @@ let upload_begin ~ctxt (stor: ODBStorage.rw_t) upload_method tarball_fn tarball_
     >>= fun () ->
     ODBArchive.uncompress_tmp_dir ~ctxt tarball_fd tarball_nm 
     (fun nm an dn ->
-      ODBCompletion.run ~ctxt stor nm an dn )
+      ODBCompletion.run ~ctxt stor nm an dn)
     >>= fun ct ->
     begin
       let t = 

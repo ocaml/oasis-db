@@ -83,36 +83,42 @@ struct
       (sexp_dump_chn ~ctxt ~fn sexp_of_vt version t)
 
   let copy_fd fd fn = 
-    begin
-      try 
-        return 
-          (Lwt_io.of_unix_fd 
-             ~mode:Lwt_io.input 
-             (Unix.dup fd))
-      with e ->
-        fail e
-    end 
-    >>= fun chn_in ->
-    finalize 
-      (fun () ->
-         Lwt_io.with_file
-           ~mode:Lwt_io.output
-           fn
-           (fun chn_out ->
-              let buf = 
-                String.make (Lwt_io.buffer_size chn_in) 'X'
-              in
-              let rec copy () = 
-                Lwt_io.read_into chn_in buf 0 (String.length buf)
-                >>= fun read ->
-                if read > 0 then
-                  Lwt_io.write_from_exactly chn_out buf 0 read 
-                  >>=
-                  copy
-                else
-                  return ()
-              in
-                copy ()))
-      (fun () ->
-         Lwt_io.close chn_in)
+    try 
+      let fd = Unix.dup fd
+      in
+      let _i : int = 
+        Unix.lseek fd 0 Unix.SEEK_SET
+      in
+      let chn_in = 
+        Lwt_io.of_unix_fd ~mode:Lwt_io.input (Unix.dup fd)
+      in
+        finalize 
+          (fun () ->
+             Lwt_io.with_file
+               ~mode:Lwt_io.output
+               fn
+               (fun chn_out ->
+                  let buf = 
+                    String.make 4096 'X'
+                  in
+                  let rec copy acc = 
+                    Lwt_io.read_into chn_in buf 0 (String.length buf)
+                    >>= fun read ->
+                    if read > 0 then
+                      begin
+                        Lwt_io.write_from_exactly chn_out buf 0 read 
+                        >>= fun () ->
+                        copy (read + acc)
+                      end
+                    else
+                      begin
+                        return ()
+                      end
+                  in
+                    copy 0))
+          (fun () ->
+             Unix.close fd;
+             Lwt_io.close chn_in)
+    with e ->
+      fail e
 end

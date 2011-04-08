@@ -9,7 +9,7 @@ open ODBContext
 open ODBPkgVer
 open ODBIncoming
 
-let assert_ver_file ocs pkg ver oasis =
+let assert_ver_file ocs pkg ver oasis tarball_org =
   let mk_fn bn =
     in_dist_dir ocs (FilePath.make_filename [pkg; ver; bn])
   in
@@ -21,7 +21,31 @@ let assert_ver_file ocs pkg ver oasis =
            ~ctxt 
            (mk_fn "storage.sexp"))
   in
-    assert_create_file (mk_fn ver.tarball);
+  let tarball_fn =
+    mk_fn ver.tarball
+  in
+    if !verbose then
+      begin
+        let dump_stat fn = 
+          if Sys.file_exists fn then
+            begin
+              let st = stat fn in
+                Printf.eprintf "File '%s' size %s, digest %s\n%!"
+                  fn (string_of_size st.size)
+                  (Digest.to_hex (Digest.file fn))
+            end
+          else
+            Printf.eprintf "File '%s' doesn't exist\n%!" fn
+        in
+          dump_stat tarball_fn;
+          dump_stat tarball_org
+      end;
+    assert_create_file tarball_fn;
+    assert_bool 
+      (Printf.sprintf 
+         "Uploaded tarball '%s' and original tarball '%s' not equal\n%!"
+         tarball_fn tarball_org)
+      (cmp tarball_fn tarball_org = None);
     List.iter 
       (if oasis then 
          (fun nm -> 
@@ -58,7 +82,7 @@ let upload ocs date fn =
 let tests = 
   let one ocs (fn, time, pkg, ver, oasis) () =
     upload ocs time fn;
-    assert_ver_file ocs pkg ver oasis
+    assert_ver_file ocs pkg ver oasis (in_data_dir fn)
   in
 
   let vecs = 
