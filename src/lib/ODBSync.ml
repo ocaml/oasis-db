@@ -18,8 +18,12 @@ open OASISUtils
 open ODBGettext
 open ODBMessage
 open ExtLib
+open FileUtilExt
+open ODBFilesystem
 
 TYPE_CONV_PATH "ODBSync"
+
+module FS = ODBFilesystem
 
 type digest = Digest.t
 
@@ -118,80 +122,60 @@ module MapString = Map.Make(String)
 
 type t =
     {
-      sync_rev:        int;
-      sync_base_path:  host_filename;
-      sync_entries:    entry_t list;
-      sync_map:        (Digest.t * file_size) MapString.t;
+      sync_rev:          int;
+      sync_size:         Int64.t;
+      sync_fs:           FS.std_rw;
+      sync_entries:      entry_t list;
+      sync_entries_old:  entry_t list;
+      sync_map:          (Digest.t * file_size) MapString.t;
+      sync_ctxt:         ODBContext.t;
     }
 
-let create base_path = 
-  let base_path = 
-    if FilePath.is_relative base_path then
-      FilePath.make_absolute (FileUtil.pwd ()) base_path
-    else
-      base_path
-  in
-    {
-      sync_rev       = 0;
-      sync_base_path = base_path;
-      sync_entries   = [];
-      sync_map       = MapString.empty;
-    }
+let norm_fn fn =
+  FilePath.reduce ~no_symlink:true fn
 
-let relative_fn base_path fn = 
-  let make_abs fn = 
-    if FilePath.is_relative fn then
-      FilePath.make_absolute (FileUtil.pwd ()) fn
-    else
-      fn
-  in
-  let base_path = make_abs base_path 
-  in
-  let fn = make_abs fn 
-  in
-    FilePath.reduce 
-      ~no_symlink:true
-      (FilePath.make_relative base_path fn)
+let id_fn t ?digest fn = 
+  t.sync_fs#stat fn
+  >>= fun st ->
+  return st.Unix.LargeFile.st_size
+  >>= fun sz ->
+  begin
+    match digest with 
+      | Some d -> 
+          return d
+      | None ->
+          t.sync_fs#digest fn
+  end
+  >|= fun digest ->
+  digest, sz
 
-let id_fn ?digest fn = 
+let id_fn_ext fn = 
+  LwtExt.IO.digest fn
+  >>= fun digest ->
   try 
-    let sz = 
-      (Unix.LargeFile.stat fn).Unix.LargeFile.st_size
-    in
-      begin
-        match digest with 
-          | Some d -> 
-              return d
-          | None ->
-              LwtExt.IO.digest fn
-      end
-      >|= fun digest ->
-      digest, sz
+    return (digest, (Unix.LargeFile.stat fn).Unix.LargeFile.st_size)
   with e ->
     fail e
-
 
 (** Add a file
   *)
 let add fn t =
+  let fn = norm_fn fn in
 
-  let t' (rel_fn, digest, sz) = 
+  let t' (fn, digest, sz) = 
     {t with
          sync_entries = 
-           (Add (rel_fn, digest, sz)) :: t.sync_entries;
+           (Add (fn, digest, sz)) :: t.sync_entries;
          sync_map = 
            MapString.add fn (digest, sz) t.sync_map}
   in
-
-    id_fn fn 
+    id_fn t fn 
     >|= fun (digest, sz) ->
-    let rel_fn = relative_fn t.sync_base_path fn
-    in
-    let id = (rel_fn, digest, sz)
+    let id = (fn, digest, sz)
     in
       try 
         let reg_digest, reg_sz = 
-          MapString.find rel_fn t.sync_map 
+          MapString.find fn t.sync_map 
         in
           if reg_digest <> digest || reg_sz <> sz then
             t' id
@@ -203,43 +187,105 @@ let add fn t =
 (** Remove a file 
   *)
 let remove fn t =
-  let rel_fn =
-    relative_fn t.sync_base_path fn
-  in
-    if MapString.mem rel_fn t.sync_map then 
+  let fn = norm_fn fn in
+
+    if MapString.mem fn t.sync_map then 
       {t with 
            sync_entries = 
-             (Rm rel_fn) :: t.sync_entries;
+             (Rm fn) :: t.sync_entries;
            sync_map =
-             MapString.remove rel_fn t.sync_map}
+             MapString.remove fn t.sync_map}
     else
       t
 
-(** Compute the filenames of log and log-version
+(** Filenames of log and log-version
   *)
-let filenames base_path = 
-  let rebase = 
-    Filename.concat 
-      base_path
-  in
-    rebase "sync-meta.sexp", 
-    rebase "sync.sexp"
+let fn_meta = "sync-meta.sexp"
+let fn_sync = "sync.sexp"
 
-(** Load the datastructure from disc. If there is no datastructure
-    on disc, create an empty one.
+(** Dump the datastructure to disc 
   *)
-let load ~ctxt base_path =
-  let fn_meta, fn = 
-    filenames base_path
+let dump t =
+  let dump_entries chn cnt e = 
+    let str = 
+      Sexp.to_string_mach
+        (sexp_of_v_entry_t (`V1 e))
+    in
+      Lwt_io.write_line chn str
+      >|= fun () -> 
+      cnt + 1
   in
-    if Sys.file_exists fn_meta && Sys.file_exists fn then 
+  let ctxt = t.sync_ctxt in
+
+  let old_e = t.sync_entries_old in
+
+  let entries = 
+    let rec find_unwritten_entries acc new_e =
+      if new_e = old_e then
+        acc
+      else
+        begin
+          match new_e with 
+            | hd :: tl ->
+                find_unwritten_entries (hd :: acc) tl 
+            | [] ->
+                raise Not_found
+        end
+    in
+      try 
+        return (find_unwritten_entries [] t.sync_entries)
+      with Not_found ->
+        fail 
+          (Failure 
+             (s_ "Unable to find new entries for sync.sexp"))
+  in
+
+    entries
+    >>= fun entries ->
+    with_file_out t.sync_fs
+      ~flags:[Unix.O_WRONLY; Unix.O_CREAT; Unix.O_APPEND; 
+              Unix.O_NONBLOCK]
+      fn_sync
+      (fun chn ->
+         Lwt_list.fold_left_s (dump_entries chn) 0 entries)
+    >>= fun cnt ->
+    debug ~ctxt (f_ "Added %d entries to file '%s'") cnt fn_sync
+    >>= fun () ->
+    id_fn t fn_sync
+    >>= fun (digest, sz) ->
+    with_file_out t.sync_fs fn_meta
+      (LwtExt.IO.sexp_dump_chn ~ctxt 
+         sexp_of_v_meta_t
+         (fun m -> `V1 m)
+         ~fn:fn_meta
+          {
+            sync_meta_rev    = t.sync_rev;
+            sync_meta_size   = sz;
+            sync_meta_digest = digest;
+          })
+    >|= fun () ->
+    {t with 
+         sync_rev         = t.sync_rev;
+         sync_size        = sz;
+         sync_entries_old = t.sync_entries}
+
+
+(** Load datastructure from disc
+  *)
+let load t = 
+  let ctxt = t.sync_ctxt in
+    t.sync_fs#file_exists fn_meta 
+    >>= fun fn_meta_exists ->
+    t.sync_fs#file_exists fn_sync
+    >>= fun fn_exists ->
+    if fn_meta_exists && fn_exists then
       begin
-        LwtExt.IO.sexp_load ~ctxt
-          v_meta_t_of_sexp meta_upgrade
-          fn_meta
+        with_file_in t.sync_fs fn_meta
+          (LwtExt.IO.sexp_load_chn ~ctxt ~fn:fn_meta
+             v_meta_t_of_sexp meta_upgrade)
         >>= fun meta ->
 
-        id_fn fn  
+        id_fn t fn_sync
         >>= fun (fn_digest, fn_sz) ->
 
         begin
@@ -253,12 +299,12 @@ let load ~ctxt base_path =
               fail 
                 (failwith 
                    (f_ "Size mismatch for %s (%Ld <> %Ld)") 
-                   fn fn_sz meta.sync_meta_size)
+                   fn_sync fn_sz meta.sync_meta_size)
             else if fn_digest <> meta.sync_meta_digest then
               fail 
                 (failwith 
                    (f_ "Checksum mismatch for %s (%s <> %s)") 
-                   fn
+                   fn_sync
                    (Digest.to_hex fn_digest)
                    (Digest.to_hex meta.sync_meta_digest))
             else
@@ -282,162 +328,143 @@ let load ~ctxt base_path =
                    sync_map = f_sync_map t.sync_map;
                    sync_entries = entry :: t.sync_entries}
           in
-          let start = 
-            return
-              {(create base_path) with 
-                   sync_rev = meta.sync_meta_rev}
+          let init = 
+            return t 
           in
-            LwtExt.IO.with_file_content fn
+            with_file_in t.sync_fs fn_sync
+              (LwtExt.IO.with_file_content_chn ~fn:fn_sync)
             >>= fun str ->
             Sexp.scan_fold_sexps
               ~f:rebuild
-              ~init:start
+              ~init
               (Lexing.from_string str)
+            >|= fun t ->
+            {t with 
+                 sync_rev         = meta.sync_meta_rev;
+                 sync_size        = meta.sync_meta_size;
+                 sync_entries_old = t.sync_entries}
         end
       end
     else
       begin
-        warning ~ctxt
-          (f_ "File '%s' and '%s' not present. Creating empty ODBSync.t") 
-          fn_meta fn
-        >>= fun () ->
-        return (create base_path)
+        return t
       end
 
-(** Dump the datastructure to disc 
+(** Create the datastructure and load it from disc. If there is no datastructure
+    on disc, create an empty one.
   *)
-let dump ~ctxt t =
-  let dump_entries chn cnt e = 
-    let str = 
-      Sexp.to_string_mach
-        (sexp_of_v_entry_t (`V1 e))
-    in
-      Lwt_io.write_line chn str
-      >|= fun () -> 
-      cnt + 1
+let create ~ctxt fs = 
+  let res = 
+    {
+      sync_rev         = 0;
+      sync_size        = -1L;
+      sync_fs          = fs;
+      sync_entries     = [];
+      sync_entries_old = [];
+      sync_map         = MapString.empty;
+      sync_ctxt        = ctxt;
+    }
   in
-  let fn_meta, fn = 
-    filenames t.sync_base_path
-  in
+    load res 
+    >>= fun res ->
+    dump res
+    >|= fun res ->
+    res
 
-  let entries = 
-    if Sys.file_exists fn then
-      (* Reload the previous file to avoid overwriting existing entries *)
-      catch 
-        (fun () ->
-           load ~ctxt t.sync_base_path 
-           >>= fun t' ->
-             if t'.sync_rev = t.sync_rev then
-               begin
-                 (* t'.sync_entries should be at the end of t.sync_entries *)
-                 let rec drop_prefix =
-                   function
-                     | (hd1 :: tl1), (hd2 :: tl2) when hd1 = hd2 ->
-                         drop_prefix (tl1, tl2)
-
-                     | [], lst ->
-                         return lst
-
-                     | _ ->
-                         fail 
-                           (Failure 
-                              (Printf.sprintf 
-                                 (f_ "Trying to reuse synchonisation data on \
-                                      disc at '%s' that do not match data in \
-                                      memory.")
-                                 t.sync_base_path))
-                 in
-                   drop_prefix 
-                     ((List.rev t'.sync_entries),
-                      (List.rev t.sync_entries))
-               end
-             else
-               return (List.rev t.sync_entries))
-        (fun e ->
-           warning ~ctxt 
-             (f_ "Cannot reload existing synchronisation data in '%s': %s")
-             t.sync_base_path
-             (Printexc.to_string e)
-           >|= fun () ->
-           List.rev t.sync_entries)
+(** Set the appropriate watch on filesystem
+  *)
+let autoupdate rsync = 
+  let watcher fn fse =
+    if fn <> fn_sync && fn <> fn_meta then
+      begin
+        let sync = !rsync in
+          sync.sync_fs#is_directory fn
+          >>= fun is_dir ->
+          if not is_dir then 
+            begin
+              begin
+                match fse with 
+                  | FSCreated ->
+                      add fn sync
+                  | FSDeleted ->
+                      return (remove fn sync)
+                  | FSChanged ->
+                      return sync
+                  | FSMovedTo fn' ->
+                      add fn' sync >|= remove fn 
+                  | FSCopiedFrom fn' ->
+                      add fn sync
+              end
+              >>= 
+              dump 
+              >>= fun sync ->
+              return (rsync := sync)
+            end
+          else
+            return ()
+      end
     else
-      return (List.rev t.sync_entries)
+      return ()
   in
+    !rsync.sync_fs#watch_add watcher
 
-    debug ~ctxt (f_ "Creating file '%s'") fn
-    >>= fun () ->
-    entries
-    >>= fun entries ->
-    Lwt_io.with_file
-      ~flags:[Unix.O_WRONLY; Unix.O_CREAT; Unix.O_APPEND; 
-              Unix.O_NONBLOCK]
-      ~mode:Lwt_io.output fn
-      (fun chn ->
-         Lwt_list.fold_left_s
-           (dump_entries chn)
-           0
-           entries)
-    >>= fun cnt ->
-    debug ~ctxt (f_ "Added %d entries to file '%s'") cnt fn
-    >>= fun () ->
-    id_fn fn 
-    >>= fun (digest, sz) ->
-    LwtExt.IO.sexp_dump ~ctxt 
-      sexp_of_v_meta_t
-      (fun m -> `V1 m)
-      fn_meta
-      {
-        sync_meta_rev    = t.sync_rev;
-        sync_meta_size   = sz;
-        sync_meta_digest = digest;
-      }
+(** Update the sync datastructure with existing data on disc
+  *)
+let scan rsync =
+  FS.fold
+    (fun fne acc ->
+       match fne with 
+         | File fn when fn <> fn_sync && fn <> fn_meta ->
+             return (SetString.add fn acc)
+         | _ ->
+             return acc)
+    !rsync.sync_fs "" SetString.empty
+  >>= fun existing_fn ->
+  begin
+    let sync = !rsync in
 
-module SetSync = 
-  Set.Make 
-    (struct
-       type t = host_filename * digest * file_size
-       let compare (fn1, dgst1, sz1) (fn2, dgst2, sz2) = 
-         match FilePath.compare fn1 fn2 with 
-           | 0 ->
-               begin
-                 match String.compare dgst1 dgst2 with 
-                   | 0 ->
-                       Int64.compare sz1 sz2
-                   | n ->
-                       n
-               end
-           | n ->
-               n
-     end)
+    let sync_fn =
+      MapString.fold
+        (fun fn _ acc ->
+           SetString.add fn acc)
+        sync.sync_map
+        SetString.empty
+    in
+    let deletes = 
+      SetString.diff sync_fn existing_fn
+    in
+    let adds =
+      SetString.diff existing_fn sync_fn
+    in
+    let sync = 
+      SetString.fold remove deletes sync
+    in
+      SetString.fold 
+        (fun fn sync_lwt -> 
+           sync_lwt >>= add fn)
+        adds (return sync)
+      >>= 
+      dump 
+      >>= fun sync ->
+      return (rsync := sync)
+  end
 
-module Remote =
-struct 
+class remote sync uri =
+object (self)
 
-  type sync = t
+  inherit (FS.std_ro sync.sync_fs#root) as super
 
-  type t = 
-      {
-        sync_cache_dir: host_filename;
-        sync_uri:       string;
-        sync_method:    [`Full | `Cached];
-        sync_data:      sync;
-      }
+  val uri   = uri
+  val mutable sync  = sync
+  val mutable online = SetString.empty
 
-  let create ~ctxt cache_dir uri = 
-    load ~ctxt cache_dir 
-    >>= fun sync ->
-    return 
-      {
-        sync_cache_dir = cache_dir;
-        sync_uri       = uri;
-        sync_method    = `Full;
-        sync_data      = sync;
-      }
+  method ctxt = sync.sync_ctxt
+  method cache = sync.sync_fs
 
   (** [url_concat url path] Concatenates a relative [path] onto an absolute
     * [url] 
     *)
-  let url_concat url tl = 
+  method private url_concat url tl = 
     (* TODO: cover more case  of URL concat *)
     if String.ends_with url "/" then
       url^tl
@@ -446,7 +473,7 @@ struct
 
   (** Take care of creating curl socket and closing it
     *)
-  let with_curl f = 
+  method private with_curl f = 
     (* Generic init of curl *)
     let c = 
       Curl.init () 
@@ -464,7 +491,9 @@ struct
   (** Download an URI to a file using its channel. Use the position
     * of the channel to resume download.
     *)
-  let download_chn ~ctxt ?curl url fn chn = 
+  method private download_chn url fn chn = 
+    let ctxt = self#ctxt in
+
     let curl_write fn chn d = 
       output_string chn d;
       String.length d
@@ -478,133 +507,363 @@ struct
         Curl.set_resumefromlarge c (LargeFile.pos_out chn);
         Curl.perform c;
         return ()
-      with e -> 
-        fail e 
+      with 
+        | Curl.CurlException(Curl.CURLE_HTTP_NOT_FOUND, _, _) ->
+            fail
+              (Failure
+                 (Printf.sprintf
+                    (f_ "URL not found '%s' url to download file '%s'")
+                    url fn))
+        | e ->
+            fail e 
     in
 
       debug ~ctxt "Downloading '%s' to '%s'" url fn
       >>= fun () ->
-      begin
-        match curl with 
-          | Some c ->
-              download_curl c
-          | None ->
-              with_curl download_curl
-      end
+      self#with_curl download_curl
       >>= fun () ->
       debug ~ctxt "Download of '%s' to '%s' completed" url fn
 
 
   (** Same as [download_chn] but open the file *)
-  let download_fn ~ctxt ?curl url fn =
-    let chn =
-      open_out fn
-    in
-      finalize
-        (fun () ->
-           download_chn ~ctxt ?curl url fn chn)
-        (fun () ->
-           close_out chn;
-           return ())
+  method private download_fn url fn =
+    with_file_out self#cache fn
+      (fun _ ->
+         (* TODO: use the chn from with_file_out *) 
+         let chn = 
+           open_out (self#cache#rebase fn)
+         in
+           finalize
+             (fun () -> self#download_chn url fn chn)
+             (fun () -> return (close_out chn)))
+           
 
   (** Check if the digest of give file is ok
     *)
-  let digest_ok ~ctxt ?(trust_digest=false) t fn = 
-    let fn_disk = 
-      FilePath.concat t.sync_cache_dir fn
-    in
-      if Sys.file_exists fn_disk then
-        begin
-          try 
-            let (exp_digest, exp_sz) = 
-              MapString.find fn t.sync_data.sync_map 
-            in
-            let digest = 
-              if trust_digest then 
-                Some exp_digest 
-              else
-                None
-            in
-              id_fn ?digest fn_disk 
-              >|= fun (digest, sz) ->
-              digest = exp_digest && sz = exp_sz
-          with Not_found ->
-            fail 
-              (Failure 
-                 (Printf.sprintf 
-                    (f_ "File '%s' is not part of the synchronization data")
-                    fn))
-        end
-      else
-        begin
-          return false
-        end
+  method private digest_ok ?(trust_digest=false) fn = 
+    self#cache#file_exists fn
+    >>= fun exists ->
+    if exists then
+      begin
+        try 
+          let (exp_digest, exp_sz) = 
+            MapString.find fn sync.sync_map 
+          in
+          let digest = 
+            if trust_digest then 
+              Some exp_digest 
+            else
+              None
+          in
+            id_fn ?digest sync fn
+            >|= fun (digest, sz) ->
+            digest = exp_digest && sz = exp_sz
+        with Not_found ->
+          fail 
+            (Failure 
+               (Printf.sprintf 
+                  (f_ "File '%s' is not part of the synchronization data")
+                  fn))
+      end
+    else
+      begin
+        return false
+      end
 
   (** Compute the host filename on disk, of a repository filename. It also 
     * makes sure that digest/size match expectation otherwise download it
     * from repository
     *)
-  let get ~ctxt ?curl ?(trust_digest=false) t fn = 
-    let fn_disk = 
-      FilePath.concat t.sync_cache_dir fn
-    in
-      digest_ok ~ctxt ~trust_digest t fn 
+  method private get ?(trust_digest=false) fn = 
+      self#digest_ok ~trust_digest fn 
       >>= fun ok ->
       begin
         if not ok then
           begin
             let url = 
-              url_concat t.sync_uri (String.concat "/" (explode_filename fn))
+              self#url_concat 
+                uri 
+                (String.concat "/" (explode_filename fn))
             in
-              FileUtilExt.mkdir ~ignore_exist:true 
-                (FilePath.dirname fn_disk) 0o755
+              self#cache#mkdir 
+                ~ignore_exist:true 
+                (FilePath.dirname fn)
+                0o755
               >>= fun () ->
-              download_fn ~ctxt ?curl url fn_disk 
+              self#download_fn url fn
+              >>= fun () ->
+              self#digest_ok fn
+              >>= fun ok ->
+              if ok then 
+                return ()
+              else
+                fail
+                  (Failure
+                     (Printf.sprintf
+                        (f_ "Downloading file '%s' from '%s' doesn't give \
+                             the right checksum, update and try again.")
+                        fn url))
           end
         else
           return ()
       end
-      >>= fun () ->
-
-      return fn_disk
 
   (* Remove empty directory *)
-  let clean_empty_dir ~ctxt t =
-    FileUtilExt.iter
-      (function
-         | FileUtilExt.PostDir dn ->
-             if Sys.readdir dn = [||] then
-               FileUtilExt.rm ~recurse:true [dn]
-               >|= ignore
-             else
-               return ()
-         | _ ->
-             return ())
-      t.sync_cache_dir
+  method private clean_empty_dir =
+    let rec one_pass () = 
+      fold 
+        (fun e acc ->
+           match e with
+             | PostDir dn ->
+                 self#cache#readdir dn 
+                 >>= 
+                 begin
+                   function 
+                     | [||] -> 
+                         info ~ctxt:self#ctxt
+                           (f_ "Directory %s is empty")
+                           dn
+                         >>= fun () ->
+                         return (dn :: acc)
+                     | _   -> 
+                         return acc
+                 end
+             | _ ->
+                 return acc)
+        self#cache ""
+        []
+      >>= 
+        function 
+          | [] ->
+              return ()
+          | lst ->
+              self#cache#rm ~recurse:true lst
+              >>=
+              one_pass
+    in
+      one_pass ()
 
-
-  (* Remove files that don't match their digest *)
-  let clean_file_digest ~ctxt t = 
-    FileUtilExt.fold
+  method clean_file_filter filter =
+    fold
       (fun e lst ->
          match e with 
-           | FileUtilExt.File fn ->
-               digest_ok ~ctxt ~trust_digest:false t 
-                 (relative_fn t.sync_cache_dir fn)
-               >>= fun ok ->
-               if not ok then 
-                 return (fn :: lst)
+           | File fn ->
+               if fn <> fn_sync && fn <> fn_meta then 
+                 begin
+                   filter fn
+                   >>= fun ok ->
+                   if not ok then 
+                     info ~ctxt:self#ctxt 
+                       (f_ "File %s doesn't meet clean filter criteria")
+                       fn
+                     >>= fun () ->
+                     return (fn :: lst)
+                   else
+                     return lst
+                 end
                else
-                 return lst
+                 begin
+                   return lst
+                 end
            | _ ->
                return lst)
-      t.sync_cache_dir
+      self#cache ""
       []
     >>=
-    FileUtilExt.rm 
-    >|= ignore
+    self#cache#rm 
 
-  let filter_sync_method t fn = 
+  (* Remove files that don't match their digest *)
+  method private clean_file_digest = 
+    self#clean_file_filter 
+      (self#digest_ok ~trust_digest:false)
+
+  (* Remove files that are not in the synchronization data set *)
+  method private clean_extra_file =
+    self#clean_file_filter
+      (fun fn ->
+         return (MapString.mem fn sync.sync_map))
+
+  (* Remove files that are set online *)
+  method private clean_online_file =
+    self#clean_file_filter 
+      (fun fn ->
+         return (not (SetString.mem fn online)))
+
+  (* Clean the cache file system of all un-needed files *)
+  method repair =
+    self#clean_online_file
+    >>= fun () ->
+    self#clean_extra_file
+    >>= fun () ->
+    self#clean_empty_dir
+
+  (* Set a file to be used online only, i.e. not in the cache *)
+  method online_set fn =
+    online <- SetString.add fn online
+
+  (* Update the synchronization data, downloading remote data. *)
+  method update = 
+    let ctxt = self#ctxt in
+    let to_url fn = self#url_concat uri (FilePath.basename fn) in
+    let url_meta = to_url fn_meta in
+    let url_sync = to_url fn_sync in
+
+    (* Download sync-meta.sexp *)
+    let fn_meta_tmp, chn_meta_tmp = 
+      Filename.open_temp_file "oasis-db-sync-meta-" ".sexp"
+    in
+    let fn_tmp, chn_tmp  = 
+      Filename.open_temp_file "oasis-db-sync-" ".sexp"
+    in
+
+    let clean () = 
+      let safe_close chn = 
+        try close_out chn with _ -> ()
+      in
+        safe_close chn_meta_tmp;
+        safe_close chn_tmp;
+        rm [fn_meta_tmp; fn_tmp]
+        >|= ignore
+    in
+
+    let check_sync_tmp meta fn_tmp = 
+      id_fn_ext fn_tmp 
+      >|= fun (digest, sz) ->
+      (* Check downloaded data *)
+      if meta.sync_meta_size = sz && meta.sync_meta_digest = digest then
+        true, ""
+      else if meta.sync_meta_size <> sz && meta.sync_meta_digest <> digest then
+        false, 
+        Printf.sprintf
+          (f_ "size: %Ld <> %Ld; digest: %s <> %s")
+          meta.sync_meta_size sz
+          (Digest.to_hex meta.sync_meta_digest)
+          (Digest.to_hex digest)
+      else if meta.sync_meta_size <> sz then
+        false, 
+        Printf.sprintf
+          (f_ "size: %Ld <> %Ld")
+          meta.sync_meta_size sz
+      else 
+        false,
+        Printf.sprintf
+          (f_ "digest: %s <> %s")
+          (Digest.to_hex meta.sync_meta_digest)
+          (Digest.to_hex digest)
+    in
+
+      finalize
+        (fun () -> 
+           info ~ctxt
+             (f_ "Download meta synchronization data '%s'")
+             url_meta;
+           >>= fun () ->
+           self#download_chn url_meta fn_meta_tmp chn_meta_tmp
+           >>= fun () ->
+           return (close_out chn_meta_tmp)
+           >>= fun () ->
+           LwtExt.IO.sexp_load ~ctxt
+             v_meta_t_of_sexp meta_upgrade
+             fn_meta_tmp
+           >>= fun meta_tmp ->
+
+           info ~ctxt
+             (f_ "Download synchronization data '%s'")
+             url_sync
+           >>= fun () -> 
+           self#download_chn url_sync fn_tmp chn_tmp
+           >>= fun () ->
+           return (close_out chn_tmp)
+           >>= fun () ->
+           check_sync_tmp meta_tmp fn_tmp
+           >>= fun (sync_ok, reason) ->
+           begin
+             if sync_ok then
+               info ~ctxt 
+                 (f_ "Download of '%s' successful.") url_sync
+             else
+               fail
+                 (Failure 
+                    (Printf.sprintf
+                       (f_ "Download of '%s' failed (%s).")
+                       url_sync reason))
+           end
+           >>= fun () ->
+
+           (* We reach this point, all files should be valid. Copy them to their
+            * final destination 
+            *)
+           Lwt.join
+             [
+               cp_ext fn_meta_tmp self#cache fn_meta;
+               cp_ext fn_tmp self#cache fn_sync;
+             ])
+
+        (* Always clean at the end *)
+        clean
+
+      >>= fun () -> 
+      (* Reload synchronization data *)
+      load sync
+      >>= fun sync' ->
+      begin
+        sync <- sync';
+        (* Fix obvious problem in the filesystem tree *)
+        self#repair
+      end
+
+  (** Override of std_ro methods *)
+
+  method file_exists fn =
+    let fn = norm_fn fn in
+      if fn = "" || fn = FilePath.current_dir then
+        return true
+      else if MapString.mem fn sync.sync_map then
+        return true
+      else
+        (* Maybe this is directory *)
+        self#is_directory fn
+
+  method is_directory fn =
+    let fn = norm_fn fn in
+    let res = 
+      MapString.fold
+        (fun fn' _ acc ->
+           acc || fn = FilePath.dirname fn')
+        sync.sync_map 
+        false
+    in
+      return res
+
+  method open_in fn =
+    self#get fn
+    >>= fun () ->
+    sync.sync_fs#open_in fn
+
+  method stat fn =
+    self#get fn
+    >>= fun () ->
+    super#stat fn
+
+  method readdir dn =
+    let dn = norm_fn dn in
+    let res =
+      MapString.fold
+        (fun fn _ acc ->
+           if FilePath.dirname fn = dn then
+             (FilePath.basename fn) :: acc
+           else
+             acc)
+        sync.sync_map
+        []
+    in
+      return (Array.of_list res)
+
+
+end
+
+(*
+  method private filter_sync_method t fn = 
     match t.sync_method with 
       | `Full ->
           true
@@ -623,7 +882,6 @@ struct
                   false
           end
 
-  let repair ~ctxt ?(trust_digest=false) ?(remove_extra=false) t =
     (* If we change sync method, there should be some extra files
      * all around the FS, remove them
      *)
@@ -655,328 +913,4 @@ struct
         >|= ignore
       else
         return ()
-    end
-    >>= fun () ->
-
-    (* Check that digest match file system *)
-    begin
-      if not trust_digest then
-        clean_file_digest ~ctxt t
-      else
-        return ()
-    end
-    >>= fun () ->
-
-    (* Add missing files using sync_data *)
-    begin
-      let downloads = 
-        MapString.fold
-          (fun fn _ lst ->
-             if filter_sync_method t fn then
-               fn :: lst
-             else
-               lst)
-          t.sync_data.sync_map 
-          []
-      in
-        Lwt_list.iter_s
-          (fun fn -> 
-             get ~ctxt ~trust_digest:true t fn
-             >|= fun _ ->
-             ())
-          downloads
-    end
-    >>= fun () ->
-
-    (* Remove empty directories *)
-    clean_empty_dir ~ctxt t
-
-
-  let update ~ctxt t = 
-    let fn_meta, fn = 
-      filenames t.sync_cache_dir 
-    in
-    let to_url fn =
-      url_concat t.sync_uri (FilePath.basename fn)
-    in
-    let url_meta = to_url fn_meta in
-    let url = to_url fn in
-
-    (* Download sync-meta.sexp *)
-    let fn_meta_tmp, chn_meta_tmp = 
-      Filename.open_temp_file "oasis-db-sync-meta-" ".sexp"
-    in
-    let fn_tmp, chn_tmp  = 
-      Filename.open_temp_file "oasis-db-sync-" ".sexp"
-    in
-
-    let clean () = 
-      let safe_close chn = 
-        try close_out chn with _ -> ()
-      in
-        safe_close chn_meta_tmp;
-        safe_close chn_tmp;
-        FileUtilExt.rm [fn_meta_tmp; fn_tmp]
-        >|= ignore
-    in
-
-    let check_sync_tmp meta fn_tmp = 
-      id_fn fn_tmp 
-      >|= fun (digest, sz) ->
-      (* Check downloaded data *)
-      if meta.sync_meta_size = sz && meta.sync_meta_digest = digest then
-        true, ""
-      else if meta.sync_meta_size <> sz && meta.sync_meta_digest <> digest then
-        false, 
-        Printf.sprintf
-          (f_ "size: %Ld <> %Ld; digest: %s <> %s")
-          meta.sync_meta_size sz
-          (Digest.to_hex meta.sync_meta_digest)
-          (Digest.to_hex digest)
-      else if meta.sync_meta_size <> sz then
-        false, 
-        Printf.sprintf
-          (f_ "size: %Ld <> %Ld")
-          meta.sync_meta_size sz
-      else 
-        false,
-        Printf.sprintf
-          (f_ "digest: %s <> %s")
-          (Digest.to_hex meta.sync_meta_digest)
-          (Digest.to_hex digest)
-    in
-
-    let proceed curl = 
-      load ~ctxt t.sync_cache_dir
-      >>= fun sync_old ->
-
-      begin
-        if Sys.file_exists fn_meta then
-          begin
-            info ~ctxt 
-              (f_ "Load current meta synchronization data '%s'")
-              fn_meta
-            >>= fun () ->
-            LwtExt.IO.sexp_load ~ctxt
-              v_meta_t_of_sexp meta_upgrade
-              fn_meta
-            >|= fun meta_old ->
-            Some meta_old
-          end
-        else
-          return None
-      end
-      >>= fun meta_old_opt ->
-      finalize
-        (fun () -> 
-           info ~ctxt 
-             (f_ "Download meta synchronization data '%s'")
-             url_meta;
-           >>= fun () ->
-           download_chn ~ctxt ~curl url_meta fn_meta_tmp chn_meta_tmp
-           >>= fun () ->
-           return (close_out chn_meta_tmp)
-           >>= fun () ->
-           LwtExt.IO.sexp_load ~ctxt
-             v_meta_t_of_sexp meta_upgrade
-             fn_meta_tmp
-           >>= fun meta ->
-
-           (* Do a copy of current sync.sexp if the update condition stands *)
-           begin
-             let cond_update = 
-               match meta_old_opt with 
-                 | Some meta_old ->
-                     meta_old.sync_meta_rev = meta.sync_meta_rev 
-                 | None ->
-                     false
-             in
-               if cond_update then
-                 begin
-                   let lwt_chn = 
-                     Lwt_io.of_unix_fd
-                       ~mode:Lwt_io.output
-                       (Unix.dup (Unix.descr_of_out_channel chn_tmp))
-                   in
-                     Lwt_io.with_file ~mode:Lwt_io.input fn
-                       (fun chn_in ->
-                          Lwt_io.write_lines lwt_chn
-                            (Lwt_io.read_lines chn_in))
-                     >>= fun () ->
-                     Lwt_io.close lwt_chn
-                     >|= fun () ->
-                     begin
-                       (* Seek to end of file *)
-                       LargeFile.seek_out 
-                         chn_tmp
-                         (LargeFile.out_channel_length 
-                            chn_tmp);
-                     end
-                 end
-               else
-                 begin
-                   return ()
-                 end
-           end
-           >>= fun () ->
-
-           (* Download the missing bytes at the end of the current sync.sexp *)
-           begin
-             let update_start = 
-               LargeFile.pos_out chn_tmp
-             in
-             let update_length =
-               Int64.sub meta.sync_meta_size update_start
-             in
-               if update_length >= 0L then 
-                 begin
-                   info ~ctxt 
-                     (f_ "Need to fetch %LdB from '%s' (data already donwloaded: %LdB)")
-                     update_length url update_start 
-                   >>= fun () ->
-                   (* Resume download *)
-                   begin
-                     if update_length > 0L then
-                       download_chn ~ctxt ~curl url fn_tmp chn_tmp
-                     else
-                       return ()
-                   end
-                   >>= fun () ->
-                   begin
-                     close_out chn_tmp;
-                     return ()
-                   end
-                 end
-               else 
-                 begin
-                   fail 
-                     (Failure
-                        (Printf.sprintf 
-                           (f_ "Data already downloaded %LdB, data to \
-                                download %LdB: inconsistent sizes. \
-                                The file at URL '%s' should only grow, \
-                                contact administrator.")
-                           update_start meta.sync_meta_size url))
-                 end
-           end
-           >>= fun () ->
-
-           (* Check that missing bytes + current content match the digest of
-            * sync.sexp
-            *)
-           check_sync_tmp meta fn_tmp 
-           >>= fun (sync_ok, reason) ->
-           begin
-             (* Check downloaded data *)
-             if sync_ok then
-               (* We got the good file *)
-               info ~ctxt (f_ "Download of '%s' successful.") url
-             else 
-               begin
-                 warning ~ctxt 
-                   (f_ "Download of '%s' failed (%s), \
-                        falling back to full download")
-                   url reason
-                 >>= fun () -> 
-                 begin
-                   let chn_tmp =
-                     open_out fn_tmp 
-                   in
-                     finalize
-                       (fun () -> 
-                          download_chn ~ctxt ~curl url fn_tmp chn_tmp)
-                       (fun () ->
-                          close_out chn_tmp;
-                          return ())
-                     >>= fun () ->
-                     check_sync_tmp meta fn_tmp
-                     >>= fun (sync_ok, reason) ->
-                     begin
-                       if sync_ok then
-                         info ~ctxt 
-                           (f_ "Full download of '%s' successful.") url
-                       else
-                         fail
-                           (Failure 
-                              (Printf.sprintf
-                                 (f_ "Full download of '%s' failed (%s).")
-                                 url reason))
-                     end
-                 end
-               end
-
-           end
-           >>= fun () ->
-
-           (* We reach this point, all files should be valid. Copy them to their
-            * final destination 
-            *)
-           Lwt.join
-             [
-               FileUtilExt.cp [fn_meta_tmp] fn_meta >|= ignore;
-               FileUtilExt.cp [fn_tmp] fn >|= ignore;
-             ]
-        )
-
-        (* Always clean at the end *)
-        clean
-
-      >>= fun () -> 
-      (* We should have synchronized synchronization data, now start
-       * real data synchronization: tarball, storage.sexp et al
-       *)
-      load ~ctxt t.sync_cache_dir
-      >>= fun sync_new ->
-
-      (* Compare the content of sync_old and sync_new and guess what operation
-       * need to be done.
-       *)
-      begin
-        let map_to_set sync =
-          MapString.fold
-            (fun k (digest, sz) ->
-               SetSync.add (k, digest, sz))
-            sync.sync_map
-            SetSync.empty
-        in
-        let set_to_files st = 
-          SetSync.fold 
-            (fun (fn, _, _) lst -> fn :: lst)
-            st
-            []
-        in
-
-        let fs_new = map_to_set sync_new in
-        let fs_old = map_to_set sync_old in
-
-        (* What should be removed *)
-        let deletes = 
-          set_to_files (SetSync.diff fs_old fs_new)
-        in
-
-        (* What should be added/updated *)
-        let adds = 
-          set_to_files (SetSync.diff fs_new fs_old)
-        in
-
-          (* Remove old files *)
-          FileUtilExt.rm
-            (List.rev_map (FilePath.concat t.sync_cache_dir) deletes)
-          >>= fun _ ->
-          Lwt_list.iter_s 
-            (fun fn ->
-               if filter_sync_method t fn then
-                 get ~ctxt t fn
-                 >|= fun (_s : string) ->
-                 ()
-               else
-                 return ())
-            adds
-          >>= fun () ->
-          (* Check everything on the FS *)
-          repair ~ctxt ~trust_digest:true t
-      end
-
-    in
-      with_curl proceed
-end
+ *)

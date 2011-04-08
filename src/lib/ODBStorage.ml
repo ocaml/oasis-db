@@ -262,7 +262,7 @@ struct
       begin
         let date =
           CalendarLib.Calendar.from_unixfloat
-            stat.Unix.st_mtime
+            stat.Unix.LargeFile.st_mtime
         in
         let pkg_t = 
           {

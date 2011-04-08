@@ -126,12 +126,30 @@ object (self)
       (fun () ->
          try 
            let res = 
-             Unix.stat (self#rebase fn)
+             Unix.LargeFile.stat (self#rebase fn)
            in
              return res
          with e ->
            fail e)
 
+  (** Compute digest of a file *)
+  method digest fn =
+    self#open_in fn 
+    >>= fun ((_, chn) as chn') ->
+    finalize
+      (fun () ->
+         LwtExt.IO.digest_chn ~fn chn)
+      (fun () ->
+         self#close_in chn')
+
+  (** Read a directory content *)
+  method readdir dn =
+    self#do_read
+      (fun () ->
+         try
+           return (Sys.readdir (self#rebase dn))
+         with e ->
+           fail e)
 end
 
 (* Do an operation on an input channel *)
@@ -154,7 +172,21 @@ let fold f fs fn a =
    *)
   fs#rebase_lwt fn
   >>= fun fn' ->
-  FileUtilExt.fold f fn' a
+  FileUtilExt.fold 
+    (fun fne a ->
+       let fne' =
+         match fne with 
+           | FileUtilExt.PostDir dn ->
+               FileUtilExt.PostDir (fs#unbase dn)
+           | FileUtilExt.PreDir dn ->
+               FileUtilExt.PreDir (fs#unbase dn)
+           | FileUtilExt.File fn ->
+               FileUtilExt.File (fs#unbase fn)
+           | FileUtilExt.Symlink fn ->
+               FileUtilExt.Symlink (fs#unbase fn)
+       in
+         f fne' a)
+    fn' a
   >>= fun res ->
   fs#read_end 
   >|= fun () ->
@@ -234,7 +266,7 @@ object (self)
       return res
 
   (** Open a file for writing *)
-  method open_out fn =
+  method open_out ?flags fn =
     self#file_exists fn 
     >>= fun exists_before ->
     self#rebase_lwt fn
@@ -242,7 +274,7 @@ object (self)
     self#write_begin 
     >|= fun () ->
     ((exists_before, fn),
-     Lwt_io.open_file ~mode:Lwt_io.output fn')
+     Lwt_io.open_file ?flags ~mode:Lwt_io.output fn')
 
   (** Close a output channel *)
   method close_out ((exists_before, fn), (chn: Lwt_io.output Lwt_io.channel)) =
@@ -390,14 +422,27 @@ object (self)
 end
 
 (** Write to a file *)
-let with_file_out fs fn f =
-  fs#open_out fn
+let with_file_out ?flags fs fn f =
+  fs#open_out ?flags fn
   >>= fun ((_, chn) as chn') ->
   f chn
   >>= fun res ->
   fs#close_out chn'
   >|= fun () ->
   res
+
+let cp_ext src fs tgt =
+  try
+    let fd =
+      Unix.openfile src [Unix.O_RDONLY] 0o640
+    in
+      finalize
+        (fun () -> 
+           fs#copy_fd fd tgt)
+        (fun () ->
+           return (Unix.close fd))
+  with e ->
+    fail e
 
 
 (** Filesystem that uses a rwlock *)
@@ -425,6 +470,6 @@ end
 let spy (fs: std_rw) = 
   fs#watch_add 
     (fun fn ev ->
-       Lwt_io.eprintl (string_of_event fn ev))
+       Lwt_io.eprintl (string_of_event (fs#rebase fn) ev))
   >>= fun () ->
   return ()

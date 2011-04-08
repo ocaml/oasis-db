@@ -13,6 +13,7 @@ type context =
       stor:  ODBStorage.rw_t;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
+      rsync: ODBSync.t ref;
       admin: int list;
 
       upload_delay: float; 
@@ -44,6 +45,7 @@ let sqle_fn      = mk_var "SQLite DB"
 let ocaw         = mk_var "OCamlCore Web context"
 let sqle         = mk_var "SQLExpr context"
 let storage      = mk_var "Storage context"
+let rsync        = mk_var "Synchronization context"
 
 let google_analytics_account = ref None
 
@@ -235,6 +237,22 @@ let init () =
            return (storage := (fun () -> storage'))
 
            >>= fun () ->
+           begin
+             let dist_fs = ODBStorage.fs storage' in
+               ODBSync.create ~ctxt:(get_odb ()) dist_fs 
+               >>= fun sync ->
+               return (ref sync)
+               >>= fun rsync ->
+               ODBSync.autoupdate rsync
+               >>= fun () ->
+               ODBSync.scan rsync
+               >>= fun () ->
+               return rsync 
+           end
+           >>= fun rsync' ->
+           return (rsync := (fun () -> rsync'))
+
+           >>= fun () ->
            return (init_val := true)
          end
        else
@@ -296,6 +314,7 @@ let get ~sp () =
           sess  = sess;
           accnt = accnt;
           admin = !admin;
+          rsync = !rsync ();
 
           (* TODO: load configuration *)
           upload_delay = 5.0;
