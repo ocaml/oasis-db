@@ -164,15 +164,16 @@ Library "oasis-db-cli"
   FindlibParent: oasis-db
   FindlibName: cli
   Path: src/cli
-  Modules: ODBInstall,
-           ODBList,
-           ODBPublish,
-           ODBRegister,
-           ODBRemove,
-           ODBSearch,
-           ODBShow,
-           ODBUpdate,
-           ODBPlugins
+  Modules: ODBCLICommon,
+           ODBCLIInstall,
+           ODBCLIList,
+           ODBCLIPublish,
+           ODBCLIRegister,
+           ODBCLIRemove,
+           ODBCLISearch,
+           ODBCLIShow,
+           ODBCLIUpdate,
+           ODBCLIPlugins
   InternalModules: ODBCLIData
   BuildDepends: oasis-db, xdg-basedir, oasis.cli
   BuildTools: ocamlify

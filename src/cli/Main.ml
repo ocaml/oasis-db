@@ -1,6 +1,6 @@
 
 open BaseMessage
-open ODBPlugins
+open ODBCLIPlugins
 
 let () =
   (* Run subcommand *)
