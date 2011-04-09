@@ -160,14 +160,44 @@ Library "oasis-db-ocsigen"
                 sqlexpr,
                 ocamlcore-api (>= 0.0.2)
 
+Library "oasis-db-cli"
+  FindlibParent: oasis-db
+  FindlibName: cli
+  Path: src/cli
+  Modules: ODBInstall,
+           ODBList,
+           ODBPublish,
+           ODBRegister,
+           ODBRemove,
+           ODBSearch,
+           ODBShow,
+           ODBUpdate,
+           ODBPlugins
+  InternalModules: ODBCLIData
+  BuildDepends: oasis-db, xdg-basedir, oasis.cli
+  BuildTools: ocamlify
+
+
 Executable test
   Path:   test
   MainIs: test.ml
+  Install: false
   BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db, git
   
+Executable "test-cli"
+  Path: src/cli
+  MainIs: Main.ml
+  Install: false
+  BuildDepends: oasis-db, xdg-basedir, oasis.cli
+
 Test main
   Command: $test
   TestTools: test
+  Run: false
+
+Test cli
+  Command: _build/src/cli/test-cli update
+  TestTools: test-cli
   
 Executable inrestart 
   Path:         src/tools/inrestart

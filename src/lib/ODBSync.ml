@@ -123,7 +123,6 @@ module MapString = Map.Make(String)
 type t =
     {
       sync_rev:          int;
-      sync_size:         Int64.t;
       sync_fs:           FS.std_rw;
       sync_entries:      entry_t list;
       sync_entries_old:  entry_t list;
@@ -266,7 +265,6 @@ let dump t =
     >|= fun () ->
     {t with 
          sync_rev         = t.sync_rev;
-         sync_size        = sz;
          sync_entries_old = t.sync_entries}
 
 
@@ -341,7 +339,6 @@ let load t =
             >|= fun t ->
             {t with 
                  sync_rev         = meta.sync_meta_rev;
-                 sync_size        = meta.sync_meta_size;
                  sync_entries_old = t.sync_entries}
         end
       end
@@ -357,7 +354,6 @@ let create ~ctxt fs =
   let res = 
     {
       sync_rev         = 0;
-      sync_size        = -1L;
       sync_fs          = fs;
       sync_entries     = [];
       sync_entries_old = [];
@@ -414,7 +410,7 @@ let scan rsync =
   FS.fold
     (fun fne acc ->
        match fne with 
-         | File fn when fn <> fn_sync && fn <> fn_meta ->
+         | `File fn when fn <> fn_sync && fn <> fn_meta ->
              return (SetString.add fn acc)
          | _ ->
              return acc)
@@ -614,7 +610,7 @@ object (self)
       fold 
         (fun e acc ->
            match e with
-             | PostDir dn ->
+             | `PostDir dn ->
                  self#cache#readdir dn 
                  >>= 
                  begin
@@ -647,7 +643,7 @@ object (self)
     fold
       (fun e lst ->
          match e with 
-           | File fn ->
+           | `File fn ->
                if fn <> fn_sync && fn <> fn_meta then 
                  begin
                    filter fn
@@ -726,9 +722,7 @@ object (self)
         >|= ignore
     in
 
-    let check_sync_tmp meta fn_tmp = 
-      id_fn_ext fn_tmp 
-      >|= fun (digest, sz) ->
+    let check_sync_tmp meta digest sz = 
       (* Check downloaded data *)
       if meta.sync_meta_size = sz && meta.sync_meta_digest = digest then
         true, ""
@@ -752,6 +746,33 @@ object (self)
           (Digest.to_hex digest)
     in
 
+    let download_sync meta_tmp = 
+       info ~ctxt
+         (f_ "Download synchronization data '%s'")
+         url_sync
+       >>= fun () -> 
+       self#download_chn url_sync fn_tmp chn_tmp
+       >>= fun () ->
+       return (close_out chn_tmp)
+       >>= fun () ->
+       id_fn_ext fn_tmp 
+       >>= fun (digest, sz) ->
+       begin
+         let sync_ok, reason = 
+           check_sync_tmp meta_tmp digest sz
+         in
+           if sync_ok then
+             info ~ctxt 
+               (f_ "Download of '%s' successful.") url_sync
+           else
+             fail
+               (Failure 
+                  (Printf.sprintf
+                     (f_ "Download of '%s' failed (%s).")
+                     url_sync reason))
+       end
+    in
+
       finalize
         (fun () -> 
            info ~ctxt
@@ -766,57 +787,57 @@ object (self)
              v_meta_t_of_sexp meta_upgrade
              fn_meta_tmp
            >>= fun meta_tmp ->
-
-           info ~ctxt
-             (f_ "Download synchronization data '%s'")
-             url_sync
-           >>= fun () -> 
-           self#download_chn url_sync fn_tmp chn_tmp
-           >>= fun () ->
-           return (close_out chn_tmp)
-           >>= fun () ->
-           check_sync_tmp meta_tmp fn_tmp
-           >>= fun (sync_ok, reason) ->
            begin
-             if sync_ok then
-               info ~ctxt 
-                 (f_ "Download of '%s' successful.") url_sync
-             else
-               fail
-                 (Failure 
-                    (Printf.sprintf
-                       (f_ "Download of '%s' failed (%s).")
-                       url_sync reason))
-           end
-           >>= fun () ->
-
-           (* We reach this point, all files should be valid. Copy them to their
-            * final destination 
-            *)
-           Lwt.join
-             [
-               cp_ext fn_meta_tmp self#cache fn_meta;
-               cp_ext fn_tmp self#cache fn_sync;
-             ])
+             (* Check that the current file sync.sexp match 
+              * the just downloaded sync-meta.sexp.
+              *)
+             id_fn sync fn_sync
+             >>= fun (digest, sz) ->
+             begin
+               let sync_ok, _ =
+                 check_sync_tmp meta_tmp digest sz
+               in
+               let rev_ok =
+                 sync.sync_rev = meta_tmp.sync_meta_rev
+               in
+                 (* Do we need to download sync.sexp ? *)
+                 if sync_ok && rev_ok then
+                   begin
+                     info ~ctxt
+                       (f_ "Synchronization data '%s' up to date")
+                       fn_sync
+                   end
+                 else
+                   begin
+                     download_sync meta_tmp 
+                     >>= fun () ->
+                     (* Install downloaded files to their final destination *)
+                     Lwt.join
+                       [
+                         cp_ext fn_meta_tmp self#cache fn_meta;
+                         cp_ext fn_tmp self#cache fn_sync;
+                       ]
+                     >>= fun () -> 
+                     (* Reload synchronization data *)
+                     load sync
+                     >>= fun sync' ->
+                     begin
+                       sync <- sync';
+                       (* Fix obvious problem in the filesystem tree *)
+                       self#repair
+                     end
+                   end
+             end
+           end)
 
         (* Always clean at the end *)
         clean
-
-      >>= fun () -> 
-      (* Reload synchronization data *)
-      load sync
-      >>= fun sync' ->
-      begin
-        sync <- sync';
-        (* Fix obvious problem in the filesystem tree *)
-        self#repair
-      end
 
   (** Override of std_ro methods *)
 
   method file_exists fn =
     let fn = norm_fn fn in
-      if fn = "" || fn = FilePath.current_dir then
+      if FilePath.is_current fn then
         return true
       else if MapString.mem fn sync.sync_map then
         return true
@@ -826,14 +847,22 @@ object (self)
 
   method is_directory fn =
     let fn = norm_fn fn in
-    let res = 
-      MapString.fold
-        (fun fn' _ acc ->
-           acc || fn = FilePath.dirname fn')
-        sync.sync_map 
-        false
-    in
-      return res
+      if FilePath.is_current fn then
+        begin
+          return true
+        end
+      else
+        begin
+          let res = 
+            MapString.fold
+              (fun fn' _ acc ->
+                 let dn = FilePath.dirname fn' in
+                   acc || fn = dn)
+              sync.sync_map 
+              false
+          in
+            return res
+        end
 
   method open_in fn =
     self#get fn
@@ -845,72 +874,35 @@ object (self)
     >>= fun () ->
     super#stat fn
 
-  method readdir dn =
+  method readdir_nolock dn =
     let dn = norm_fn dn in
+    let all = FilePath.is_current dn in
+
+    let head_path fn =
+      try
+        fst (ExtLib.String.split fn "/")
+      with ExtLib.Invalid_string ->
+        fn
+    in
+
+    let len = String.length dn in
+
+    let sub_prefix fn = 
+      String.sub fn (len + 1) ((String.length fn) - len - 1)
+    in
+
     let res =
       MapString.fold
         (fun fn _ acc ->
-           if FilePath.dirname fn = dn then
-             (FilePath.basename fn) :: acc
+           if all then
+             SetString.add (head_path fn) acc
+           else if FilePath.is_subdir fn dn then
+             SetString.add (head_path (sub_prefix fn)) acc
            else
              acc)
         sync.sync_map
-        []
+        SetString.empty
     in
-      return (Array.of_list res)
-
-
+    let lst = SetString.elements res in
+      return (Array.of_list lst)
 end
-
-(*
-  method private filter_sync_method t fn = 
-    match t.sync_method with 
-      | `Full ->
-          true
-
-      | `Cached ->
-          (* We only synchronize important data: _oasis and 
-           * storage.sexp 
-           *)
-          begin
-            match FilePath.basename fn with 
-              | "storage.sexp"
-              | "_oasis" -> 
-                  true
-
-              | _ ->
-                  false
-          end
-
-    (* If we change sync method, there should be some extra files
-     * all around the FS, remove them
-     *)
-    begin
-      if remove_extra then
-        FileUtilExt.fold
-          (fun e lst ->
-             match e with 
-               | FileUtilExt.File fn ->
-                   begin
-                     let rel_fn = 
-                       relative_fn t.sync_cache_dir fn 
-                     in
-                     let lst' =
-                       if not (filter_sync_method t rel_fn) then
-                         fn :: lst
-                       else
-                         lst
-                     in
-                       return lst'
-                   end
-
-               | _ ->
-                   return lst)
-          t.sync_cache_dir 
-          []
-        >>= 
-        FileUtilExt.rm 
-        >|= ignore
-      else
-        return ()
- *)

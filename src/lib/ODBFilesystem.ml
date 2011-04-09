@@ -143,13 +143,17 @@ object (self)
          self#close_in chn')
 
   (** Read a directory content *)
+  method readdir_nolock dn =
+     try
+       return (Sys.readdir (self#rebase dn))
+     with e ->
+       fail e
+
+  (** Read a directory content *)
   method readdir dn =
     self#do_read
       (fun () ->
-         try
-           return (Sys.readdir (self#rebase dn))
-         with e ->
-           fail e)
+         self#readdir_nolock dn)
 end
 
 (* Do an operation on an input channel *)
@@ -162,48 +166,58 @@ let with_file_in fs fn f =
   >|= fun () ->
   res
 
-(** Traverse a whole filesystem tree *)
-let fold f fs fn a =
-  fs#read_begin
-  >>= fun () ->
-  (* TODO: maybe the fn can change at each level,
-   * maybe call again self#rebase 
-   * (e.g. unionfs)
-   *)
-  fs#rebase_lwt fn
-  >>= fun fn' ->
-  FileUtilExt.fold 
-    (fun fne a ->
-       let fne' =
-         match fne with 
-           | FileUtilExt.PostDir dn ->
-               FileUtilExt.PostDir (fs#unbase dn)
-           | FileUtilExt.PreDir dn ->
-               FileUtilExt.PreDir (fs#unbase dn)
-           | FileUtilExt.File fn ->
-               FileUtilExt.File (fs#unbase fn)
-           | FileUtilExt.Symlink fn ->
-               FileUtilExt.Symlink (fs#unbase fn)
-       in
-         f fne' a)
-    fn' a
-  >>= fun res ->
-  fs#read_end 
-  >|= fun () ->
-  res 
+
+(** Traverse a directory, no lock *)
+let fold_dir_nolock f fs fn a =
+  fs#readdir_nolock fn 
+  >>= fun arr ->
+  begin
+    let lst = Array.to_list arr in
+      Lwt_list.fold_left_s
+        (fun a bn ->
+           let fn = FilePath.concat fn bn in
+             f fn bn a)
+        a lst
+  end
 
 (** Traverse a directory *)
 let fold_dir f fs fn a =
   fs#read_begin
   >>= fun () ->
-  (* TODO: see the TODO of fold *)
-  fs#rebase_lwt fn
-  >>= fun fn' ->
-  FileUtilExt.fold_dir f fn' a
+  fold_dir_nolock f fs fn a
   >>= fun res ->
   fs#read_end
   >|= fun () ->
   res
+
+(** Traverse a whole filesystem tree *)
+let fold f fs fn a =
+  fs#read_begin
+  >>= fun () ->
+  begin
+    let rec fold_aux fn _ a = 
+      fs#is_directory fn
+      >>= fun is_dir ->
+        if is_dir then
+          begin
+            f (`PreDir fn) a
+            >>= fun a ->
+            fold_dir_nolock fold_aux fs fn a
+            >>= fun a ->
+            f (`PostDir fn) a
+          end
+        else
+          begin
+            f (`File fn) a 
+          end
+    in
+      fold_aux fn "" a
+  end
+  >>= fun res ->
+  fs#read_end 
+  >|= fun () ->
+  res 
+
 
 (** Read-write filesystem *)
 class std_rw root = 
