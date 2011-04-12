@@ -115,6 +115,7 @@
 "src/lib/ODBIncoming.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBSync.ml": syntax_camlp4o, pkg_sexplib.syntax
 "src/lib/ODBLog.ml": syntax_camlp4o, pkg_sexplib.syntax
+"src/lib/ODBRepository.ml": syntax_camlp4o, pkg_sexplib.syntax
 
 "test/test.ml": syntax_camlp4o, pkg_camlp4.macro
 

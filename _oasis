@@ -97,7 +97,9 @@ Library "oasis-db"
            ODBUpload,
            ODBRWLock,
            ODBFilesystem,
-           ODBHLS
+           ODBHLS,
+           ODBRepository,
+           ODBCurl
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,
@@ -107,7 +109,8 @@ Library "oasis-db"
                 inotify,
                 fileutils,
                 yojson,
-                rest, rest.curl
+                rest, rest.curl,
+                inifiles
   
 Flag oasis_db_ocsigen
   Description: Build ocsigen module for OASIS-DB. It requires postgresql running.
@@ -147,6 +150,7 @@ Library "oasis-db-ocsigen"
            Comment,
            Rating,
            ExtODB,
+           Descr,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
@@ -173,7 +177,8 @@ Library "oasis-db-cli"
            ODBCLISearch,
            ODBCLIShow,
            ODBCLIUpdate,
-           ODBCLIPlugins
+           ODBCLIPlugins,
+           InifilesExt
   InternalModules: ODBCLIData
   BuildDepends: oasis-db, xdg-basedir, oasis.cli
   BuildTools: ocamlify

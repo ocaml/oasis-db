@@ -467,56 +467,19 @@ object (self)
     else
       url^"/"^tl
 
-  (** Take care of creating curl socket and closing it
-    *)
-  method private with_curl f = 
-    (* Generic init of curl *)
-    let c = 
-      Curl.init () 
-    in
-    let () = 
-      Curl.set_failonerror c true
-    in
-      finalize 
-        (fun () -> 
-           f c)
-        (fun () -> 
-           Curl.cleanup c;
-           return ())
-
   (** Download an URI to a file using its channel. Use the position
     * of the channel to resume download.
     *)
   method private download_chn url fn chn = 
     let ctxt = self#ctxt in
-
-    let curl_write fn chn d = 
-      output_string chn d;
-      String.length d
-    in
-
-    let download_curl c = 
-      try 
-        (* Resume download *)
-        Curl.set_url c url;
-        Curl.set_writefunction c (curl_write fn chn);
-        Curl.set_resumefromlarge c (LargeFile.pos_out chn);
-        Curl.perform c;
-        return ()
-      with 
-        | Curl.CurlException(Curl.CURLE_HTTP_NOT_FOUND, _, _) ->
-            fail
-              (Failure
-                 (Printf.sprintf
-                    (f_ "URL not found '%s' url to download file '%s'")
-                    url fn))
-        | e ->
-            fail e 
-    in
-
       debug ~ctxt "Downloading '%s' to '%s'" url fn
       >>= fun () ->
-      self#with_curl download_curl
+      begin
+        ODBCurl.download_chn 
+          ~custom:(fun c -> Curl.set_resumefromlarge c (LargeFile.pos_out chn))
+          url fn chn;
+        return ()
+      end
       >>= fun () ->
       debug ~ctxt "Download of '%s' to '%s' completed" url fn
 
@@ -586,12 +549,17 @@ object (self)
                 (FilePath.dirname fn)
                 0o755
               >>= fun () ->
+              info ~ctxt:self#ctxt 
+                (f_ "Downloading '%s'") fn
+              >>= fun () ->
               self#download_fn url fn
               >>= fun () ->
               self#digest_ok fn
               >>= fun ok ->
               if ok then 
-                return ()
+                info ~ctxt:self#ctxt
+                  (f_ "Download of '%s' complete")
+                  fn
               else
                 fail
                   (Failure
