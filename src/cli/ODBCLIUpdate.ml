@@ -1,4 +1,11 @@
 
+(** 'update' subcommand handler.
+   
+     Synchronize data with remote servers.
+
+     @author Sylvain Le Gall
+  *)
+
 open SubCommand
 open ODBGettext
 open ODBCLICommon

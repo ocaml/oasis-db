@@ -202,7 +202,7 @@ Test main
   Run: false
 
 Test cli
-  Command: _build/src/cli/test-cli update
+  Command: _build/src/cli/test-cli list -findlib
   TestTools: test-cli
   
 Executable inrestart 
