@@ -11,7 +11,7 @@ of your package:
 \ ![OASIS-DB badge](oasis-db-badge.png)
 
 {{
-    <a href="http://oasis.ocamlcore.org/browse?pkg=YOURPACKAGE">
+    <a href="http://oasis.ocamlcore.org/view/YOURPACKAGE/latest">
       <img
       src="http://oasis.ocamlcore.org/oasis-db-badge.png"
       alt="OASIS-DB" style="border: none;" />
@@ -37,5 +37,5 @@ information about the development of *OASIS-DB*.
 
 !! Use the REST API
 
-Have a look at [OASIS-DB API](../api/help). You can build your own application 
+Have a look at [OASIS-DB API](../api/). You can build your own application 
 using our REST API.
