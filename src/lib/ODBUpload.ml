@@ -70,6 +70,52 @@ let pkg_ver_of_upload t =
       publink           = t.publink;
     }
 
+let check_exists ~ctxt ~assume_sure t = 
+  try 
+
+    let pkg_ver = 
+      pkg_ver_of_upload t
+    in
+    let is_sure = 
+      function
+        | Sure _ -> true
+        | Unsure _ | NotFound -> false
+    in
+    let sure = 
+      assume_sure ||
+      (
+        (is_sure t.completion.ct_pkg)
+        &&
+        (is_sure t.completion.ct_ver)
+      )
+    in
+      ODBStorage.PkgVer.mem t.storage (`PkgVer pkg_ver) 
+      >>= function
+        | true ->
+            let msg = 
+              Printf.sprintf
+                (f_ "Package's version %s v%s already exists.")
+                pkg_ver.pkg 
+                (OASISVersion.string_of_version pkg_ver.ver)
+            in
+              if sure then 
+                begin
+                  fail (Failure msg)
+                end
+              else
+                begin
+                  ODBMessage.error ~ctxt "%s" msg
+                  >>= fun () ->
+                  return t
+                end
+
+        | false ->
+            return t
+
+  with Not_found ->
+    return t
+
+
 let upload_begin ~ctxt (stor: ODBStorage.rw_t) upload_method tarball_fn tarball_nm publink =  
   let upload_date =
     CalendarLib.Calendar.from_unixfloat
@@ -132,10 +178,12 @@ let upload_begin ~ctxt (stor: ODBStorage.rw_t) upload_method tarball_fn tarball_
         }
       in
         Gc.finalise safe_clean t;
-        return t
+        check_exists ~ctxt ~assume_sure:false t
     end
 
 let upload_commit ~ctxt t = 
+  check_exists ~ctxt ~assume_sure:true t
+  >>= fun t ->
   begin
     try 
       return (pkg_ver_of_upload t)

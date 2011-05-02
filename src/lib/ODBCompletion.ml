@@ -298,15 +298,7 @@ let order ~ctxt stor a_pkg a_ver =
                     let ver1 = v1.ODBPkgVer.ver in
                     let ver2 = v2.ODBPkgVer.ver in
 
-                    if cmp ver1 ver = 0 || cmp ver2 ver = 0 then
-                      begin
-                        error ~ctxt 
-                        (f_ "Version '%s' for package '%s' already exists")
-                        (OASISVersion.string_of_version ver) pkg_s
-                        >>= fun () ->
-                        return NotFound
-                      end
-                    else if cmp ver ver1 < 0 then
+                    if cmp ver ver1 < 0 then
                       begin
                         let order = 
                           v1.ODBPkgVer.ord - 10
@@ -452,7 +444,3 @@ let run ~ctxt stor fn an dn =
               ct_oasis  = oasis_content;
             }
     end
-
-(* TODO: Other possible checks:
-   - if user <> www-data then assert user provided = user
- *)
