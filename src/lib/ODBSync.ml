@@ -457,16 +457,6 @@ object (self)
   method ctxt = sync.sync_ctxt
   method cache = sync.sync_fs
 
-  (** [url_concat url path] Concatenates a relative [path] onto an absolute
-    * [url] 
-    *)
-  method private url_concat url tl = 
-    (* TODO: cover more case  of URL concat *)
-    if String.ends_with url "/" then
-      url^tl
-    else
-      url^"/"^tl
-
   (** Download an URI to a file using its channel. Use the position
     * of the channel to resume download.
     *)
@@ -540,7 +530,7 @@ object (self)
         if not ok then
           begin
             let url = 
-              self#url_concat 
+              ODBCurl.uri_concat 
                 uri 
                 (String.concat "/" (explode_filename fn))
             in
@@ -668,9 +658,9 @@ object (self)
   (* Update the synchronization data, downloading remote data. *)
   method update = 
     let ctxt = self#ctxt in
-    let to_url fn = self#url_concat uri (FilePath.basename fn) in
-    let url_meta = to_url fn_meta in
-    let url_sync = to_url fn_sync in
+    let to_url fn = ODBCurl.uri_concat uri (FilePath.basename fn) in
+    let uri_meta = to_url fn_meta in
+    let uri_sync = to_url fn_sync in
 
     (* Download sync-meta.sexp *)
     let fn_meta_tmp, chn_meta_tmp = 
@@ -717,9 +707,9 @@ object (self)
     let download_sync meta_tmp = 
        info ~ctxt
          (f_ "Download synchronization data '%s'")
-         url_sync
+         uri_sync
        >>= fun () -> 
-       self#download_chn url_sync fn_tmp chn_tmp
+       self#download_chn uri_sync fn_tmp chn_tmp
        >>= fun () ->
        return (close_out chn_tmp)
        >>= fun () ->
@@ -731,13 +721,13 @@ object (self)
          in
            if sync_ok then
              info ~ctxt 
-               (f_ "Download of '%s' successful.") url_sync
+               (f_ "Download of '%s' successful.") uri_sync
            else
              fail
                (Failure 
                   (Printf.sprintf
                      (f_ "Download of '%s' failed (%s).")
-                     url_sync reason))
+                     uri_sync reason))
        end
     in
 
@@ -745,9 +735,9 @@ object (self)
         (fun () -> 
            info ~ctxt
              (f_ "Download meta synchronization data '%s'")
-             url_meta;
+             uri_meta;
            >>= fun () ->
-           self#download_chn url_meta fn_meta_tmp chn_meta_tmp
+           self#download_chn uri_meta fn_meta_tmp chn_meta_tmp
            >>= fun () ->
            return (close_out chn_meta_tmp)
            >>= fun () ->

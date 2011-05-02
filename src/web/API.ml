@@ -33,7 +33,7 @@ let pkg_ver_show =
 
 let api_help = 
   Eliom_predefmod.Xhtml.register_new_service
-    ~path:(base_path @ ["help"])
+    ~path:(base_path @ [""])
     ~get_params:unit
     (fun sp path () ->
        Context.get ~sp () 
@@ -71,20 +71,23 @@ let pkg_ver_upload_no_post =
        fail (Failure (s_ "This page require POST params")))
 
 let pkg_ver_upload =
-  Eliom_predefmod.Unit.register_new_post_service 
+  Eliom_predefmod.Text.register_new_post_service 
     ~fallback:pkg_ver_upload_no_post
-    ~post_params:(string "publink" ** file "tarball")
-    (fun sp _ (publink, tarball_fd) ->
+    ~post_params:(opt (string "publink") ** file "tarball")
+    (fun sp _ (publink_opt, tarball_fd) ->
        Context.get_user ~sp ()
        >>= fun (ctxt, accnt) ->
-       Upload.upload_init_check tarball_fd publink
-       >>= fun (tarball_fn, tarball_nm, publink) ->
+       Upload.upload_init_check tarball_fd publink_opt
+       >>= fun (tarball_fn, tarball_nm, publink_opt) ->
        ODBUpload.upload_begin ~ctxt:ctxt.odb
          ctxt.stor
          (WebAPI accnt.OCAAccount.accnt_real_name)
-         tarball_fn tarball_nm publink 
+         tarball_fn tarball_nm publink_opt 
        >>= fun upload ->
        ODBUpload.upload_commit ~ctxt:ctxt.odb
          upload
-       >|= fun _ ->
-       ())
+       >|= fun (_, pkg_ver) ->
+       Printf.sprintf
+         (f_ "Package's version %s v%s successfully uploaded.")
+         pkg_ver.pkg (OASISVersion.string_of_version pkg_ver.ver),
+       "text/plain")

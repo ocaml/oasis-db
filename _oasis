@@ -171,7 +171,7 @@ Library "oasis-db-cli"
   Modules: ODBCLICommon,
            ODBCLIInstall,
            ODBCLIList,
-           ODBCLIPublish,
+           ODBCLIUpload,
            ODBCLIRegister,
            ODBCLIRemove,
            ODBCLISearch,
@@ -202,7 +202,8 @@ Test main
   Run: false
 
 Test cli
-  Command: _build/src/cli/test-cli list -findlib
+#  Command: _build/src/cli/test-cli update
+  Command: _build/src/cli/test-cli upload test/data/ocaml-fastrandom-0.0.1.tar.gz 
   TestTools: test-cli
   
 Executable inrestart 

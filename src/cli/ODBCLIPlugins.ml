@@ -1,6 +1,6 @@
 open ODBCLIInstall
 open ODBCLIList
-open ODBCLIPublish
+open ODBCLIUpload
 open ODBCLIRegister
 open ODBCLIRemove
 open ODBCLISearch

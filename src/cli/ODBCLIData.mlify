@@ -1,6 +1,6 @@
 VarString install_mkd  "ODBCLIInstallHelp.mkd"
 VarString list_mkd     "ODBCLIListHelp.mkd"
-VarString publish_mkd  "ODBCLIPublishHelp.mkd"
+VarString upload_mkd   "ODBCLIUploadHelp.mkd"
 VarString register_mkd "ODBCLIRegisterHelp.mkd"
 VarString remove_mkd   "ODBCLIRemoveHelp.mkd"
 VarString search_mkd   "ODBCLISearchHelp.mkd"

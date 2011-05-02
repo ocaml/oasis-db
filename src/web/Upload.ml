@@ -414,13 +414,19 @@ let upload_edit_box ~ctxt ~sp id upload log =
  * Initialization action: upload a tarball
  *)
 
-let upload_init_check tarball_fd publink = 
+let upload_init_check tarball_fd publink_opt = 
   try 
-    let publink = 
-      match ExtString.String.strip publink with
-        | "" -> None
-        | s  -> Some s
-        (* TODO: test the link *)
+    let publink_opt = 
+      match publink_opt with 
+        | Some s ->
+            begin
+              match ExtString.String.strip s with
+                | "" -> None
+                | s  -> Some s
+                (* TODO: test the link *)
+            end
+        | None ->
+            None
     in
     let tarball_nm =  
       match get_original_filename tarball_fd with 
@@ -434,7 +440,7 @@ let upload_init_check tarball_fd publink =
     let tarball_fn =
       get_tmp_filename tarball_fd
     in
-      return (tarball_fn, tarball_nm, publink)
+      return (tarball_fn, tarball_nm, publink_opt)
   with e -> 
     fail e
 
@@ -447,7 +453,7 @@ let upload_init_action =
     (fun sp _ (publink, (tarball_fd, id))->
        Context.get_user ~sp () 
        >>= fun (ctxt, accnt) ->
-       upload_init_check tarball_fd publink
+       upload_init_check tarball_fd (Some publink)
        >>= fun (tarball_fn, tarball_nm, publink) ->
        begin
          let tsk = 

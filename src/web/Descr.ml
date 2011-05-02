@@ -21,9 +21,14 @@ let descr_sexp =
             repo_long_name       = Some "Development version on localhost";
             repo_description     = None;
             repo_priority        = 500;
-            repo_dist_uri        = string_of_uri (make_uri ~absolute:true ~service:Dist.dist ~sp []);
+            repo_dist_uri        = 
+              string_of_uri 
+                (make_uri ~absolute:true ~service:Dist.dist ~sp []);
             repo_incoming_uri    = None;
-            repo_api_uri         = None;
+            repo_api_uri         = 
+              Some 
+                (string_of_uri 
+                   (make_uri ~absolute:true ~service:API.api_help ~sp ()));
             repo_download_policy = `Minimal;
           }
         in
