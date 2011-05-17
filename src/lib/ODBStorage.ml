@@ -114,9 +114,16 @@ struct
 
   (* See ODBStorage.mli *)
   let mem t k = 
-    get t k 
-    >>= fun hls ->
-    HLS.mem hls (O.key_str k)
+    catch 
+      (fun () ->
+         get t k 
+         >>= fun hls ->
+         HLS.mem hls (O.key_str k))
+      (function
+         | Not_found ->
+             return false
+         | e ->
+             fail e)
 
   let find_container t k =
     get t k
