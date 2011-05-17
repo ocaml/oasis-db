@@ -177,6 +177,7 @@ Library "oasis-db-cli"
            ODBCLISearch,
            ODBCLIShow,
            ODBCLIUpdate,
+           ODBCLIFetch,
            ODBCLIPlugins,
            InifilesExt
   InternalModules: ODBCLIData
@@ -190,22 +191,16 @@ Executable test
   Install: false
   BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db, git
   
-Executable "test-cli"
+Executable "test_cli"
   Path: src/cli
   MainIs: Main.ml
   Install: false
   BuildDepends: oasis-db, xdg-basedir, oasis.cli
 
 Test main
-  Command: $test
+  Command: $test -oasis-cli $test_cli
   TestTools: test
-  Run: false
 
-Test cli
-#  Command: _build/src/cli/test-cli update
-  Command: _build/src/cli/test-cli upload test/data/ocaml-fastrandom-0.0.1.tar.gz 
-  TestTools: test-cli
-  
 Executable inrestart 
   Path:         src/tools/inrestart
   MainIs:       Main.ml

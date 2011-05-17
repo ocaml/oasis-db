@@ -53,6 +53,10 @@ let _ :: _ | [] =
       "-not-long",
       Arg.Clear long,
       " Don't run long tests.";
+
+      "-oasis-cli",
+      Arg.Set_string oasis_cli,
+      "prog OASIS CLI test command";
     ]
   in
 
@@ -66,4 +70,5 @@ let _ :: _ | [] =
          TestAPI.tests;
          TestSync.tests;
          TestGit.tests;
+         TestCLI.tests;
        ])

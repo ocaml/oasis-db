@@ -14,6 +14,8 @@ let odb =
 let ocsigen = ref "ocsigen"
 let ocsigen_args = ref ["-s"]
 
+let oasis_cli = ref "false"
+
 let in_data_dir fn = 
   FilePath.make_filename ["test"; "data"; fn]
 
@@ -407,9 +409,23 @@ let bracket_ocsigen conf pre_start f post_stop () =
           if !verbose then
             begin
               Buffer.output_buffer Pervasives.stderr buf;
+              output_string Pervasives.stderr "\n";
               Pervasives.flush Pervasives.stderr
             end;
           pre_start ocs
+        in
+
+        (* Override LWT_LOG to start ocsigen *)
+        let lwt_log_bak =
+          let bak =
+            try 
+              Some (Unix.getenv "LWT_LOG")
+            with Not_found ->
+              None
+          in
+            if !verbose then
+              Unix.putenv "LWT_LOG" "* -> debug";
+            bak
         in
 
         (* Start ocsigen *)
@@ -425,6 +441,13 @@ let bracket_ocsigen conf pre_start f post_stop () =
 
         let () = 
           InotifyExt.assert_create_file command_fn
+        in
+
+        (* Restore LWT_LOG *)
+        let () =
+          match lwt_log_bak with 
+            | Some s -> Unix.putenv "LWT_LOG" s
+            | None -> ()
         in
 
           (* Test *)

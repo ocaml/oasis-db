@@ -161,7 +161,11 @@ let main () =
                List.iter 
                  (fun s ->
                     BaseMessage.error "%s" s)
-                 (msg_code :: msg_lst)
+                 (msg_code :: msg_lst);
+               failwith 
+                 (Printf.sprintf
+                    (f_ "Error while uploading '%s'")
+                    fn)
              end;
            Buffer.clear answer)
       tarballs;

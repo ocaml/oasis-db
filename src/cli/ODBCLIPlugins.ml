@@ -6,3 +6,4 @@ open ODBCLIRemove
 open ODBCLISearch
 open ODBCLIShow
 open ODBCLIUpdate
+open ODBCLIFetch
