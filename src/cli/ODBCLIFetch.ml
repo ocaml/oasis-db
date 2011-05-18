@@ -32,10 +32,6 @@ let main () =
   let what = !what in
   let output = !output in
 
-  let ctxt =
-    Lwt_unix.run (context_lwt ())
-  in
-
   let name_cond, ver_check_opt = 
     match !anon with 
       | [pkg_str; ver_cmp_str] ->
@@ -156,6 +152,8 @@ let main () =
   in
 
   let job = 
+    context_lwt ()
+    >>= fun ctxt ->
     Lwt_list.fold_left_s
       (fun acc (repo, fs) -> 
          catch 
