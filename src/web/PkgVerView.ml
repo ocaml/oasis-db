@@ -33,28 +33,30 @@ let oasis_fields ~ctxt ~sp pkg =
    *)
 
   (* Compute dependencies *)
-  ODBDeps.solve 
-    ~ctxt:ctxt.odb 
-    (ODBDeps.of_oasis_package pkg)
-    ctxt.stor 
+  ODBDeps.solve (ODBDeps.of_oasis_package pkg) ctxt.stor 
   >|= fun deps ->
 
   begin
-    let dependencies =
+    let build_tools, build_deps =
       ODBDeps.fold
-        (fun nm e acc ->
+        (fun dep e (build_tools, build_deps) ->
            let scmp = string_of_comparator in
            let spf  fmt = Printf.sprintf fmt in
+           let nm = 
+             match dep with
+               | `ExternalTool prog -> prog
+               | `FindlibPackage fndlb -> fndlb
+           in
            let txt = 
              match e.ODBDeps.version_cmp, e.ODBDeps.optional with 
                | Some cmp, false ->
                    spf (f_ "%s (%s)") nm (scmp cmp)
                | Some cmp, true ->
-                   spf (f_ "%s (%s, optional)") nm (scmp cmp) 
+                   spf (f_ "%s (%s, opt.)") nm (scmp cmp) 
                | None, false ->
                    nm
                | None, true ->
-                   spf (f_ "%s (optional)") nm
+                   spf (f_ "%s (opt.)") nm
            in
            let hd = 
              match e.ODBDeps.package_version with 
@@ -67,13 +69,42 @@ let oasis_fields ~ctxt ~sp pkg =
                | None ->
                    pcdata txt 
            in
-             hd :: acc)
+             match dep with 
+               | `ExternalTool _ -> 
+                   hd :: build_tools, 
+                   build_deps
+               | `FindlibPackage _ ->
+                   build_tools,
+                   hd :: build_deps)
         deps
-        []
+        ([], [])
     in
    
-    let provides =
-      ODBProvides.of_oasis_package pkg
+    let provide_tools, provide_fndlbs =
+      List.fold_left
+        (fun (provide_tools, provide_fndlbs) (k, status) ->
+           let nm =
+             match k with 
+               | `ExternalTool (nm, _)
+               | `FindlibPackage (nm, _) ->
+                   nm
+           in
+           let str =
+             match status with 
+               | `Always ->
+                   nm
+               | `Sometimes ->
+                   Printf.sprintf (f_ "%s (opt.)") nm
+           in
+             match k with 
+               | `ExternalTool _ ->
+                   str :: provide_tools,
+                   provide_fndlbs
+               | `FindlibPackage _ ->
+                   provide_tools,
+                   str :: provide_fndlbs)
+        ([], [])
+        (ODBProvides.of_oasis_package pkg)
     in
 
     let src_repos = 
@@ -267,14 +298,24 @@ let oasis_fields ~ctxt ~sp pkg =
         end;
         
         non_zero_lst_html
-          "dependencies"
-          (sn_ "Dependency: " "Dependencies: ")
-          dependencies;
+          "build_depends"
+          (sn_ "Build Depend: " "Build Depends: ")
+          build_deps;
+
+        non_zero_lst_html
+          "build_tools"
+          (sn_ "Build Tool: " "Build Tools: ")
+          build_tools;
 
         non_zero_lst
-          "provides"
-          (sn_ "Provide: " "Provides: ")
-          provides;
+          "provide_tools"
+          (sn_ "Provide Tool: " "Provide Tools: ")
+          provide_tools;
+
+        non_zero_lst
+          "provide_findlib"
+          (sn_ "Provide Findlib: " "Provide Findlibs: ")
+          provide_fndlbs;
 
         Some 
           ("license",

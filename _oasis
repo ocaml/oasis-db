@@ -74,6 +74,8 @@ Library "oasis-db"
   CompiledObject: Best
   Modules: FileUtilExt,
            LwtExt,
+           OASISExprExt,
+           OASISBuildSectionExt,
            ODBUtils,
            ODBConf,
            ODBGettext,

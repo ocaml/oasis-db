@@ -1,0 +1,14 @@
+OASISFormat: 0.1
+Name:        ocamlify
+Version:     0.0.1
+Synopsis:    include files in OCaml code
+Authors:     Sylvain Le Gall
+LicenseFile: COPYING.txt 
+License:     LGPL-2.1 with OCaml linking exception
+FilesAB:     src/OCamlifyConfig.ml.ab
+Plugins:     StdFiles (0.1.0), DevFiles (0.1.0)
+
+Executable ocamlify
+  Path:           src
+  CompiledObject: byte
+  MainIs:         ocamlify.ml

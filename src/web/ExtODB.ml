@@ -139,24 +139,6 @@ let findlib_root fndlb_nm =
   in
     res
 
-(* Compute installability of a build section. 
- * TODO: It should take into account default flag value 
- * + reasonable env like in oasis2debian
- *)
-let is_bs_installable oasis bs = 
- match bs.bs_install with 
-   | [OASISExpr.EBool true, true] -> true
-   | _ -> false
-
-(* Compute buildability of a build section. 
- * TODO: It should take into account default flag value 
- * + reasonable env like in oasis2debian
- *)
-let is_bs_buildable oasis bs = 
- match bs.bs_build with 
-   | [OASISExpr.EBool true, true] -> true
-   | _ -> false
-
 let get_odb_admin ~sp () =
   get_user ~sp () 
   >>= fun (ctxt, accnt) ->
@@ -632,48 +614,33 @@ let map_info_name ~ctxt mp_repo =
     let pkg_ver_str =
       (pkg_str, ver_str)
     in
-    let fndlb_nm_mp = 
-      OASISLibrary.findlib_name_map oasis
+    let provides =
+      ODBProvides.of_oasis_package oasis
     in
-    let acc = 
       List.fold_left 
         (fun acc ->
            function
-             | Executable (cs, bs, _) ->
+             | `ExternalTool (nm, _), `Always ->
                  (* Add executable provides *)
-                 if is_bs_installable oasis bs then
-                   add_merge_entry
-                     cs.cs_name 
-                     (`PkgVerOASIS(pkg_ver_str, {t with is_program = true}))
-                     acc
-                 else
+                 add_merge_entry
+                   nm 
+                   (`PkgVerOASIS(pkg_ver_str, {t with is_program = true}))
                    acc
 
-             | Library (cs, bs, _) ->
+             | `FindlibPackage (fndlb_full, _), `Always ->
                  (* Add findlib provides *)
-                 if is_bs_installable oasis bs then
-                   let fndlb_nm =
-                     OASISLibrary.findlib_of_name 
-                       ~recurse:true 
-                       fndlb_nm_mp 
-                       cs.cs_name 
-                   in
-                   let fndlb_root =
-                     findlib_root fndlb_nm
-                   in
-                     add_merge_entry
-                       fndlb_root
-                       (`PkgVerOASIS(pkg_ver_str, {t with is_library = true}))
-                       acc
-                 else
-                   acc
-
-             | SrcRepo _ | Test _ | Doc _ | Flag _ ->
+                 let fndlb_root =
+                   findlib_root fndlb_full
+                 in
+                   add_merge_entry
+                     fndlb_root
+                     (`PkgVerOASIS(pkg_ver_str, {t with is_library = true}))
+                     acc
+             | `ExternalTool _, `Sometimes | `FindlibPackage _, `Sometimes ->
+                 (* Ignore optional provides *)
                  acc)
         acc
-        oasis.sections 
-    in
-      acc
+        provides
   in
 
   let add_without_oasis pkg_str ver_str acc =
@@ -734,50 +701,44 @@ let map_info_name ~ctxt mp_repo =
 
 (* Compute non optional dependency out of t datastructure *)
 let non_optional_deps ~ctxt oasis = 
-  ODBDeps.solve ~ctxt:ctxt.odb 
-    (ODBDeps.of_oasis_package oasis)
-    ctxt.stor 
-  >>= fun deps ->
-  let non_optional_deps = 
-    (* TODO: move this to ODBDeps *)
-    (* Compute tool dependencies *)
-    List.fold_left 
-      (fun acc ->
-         function 
-           | Library (_, bs, _) 
-           | Executable (_, bs, _) ->
-               if is_bs_buildable oasis bs then
-                 List.fold_left
-                   (fun acc ->
-                      function
-                        | ExternalTool nm ->
-                            (MapString.add nm None acc)
-                        | InternalExecutable _ ->
-                            acc)
-                   acc
-                   bs.bs_build_tools
-               else
-                 acc
-           | Test _ | Doc _ | Flag _ | SrcRepo _ ->
-               acc)
-      MapString.empty 
-      oasis.sections
-  in
-  let non_optional_deps =
-    ODBDeps.fold 
-      (fun fndlb_nm e acc ->
-         let fndlb_root = 
-           findlib_root fndlb_nm 
-         in
-           if not e.ODBDeps.optional then
-             (* TODO: merge with previous version *)
-             MapString.add fndlb_root e.ODBDeps.version_cmp acc
-           else
-             acc)
-      deps
-      non_optional_deps
-  in
-    return non_optional_deps
+  ODBDeps.solve (ODBDeps.of_oasis_package oasis) ctxt.stor 
+  >|= fun deps ->
+  ODBDeps.fold 
+    (fun dep e acc ->
+       let short_dep = 
+         match dep with 
+           | `FindlibPackage fndlb_full ->
+               findlib_root fndlb_full
+           | `ExternalTool prog ->
+               prog
+       in
+         if not e.ODBDeps.optional then
+           begin
+             let cmp_opt = 
+               let cur_cmp = 
+                 e.ODBDeps.version_cmp 
+               in
+                 try 
+                   begin
+                     let pre_cmp = 
+                       MapString.find short_dep acc
+                     in
+                       match pre_cmp, cur_cmp with 
+                         | Some vcmp1, Some vcmp2 ->
+                             Some (comparator_reduce (VAnd (vcmp1, vcmp2)))
+                         | None, e | e, None ->
+                             e
+                   end
+
+                 with Not_found ->
+                   cur_cmp
+             in
+               MapString.add short_dep cmp_opt acc
+           end
+         else
+           acc)
+    deps
+    MapString.empty
 
 type table_t =
     {

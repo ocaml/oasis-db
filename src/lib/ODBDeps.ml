@@ -12,12 +12,23 @@ type elem =
       package_version: ODBPkgVer.t option;
     }
 
-type t = elem MapString.t
+type key =
+    [ `FindlibPackage of findlib_full 
+    | `ExternalTool of prog]
 
-let add findlib_nm e1 t = 
+module Map = 
+  Map.Make
+    (struct 
+       type t = key
+       let compare = Pervasives.compare
+     end)
+
+type t = elem Map.t
+
+let add dep e1 t = 
   let e2 =
     try 
-      MapString.find findlib_nm t
+      Map.find dep t
     with Not_found ->
       {
         optional        = true;
@@ -44,8 +55,8 @@ let add findlib_nm e1 t =
       | None, None ->
           None
   in
-    MapString.add 
-      findlib_nm 
+    Map.add 
+      dep
       {
         optional = optional;
         version_cmp = version_cmp;
@@ -53,93 +64,139 @@ let add findlib_nm e1 t =
       }
       t
 
-(* TODO: tool dependencies which includes test/doc, for dependencies
- * and provides.
- *)
 (* Extract build dependencies from OASIS package *)
 let of_oasis_package pkg = 
-  List.fold_left
-    (fun acc ->
-       function
-         | Executable (_, bs, _)
-         | Library (_, bs, _) ->
-             begin
-               let optional =
-                 (* If the build is optional, the dependencies
-                  * are optional as well 
-                  *)
-                 match bs.bs_build with 
-                   | [OASISExpr.EBool true, true] -> false
-                   | _ -> true
-               in
-                 List.fold_left
-                   (fun acc ->
-                      function
-                        | FindlibPackage (nm, ver_opt) ->
-                            add nm 
-                              {optional        = optional;
-                               version_cmp     = ver_opt;
-                               package_version = None}
-                              acc
+  let rec add_tool_list optional = 
+    List.fold_left
+      (fun acc ->
+         function
+           | ExternalTool nm ->
+               add (`ExternalTool nm)
+                 {optional        = optional;
+                  version_cmp     = None;
+                  package_version = None}
+                 acc
 
-                        | InternalLibrary _ ->
-                            acc)
+           | InternalExecutable _ ->
+               acc)
+  in
+
+    List.fold_left
+      (fun acc ->
+         function
+           | Executable (_, bs, _)
+           | Library (_, bs, _) ->
+               begin
+                 let built, optional =
+                   (* If the build is optional, the dependencies
+                    * are optional as well 
+                    *)
+                   match OASISBuildSectionExt.buildable pkg bs with 
+                     | `Always -> true, false
+                     | `Sometimes -> true, true
+                     | `Never -> false, true
+                 in
+
+                   if built then
+                     begin
+                       let acc =
+                         (* Add findlib packages *)
+                         List.fold_left
+                           (fun acc ->
+                              function
+                                | FindlibPackage (nm, ver_opt) ->
+                                    add (`FindlibPackage nm)
+                                      {optional        = optional;
+                                       version_cmp     = ver_opt;
+                                       package_version = None}
+                                      acc
+
+                                | InternalLibrary _ ->
+                                    acc)
+                           acc
+                           bs.bs_build_depends
+                       in
+
+                       let acc = 
+                         (* Add external tools *)
+                         add_tool_list optional acc bs.bs_build_tools
+                       in
+                         acc
+                     end
+                   else
+                     (* This section is not built at all *)
+                     acc
+               end
+
+           | Test (cs, test) ->
+               begin 
+                 if OASISExprExt.trivial_choose pkg test.test_run <> Some false then
+                   (* Running test is not mandatory, so it is always optional *)
+                   add_tool_list true acc test.test_tools 
+                 else
                    acc
-                   bs.bs_build_depends
-             end
-               
-         | Flag _ | Test _ | Doc _ | SrcRepo _ ->
-             acc)
-    MapString.empty
-    pkg.sections
+               end
+
+           | Doc (cs, doc) ->
+               begin
+                 if OASISExprExt.trivial_choose pkg doc.doc_build <> Some false then
+                   (* Building doc is not mandatory, so it is always optional *)
+                   add_tool_list true acc doc.doc_build_tools
+                 else
+                   acc
+               end
+                 
+           | Flag _ | SrcRepo _ ->
+               acc)
+      Map.empty
+      pkg.sections
 
 let fold = 
-  MapString.fold 
+  Map.fold 
 
-let solve ~ctxt t str = 
+let solve t stor = 
   (* 1. Build a map of findlib_name -> package versions *)
-  ODBProvides.map ~ctxt str
+  ODBProvides.map stor
   >|= fun provides -> 
 
   (* 2. Solve the build dependencies *)
   begin
-    MapString.mapi
-      (fun fndlb_nm e ->
-         if e.package_version = None then
+    Map.mapi
+      (fun dep elt ->
+         if elt.package_version = None then
            begin
-             (* TODO: rely on ODBStorage.Ver.latest rather than
-              * on List.sort
-              *)
              try 
                let lst = 
-                 (* All version that provides this findlib library *)
-                 MapString.find fndlb_nm provides
-               in
-               let lst = 
-                 (* Only the one that match the version constraint *)
-                 match e.version_cmp with 
-                   | Some cmp ->
-                       List.filter 
-                         (fun ver -> comparator_apply ver.ver cmp)
-                         lst
-                   | None ->
-                       lst
+                 (* Find package that provides this dependency *)
+                 ODBProvides.Map.find_name ?ver_cmp:elt.version_cmp dep provides
                in
                let lst =
-                 (* Sort the result, latest version first *)
-                 List.sort (fun v1 v2 -> ~- (ODBPkgVer.compare v1 v2)) lst
+                 (* Sort the result, always installable version first and 
+                    latest version first 
+                  *)
+                 List.sort 
+                   (fun (st1, pkg_ver1) (st2, pkg_ver2) -> 
+                      match st1, st2 with 
+                        | `Always, `Always 
+                        | `Sometimes, `Sometimes ->
+                            ~- (ODBPkgVer.compare pkg_ver1 pkg_ver2)
+                        | `Always, `Sometimes ->
+                            -1
+                        | `Sometimes, `Always ->
+                            1)
+                   (List.flatten lst)
                in
                  match lst with 
-                   | ver :: _ ->
-                       {e with package_version = Some ver}
+                   | (_, pkg_ver) :: _ ->
+                       {elt with package_version = Some pkg_ver}
                    | [] ->
-                       e
+                       elt
 
              with Not_found ->
-               e
+               elt
            end
          else
-           e)
+           elt)
       t
   end
 

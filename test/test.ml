@@ -71,4 +71,5 @@ let _ :: _ | [] =
          TestSync.tests;
          TestGit.tests;
          TestCLI.tests;
+         TestOASISExt.tests;
        ])
