@@ -20,22 +20,19 @@
 ################################################################################
 
 
--include Makefile.secret 
-export PGDATABASE PGUSER PGPASSWORD PGHOST
-
 #LWT_LOG=* -> info
 LWT_LOG=* -> debug
 export LWT_LOG
 
-#TESTFLAGS = -only-test OASIS-DB:2:Sync -verbose
+OCAMLRUNPARAM=b
+export OCAMLRUNPARAM
+
+#TESTFLAGS = -only-test OASIS-DB:7:Web -verbose
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display --enable-dev --enable-oasis-db-ocsigen
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
 
 #default: build
 default: test
-#TESTFLAGS      += -not-long 
-#TESTFLAGS      += -verbose
-#TESTFLAGS      += -only-test OASIS-DB:1:Incoming:22:ManyInARow
 
 # OASIS_START
 # DO NOT EDIT (digest: bc1e05bfc8b39b664f29dae8dbd3ebbb)
