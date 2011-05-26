@@ -72,4 +72,5 @@ let _ :: _ | [] =
          TestGit.tests;
          TestCLI.tests;
          TestOASISExt.tests;
+         TestWeb.tests;
        ])

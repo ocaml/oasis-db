@@ -401,10 +401,20 @@ struct
       (fun () ->
          match pkg_cont.pkg_latest, extra with
            | Some e, Some e' ->
-               if ODBPkgVer.compare e e' < 0 then
-                 return e'
-               else
-                 return e
+               begin
+                 try 
+                   if ODBPkgVer.compare e e' < 0 then
+                     begin
+                       return e'
+                     end
+                   else
+                     begin
+                       return e
+                     end
+                 with e ->
+                   fail e
+               end
+
            | None, Some e 
            | Some e, None ->
                return e
