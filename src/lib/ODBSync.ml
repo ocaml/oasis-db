@@ -46,7 +46,7 @@ let digest_of_sexp s =
       | 'A'..'F' -> (code c) - (code 'A') + 10
       | 'a'..'f' -> (code c) - (code 'a') + 10
       | c ->
-          failwithf2 
+          failwithf
             (f_ "Unknown hexadecimal digit '%c' in '%s'")
             c str
   in
