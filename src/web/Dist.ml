@@ -128,11 +128,8 @@ let () =
          return
            (List.sort 
               (fun (_, nm1, _) (_, nm2, _) -> 
-                 OASISVersion.version_compare 
-                   (OASISVersion.version_of_string nm1)
-                   (OASISVersion.version_of_string nm2))
+                 String.compare nm1 nm2)
               lst')
-
          >>= fun lst' ->
          template 
            ~ctxt
