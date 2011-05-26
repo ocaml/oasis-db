@@ -101,7 +101,8 @@ Library "oasis-db"
            ODBFilesystem,
            ODBHLS,
            ODBRepository,
-           ODBCurl
+           ODBCurl,
+           ODBPkgVerSolver
   BuildDepends: lwt, lwt.unix,
                 unix, 
                 pcre,
@@ -180,10 +181,11 @@ Library "oasis-db-cli"
            ODBCLIShow,
            ODBCLIUpdate,
            ODBCLIFetch,
+           ODBCLIBundle,
            ODBCLIPlugins,
            InifilesExt
   InternalModules: ODBCLIData
-  BuildDepends: oasis-db, xdg-basedir, oasis.cli
+  BuildDepends: oasis-db, xdg-basedir, oasis.cli, odn (>= 0.0.4)
   BuildTools: ocamlify
 
 

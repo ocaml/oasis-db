@@ -701,44 +701,49 @@ let map_info_name ~ctxt mp_repo =
 
 (* Compute non optional dependency out of t datastructure *)
 let non_optional_deps ~ctxt oasis = 
-  ODBDeps.solve (ODBDeps.of_oasis_package oasis) ctxt.stor 
-  >|= fun deps ->
-  ODBDeps.fold 
-    (fun dep e acc ->
-       let short_dep = 
-         match dep with 
-           | `FindlibPackage fndlb_full ->
-               findlib_root fndlb_full
-           | `ExternalTool prog ->
-               prog
-       in
-         if not e.ODBDeps.optional then
-           begin
-             let cmp_opt = 
-               let cur_cmp = 
-                 e.ODBDeps.version_cmp 
-               in
-                 try 
-                   begin
-                     let pre_cmp = 
-                       MapString.find short_dep acc
-                     in
-                       match pre_cmp, cur_cmp with 
-                         | Some vcmp1, Some vcmp2 ->
-                             Some (comparator_reduce (VAnd (vcmp1, vcmp2)))
-                         | None, e | e, None ->
-                             e
-                   end
+  ODBProvides.map ctxt.stor 
+  >|= fun provides ->
+  begin
+    let deps = 
+      ODBDeps.solve (ODBDeps.of_oasis_package oasis) provides
+    in
+      ODBDeps.fold 
+        (fun dep e acc ->
+           let short_dep = 
+             match dep with 
+               | `FindlibPackage fndlb_full ->
+                   findlib_root fndlb_full
+               | `ExternalTool prog ->
+                   prog
+           in
+             if not e.ODBDeps.optional then
+               begin
+                 let cmp_opt = 
+                   let cur_cmp = 
+                     e.ODBDeps.version_cmp 
+                   in
+                     try 
+                       begin
+                         let pre_cmp = 
+                           MapString.find short_dep acc
+                         in
+                           match pre_cmp, cur_cmp with 
+                             | Some vcmp1, Some vcmp2 ->
+                                 Some (comparator_reduce (VAnd (vcmp1, vcmp2)))
+                             | None, e | e, None ->
+                                 e
+                       end
 
-                 with Not_found ->
-                   cur_cmp
-             in
-               MapString.add short_dep cmp_opt acc
-           end
-         else
-           acc)
-    deps
-    MapString.empty
+                     with Not_found ->
+                       cur_cmp
+                 in
+                   MapString.add short_dep cmp_opt acc
+               end
+             else
+               acc)
+        deps
+        MapString.empty
+  end
 
 type table_t =
     {

@@ -154,49 +154,43 @@ let of_oasis_package pkg =
 let fold = 
   Map.fold 
 
-let solve t stor = 
-  (* 1. Build a map of findlib_name -> package versions *)
-  ODBProvides.map stor
-  >|= fun provides -> 
+(* Solve the build dependencies *)
+let solve t provides = 
+  Map.mapi
+    (fun dep elt ->
+       if elt.package_version = None then
+         begin
+           try 
+             let lst = 
+               (* Find package that provides this dependency *)
+               ODBProvides.Map.find_name ?ver_cmp:elt.version_cmp dep provides
+             in
+             let lst =
+               (* Sort the result, always installable version first and 
+                  latest version first 
+                *)
+               List.sort 
+                 (fun (st1, pkg_ver1) (st2, pkg_ver2) -> 
+                    match st1, st2 with 
+                      | `Always, `Always 
+                      | `Sometimes, `Sometimes ->
+                          ~- (ODBPkgVer.compare pkg_ver1 pkg_ver2)
+                      | `Always, `Sometimes ->
+                          -1
+                      | `Sometimes, `Always ->
+                          1)
+                 (List.flatten lst)
+             in
+               match lst with 
+                 | (_, pkg_ver) :: _ ->
+                     {elt with package_version = Some pkg_ver}
+                 | [] ->
+                     elt
 
-  (* 2. Solve the build dependencies *)
-  begin
-    Map.mapi
-      (fun dep elt ->
-         if elt.package_version = None then
-           begin
-             try 
-               let lst = 
-                 (* Find package that provides this dependency *)
-                 ODBProvides.Map.find_name ?ver_cmp:elt.version_cmp dep provides
-               in
-               let lst =
-                 (* Sort the result, always installable version first and 
-                    latest version first 
-                  *)
-                 List.sort 
-                   (fun (st1, pkg_ver1) (st2, pkg_ver2) -> 
-                      match st1, st2 with 
-                        | `Always, `Always 
-                        | `Sometimes, `Sometimes ->
-                            ~- (ODBPkgVer.compare pkg_ver1 pkg_ver2)
-                        | `Always, `Sometimes ->
-                            -1
-                        | `Sometimes, `Always ->
-                            1)
-                   (List.flatten lst)
-               in
-                 match lst with 
-                   | (_, pkg_ver) :: _ ->
-                       {elt with package_version = Some pkg_ver}
-                   | [] ->
-                       elt
-
-             with Not_found ->
-               elt
-           end
-         else
-           elt)
-      t
-  end
+           with Not_found ->
+             elt
+         end
+       else
+         elt)
+    t
 

@@ -128,3 +128,5 @@
 "src/web/Rating.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 "src/web/Comment.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 "src/web/ExtODB.ml": syntax_camlp4o, pkg_sqlexpr.syntax
+
+"src/cli/ODBCLIBundle.ml": syntax_camlp4o, pkg_odn.with.syntax

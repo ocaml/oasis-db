@@ -201,6 +201,7 @@ let with_temp_dir pre suf f =
         >|= 
         ignore))
 
+(* TODO: don't handle copy of src directory *)
 let cp lst tgt =
   let cp_one src tgt =
     with_file ~mode:input src 

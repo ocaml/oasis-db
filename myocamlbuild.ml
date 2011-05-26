@@ -40,6 +40,30 @@ let depends_from_file env build ?(fmod=fun x -> x) fn =
       depends_lst
 ;;
 
+let ocamlmod_str = "ocamlmod";;
+let ocamlmod = A ocamlmod_str;;
+
+rule "ocamlmod: %.mod -> %.ml"
+  ~prod:"%.ml"
+  ~dep:"%.mod"
+  begin
+    fun env build ->
+      let modfn =
+        env "%.mod"
+      in
+      let dirname =
+        Pathname.dirname modfn
+      in
+        depends_from_file 
+          env 
+          build
+          ~fmod:(fun fn -> dirname/fn)
+          modfn;
+        Cmd(S[ocamlmod;
+              P(modfn)])
+  end
+;;
+
 let ocamlify = A"ocamlify";;
 
 rule "ocamlify: %.mlify -> %.mlify.depends"

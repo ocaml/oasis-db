@@ -32,11 +32,15 @@ let oasis_fields ~ctxt ~sp pkg =
   (* TODO: link to packages that rev-depends
    *)
 
-  (* Compute dependencies *)
-  ODBDeps.solve (ODBDeps.of_oasis_package pkg) ctxt.stor 
-  >|= fun deps ->
+  (* Build a map of provide -> package's versions *)
+  ODBProvides.map ctxt.stor
+  >|= fun provides -> 
 
   begin
+    let deps = 
+      ODBDeps.solve (ODBDeps.of_oasis_package pkg) provides
+    in
+ 
     let build_tools, build_deps =
       ODBDeps.fold
         (fun dep e (build_tools, build_deps) ->
