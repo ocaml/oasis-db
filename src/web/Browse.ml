@@ -133,11 +133,16 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
               [pcdata cat]];
 
          begin
-           match lst with
-             | hd :: tl -> 
-                 ul (to_li hd) (List.map to_li tl)
-             | [] -> 
-                 pcdata (s_ "Nothing")
+           let lst = 
+             List.sort 
+               (fun (pkg1, _, _) (pkg2, _, _) -> String.compare pkg1 pkg2) 
+               lst
+           in
+             match lst with
+               | hd :: tl -> 
+                   ul (to_li hd) (List.map to_li tl)
+               | [] -> 
+                   pcdata (s_ "Nothing")
          end]
       in
         toc_item :: toc,
