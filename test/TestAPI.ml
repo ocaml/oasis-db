@@ -22,9 +22,13 @@ let tests =
          let curl = 
            Curl.init ()
          in
+         let write_fun = String.length in
+
            Curl.set_verbose curl !verbose; 
            Curl.set_followlocation curl true;
            Curl.set_failonerror curl true;
+
+           Curl.set_writefunction curl write_fun;
 
            (* Login *)
            Curl.set_url curl (base_url^"/login?login=admin1&password=");
