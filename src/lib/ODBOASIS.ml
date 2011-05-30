@@ -6,7 +6,9 @@ let from_string ~ctxt ?fn str =
     let pkg = 
       OASISParse.from_string 
         ~ctxt:{(ODBContext.to_oasis ctxt) with 
-                  OASISContext.ignore_plugins = true}
+                  OASISContext.ignore_plugins = true;
+                  OASISContext.ignore_unknown_fields = true;}
+
         ?fn
         str
     in
