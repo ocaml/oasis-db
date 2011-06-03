@@ -10,7 +10,8 @@ open OUnit
 let bracket_oasis_db_cli f = 
   bracket_oasis_db
     (* Pre start *)
-    ignore
+    (fun _ ->
+       skip_long ())
 
     (* Main *)
     (fun ocs ->
