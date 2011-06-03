@@ -147,7 +147,7 @@ let oasis_fields ~ctxt ~sp pkg =
                 begin
                   let branch_opt = 
                     match repo.src_repo_branch with 
-                      | Some b -> Printf.sprintf "-b %s" b
+                      | Some b -> Printf.sprintf "-b %s " b
                       | None   -> ""
                   in
 
