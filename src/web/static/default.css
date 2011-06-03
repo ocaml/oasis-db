@@ -17,12 +17,12 @@ body
 }
 
 h1 { color: #555; font-size: x-large;}
-h2 { color: #555; font-size; large;}
-h3 { color: #555; font-size; medium;}
+h2 { color: #555; font-size: large;}
+h3 { color: #555; font-size: medium;}
 
 #content h1 a { color: #555; font-size: x-large;}
-#content h2 a { color: #555; font-size; large;}
-#content h3 a { color: #555; font-size; medium;}
+#content h2 a { color: #555; font-size: large;}
+#content h3 a { color: #555; font-size: medium;}
 
 
 /* Header */
@@ -495,7 +495,7 @@ div.postActions {
 #odb-admin-program-list {width: 100%}
 #odb-admin-library-list {width: 100%}
 
-.odb-dep-error img { border: 0px; padding-left: auto }
+.odb-dep-error img { border: 0px; }
 .odb-dep-error { text-align: right; }
 
 td.odb-not-latest { background-color: yellow; }
