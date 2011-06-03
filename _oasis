@@ -147,6 +147,7 @@ Library "oasis-db-ocsigen"
            MarkdownExt,
            PkgView,
            PkgVerView,
+           PkgVerEdit,
            Sqlexpr,
            Distro,
            Monitor,
@@ -154,6 +155,7 @@ Library "oasis-db-ocsigen"
            Rating,
            ExtODB,
            Descr,
+           BoxedForms,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

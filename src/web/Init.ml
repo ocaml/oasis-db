@@ -12,7 +12,8 @@ let () =
     Lwt.ignore_result (Context.init ());
     Xhtml.register home Index.home_handler;
     Xhtml.register browse Browse.browse_handler;
-    Xhtml.register view PkgVerView.view_handler;
+    Xhtml.register view_pkg_ver PkgVerView.view_handler;
+    Xhtml.register edit_pkg_ver PkgVerEdit.handler;
     Redirection.register upload Upload.upload_handler;
     Xhtml.register contribute Index.contribute_handler;
     Xhtml.register about Index.about_handler;

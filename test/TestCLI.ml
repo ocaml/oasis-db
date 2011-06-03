@@ -96,6 +96,7 @@ let tests =
     "Fetch" >::
     bracket_oasis_db_cli
       (fun ocs oasis_cli ->
+
          let () =
            (* Run an update *)
            assert_command oasis_cli 

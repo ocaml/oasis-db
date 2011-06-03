@@ -136,7 +136,7 @@ let home_handler sp () () =
                      in
                        li 
                          [a 
-                            view
+                            view_pkg_ver
                             sp
                             [pcdata 
                                (Printf.sprintf 

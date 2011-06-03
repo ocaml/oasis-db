@@ -66,7 +66,7 @@ let oasis_fields ~ctxt ~sp pkg =
              match e.ODBDeps.package_version with 
                | Some pkg_ver ->
                    a 
-                     view 
+                     view_pkg_ver
                      sp 
                      [pcdata txt]
                      (pkg_ver.pkg, Version pkg_ver.ver)
@@ -510,6 +510,17 @@ let page ~ctxt ~sp pkg_ver =
   Rating.pkg_ver_box ~sp ~ctxt pkg_ver
   >>= fun (_, rating_box) ->
   begin
+
+    let edit_box =
+      match Account.get_id ~ctxt () with
+        | Some id ->
+            a Common.edit_pkg_ver sp 
+              [pcdata (s_ "Edit")] 
+              (pkg_ver.pkg, pkg_ver.ver)
+        | None ->
+            span [pcdata (s_ "Edit")]
+    in
+
     (* Page titles *)
     let browser_ttl =
       Printf.sprintf (f_ "%s v%s") 
@@ -536,10 +547,11 @@ let page ~ctxt ~sp pkg_ver =
             [
               ul 
                 (li 
-                   [a view sp 
+                   [a view_pkg_ver sp 
                       [pcdata (s_ "Package page")] 
                       (pkg_ver.pkg, NoVersion)])
                 [li [monitor_box];
+                 li [edit_box];
                  li [rating_box]]
             ]
         ]

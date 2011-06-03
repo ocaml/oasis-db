@@ -107,7 +107,7 @@ let browse_any ~ctxt ~sp service ttl cat_name cat_none classify () =
 
       let to_li (pkg, _, oasis_opt) = 
         li 
-          [a view sp [pcdata pkg] (pkg, LatestVersion);
+          [a view_pkg_ver sp [pcdata pkg] (pkg, LatestVersion);
            
            match oasis_opt with 
              | Some oasis ->

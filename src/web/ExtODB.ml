@@ -755,7 +755,7 @@ type table_t =
 
 let table_packages_tr ~sp pkg_str lst =
   tr
-    (th [a Common.view sp [pcdata pkg_str] (pkg_str, NoVersion)])
+    (th [a Common.view_pkg_ver sp [pcdata pkg_str] (pkg_str, NoVersion)])
     lst
 
 let table_packages_td ~sp table_t repo ver_str_opt extra =
@@ -772,7 +772,7 @@ let table_packages_td ~sp table_t repo ver_str_opt extra =
   let ctnt =
     match ver_str_opt with 
       | Some ver_str ->
-          [a Common.view sp [pcdata ver_str] 
+          [a Common.view_pkg_ver sp [pcdata ver_str] 
              (table_t.pkg_str, Version (version_of_string ver_str))]
       | None ->
           [pcdata (s_ "none")]

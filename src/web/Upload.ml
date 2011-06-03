@@ -555,7 +555,7 @@ let upload_with_id =
                         upload_data_unset ~sp id;
                         Eliom_predefmod.Redirection.send ~sp 
                           (preapply 
-                             view
+                             view_pkg_ver
                              (pkg_ver.ODBPkgVer.pkg, 
                               Version pkg_ver.ODBPkgVer.ver))
                       end)

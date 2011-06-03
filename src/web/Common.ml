@@ -54,11 +54,18 @@ let upload     = new_service ["upload"] unit ()
 let contribute = new_service ["contribute"] unit ()
 let about      = new_service ["about"] unit ()
 
-let view = 
+let view_pkg_ver = 
   new_service ["view"] 
     (suffix 
        (string "pkg" ** 
         ExtParams.version_option "ver")) 
+    ()
+
+let edit_pkg_ver =
+  new_service ["edit"]
+    (suffix
+       (string "pkg" **
+        ExtParams.version "ver"))
     ()
 
 let my_account =
@@ -209,7 +216,7 @@ let versions_field ~sp pkg_ver_lst pkg_ver_cur_opt pkg_ver_latest =
              mk_pcdata pkg_ver
            else
              a
-               view
+               view_pkg_ver
                sp
                [mk_pcdata pkg_ver]
                (pkg_ver.pkg, Version pkg_ver.ver)

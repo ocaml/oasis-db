@@ -279,8 +279,7 @@ let init () =
   Log.add (!sqle ()) 
     (`Sys ("oasis-db web context", `Started))
 
-
-let get ~sp () = 
+let get_sys () =
   Lwt_mutex.with_lock init_mutex
     (fun () ->
        begin
@@ -294,16 +293,6 @@ let get ~sp () =
     let ocaw = 
       !ocaw ()
     in
-      OCAWeb.Session.get ~ctxt:ocaw sp
-      >>= fun sess ->
-      begin
-        match sess with 
-          | Some _ ->
-              OCAWeb.Account.get ~sess ~ctxt:ocaw sp
-          | None ->
-              return None
-      end
-      >>= fun accnt ->
       return 
         {
           odb   = get_odb ();
@@ -311,8 +300,8 @@ let get ~sp () =
           ocaw  = ocaw;
           mkd   = {Mkd.mkd_dir = !mkd_dir};
           stor  = !storage ();
-          sess  = sess;
-          accnt = accnt;
+          sess  = None;
+          accnt = None;
           admin = !admin;
           rsync = !rsync ();
 
@@ -324,6 +313,23 @@ let get ~sp () =
           google_analytics_account = !google_analytics_account;
         }
   end
+
+let get ~sp () = 
+  get_sys ()
+  >>= fun t ->
+  OCAWeb.Session.get ~ctxt:t.ocaw sp
+  >>= fun sess ->
+  begin
+    match sess with 
+      | Some _ ->
+          OCAWeb.Account.get ~sess ~ctxt:t.ocaw sp
+      | None ->
+          return None
+  end
+  >|= fun accnt ->
+  {t with 
+       sess = sess; 
+       accnt = accnt;}
 
 
 let is_anon ~ctxt () = 

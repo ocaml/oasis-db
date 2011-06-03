@@ -147,7 +147,7 @@ let rss2_handler =
                ~link:(make_string_uri 
                         ~sp 
                         ~absolute:true
-                        ~service:(preapply view (ver.pkg, Version ver.ver))
+                        ~service:(preapply view_pkg_ver (ver.pkg, Version ver.ver))
                         ())
                ()
            in
