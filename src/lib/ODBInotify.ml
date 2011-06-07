@@ -18,7 +18,7 @@ let rm_watch fd wd =
 
 let read fd =
   Lwt_unix.wrap_syscall 
-    Lwt_unix.inputs 
+    Lwt_unix.Read
     fd 
     (fun () -> read (Lwt_unix.unix_file_descr fd)) 
 

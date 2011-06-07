@@ -2,6 +2,7 @@
 open ODBGettext
 open ODBTypes
 open CalendarLib
+open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBLog"
 

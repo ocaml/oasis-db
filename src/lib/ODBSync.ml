@@ -20,6 +20,7 @@ open ODBMessage
 open ExtLib
 open FileUtilExt
 open ODBFilesystem
+open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBSync"
 

@@ -7,6 +7,7 @@ open Lwt
 open ODBGettext
 open ODBTypes
 open ODBMessage
+open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBCompletion"
 

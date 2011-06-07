@@ -8,6 +8,7 @@ open Lwt
 open ODBTypes
 open ODBGettext
 open ODBMessage
+open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBPkgVer"
 

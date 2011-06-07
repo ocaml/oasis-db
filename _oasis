@@ -103,11 +103,11 @@ Library "oasis-db"
            ODBRepository,
            ODBCurl,
            ODBPkgVerSolver
-  BuildDepends: lwt, lwt.unix,
+  BuildDepends: lwt (>= 2.3.0), lwt.unix,
                 unix, 
                 pcre,
                 oasis, oasis.builtin-plugins,
-                sexplib,
+                sexplib (>= 5.2.1),
                 calendar,
                 inotify,
                 fileutils,

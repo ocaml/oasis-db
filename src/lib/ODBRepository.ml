@@ -8,6 +8,7 @@ open Inifiles
 open OASISUtils
 open ODBGettext
 open ODBUtils
+open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBRepository"
 

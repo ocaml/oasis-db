@@ -47,16 +47,15 @@ let fold_dir f fn a =
   in
     catch 
       (fun () ->
-         let fd = 
            opendir fn
-         in
+           >>= fun fd ->
            finalize 
              (fun () ->
                fold_dir_aux fd a)
 
              (fun () ->
                (* Always close dir *)
-               return (closedir fd)))
+               closedir fd))
 
       (function 
          | (Unix_error (e, _, _)) as exc -> 
@@ -93,16 +92,16 @@ let fold f fn a =
       (* TODO: this should be handled in fileutils *)
       | FileUtil.FileDoesntExist fn ->
           begin
-            try 
-              let _st : stats = 
-                lstat fn 
-              in
-                f (Symlink fn) a
-            with 
-              | Unix_error (e, _, _) when e = ENOENT ->
-                  fail (ENotExist fn)
-              | e ->
-                  fail e
+            catch 
+              (fun () ->
+                 lstat fn
+                 >>= fun (_st : stats) ->
+                 f (Symlink fn) a)
+              (function
+                 | Unix_error (e, _, _) when e = ENOENT ->
+                     fail (ENotExist fn)
+                 | e ->
+                     fail e)
           end
       | e ->
           fail e
