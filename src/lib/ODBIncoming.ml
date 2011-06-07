@@ -35,7 +35,7 @@ let sexp_of_tarball fn =
 
 module SetString = Set.Make(String)
 
-let inject ~ctxt str sexp_fn tarball_fn = 
+let inject ~ctxt stor sexp_fn tarball_fn = 
   try 
     let user = 
       let st =
@@ -49,7 +49,7 @@ let inject ~ctxt str sexp_fn tarball_fn =
       from_file ~ctxt sexp_fn 
       >>= fun t ->
       ODBUpload.upload_begin ~ctxt 
-        str
+        stor
         (Incoming user) 
         tarball_fn 
         (Filename.basename tarball_fn)
@@ -63,7 +63,7 @@ let inject ~ctxt str sexp_fn tarball_fn =
 
 (** Wait to have tarball + sexp files
   *)
-let wait_complete ~ctxt str ev changed = 
+let wait_complete ~ctxt stor ev changed = 
   match ev with 
     | Created fn ->
         begin
@@ -108,7 +108,7 @@ let wait_complete ~ctxt str ev changed =
                 >>= fun () ->
                 catch 
                   (fun () ->
-                     inject ~ctxt str sexp_fn tarball_fn)
+                     inject ~ctxt stor sexp_fn tarball_fn)
                   (fun e ->
                      error ~ctxt 
                        (f_ "Cannot process '%s': %s")
@@ -158,7 +158,7 @@ let wait_complete ~ctxt str ev changed =
 
 (** Main loop for incoming/ watch
   *)
-let start ~ctxt str log  = 
+let start ~ctxt stor log  = 
   let ctxt = 
     ODBContext.sub ctxt "incoming" 
   in
@@ -174,7 +174,7 @@ let start ~ctxt str log  =
    *)
   ODBInotify.monitor_dir ~ctxt 
     (fun iev changed ->
-       wait_complete ~ctxt str iev changed
+       wait_complete ~ctxt stor iev changed
        >>= fun (levs, changed) ->
        Lwt_list.iter_p 
          (fun (timestamp, ev) -> 
