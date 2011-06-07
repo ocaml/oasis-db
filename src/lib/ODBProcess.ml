@@ -5,25 +5,27 @@ open ODBMessage
 
 exception EStatus of string * string list * Unix.process_status;;
 
-let string_of_exception = 
-  function
-    | EStatus (cmd, args, st) ->
-        begin
-          let cmd_str = 
-            String.concat " " (cmd :: args)
-          in
-            match st with 
-              | Unix.WEXITED n ->
-                  Printf.sprintf 
-                    (f_ "Process '%s' exited with error code %d")
-                    cmd_str
-                    n
-                  
-              | Unix.WSIGNALED n ->
-                  Printf.sprintf
-                    (f_ "Process '%s' killed by signal %d")
-                    cmd_str
-                    n
+let () = 
+  Printexc.register_printer
+    (function
+       | EStatus (cmd, args, st) ->
+           begin
+             let cmd_str = 
+               String.concat " " (cmd :: args)
+             in
+             let msg =
+               match st with 
+                 | Unix.WEXITED n ->
+                     Printf.sprintf 
+                       (f_ "Process '%s' exited with error code %d")
+                       cmd_str
+                       n
+                     
+                 | Unix.WSIGNALED n ->
+                     Printf.sprintf
+                       (f_ "Process '%s' killed by signal %d")
+                       cmd_str
+                       n
 
               | Unix.WSTOPPED n ->
                   Printf.sprintf

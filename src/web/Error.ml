@@ -46,7 +46,7 @@ let () =
                      (html
                         (Printf.sprintf 
                            (f_ "Cannot get account box: %s")
-                           (ODBMessage.string_of_exception e))))
+                           (Printexc.to_string e))))
               >>= fun account_box ->
               Eliom_predefmod.Xhtml.send ?code ~sp
                 (template_skeleton

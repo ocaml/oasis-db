@@ -365,7 +365,7 @@ let run ~ctxt stor fn an dn =
         (fun e ->
           warning ~ctxt
             (f_ "Error in completion '%s' on '%s': %s")
-            nm fn (ODBMessage.string_of_exception e)
+            nm fn (Printexc.to_string e)
           >>= fun () ->
           return dflt)
   in

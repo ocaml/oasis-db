@@ -29,18 +29,6 @@ let string_of_event fn =
       | FSCopiedFrom fn' ->
           spf "%s copied from %s" fn fn'
 
-exception Not_subdir of (filename * filename)
-
-let () = 
-  Printexc.register_printer
-    (function
-       | Not_subdir (root, fn) ->
-           Some 
-             (Printf.sprintf
-                "Filename '%s' is not a subdirectory of '%s'"
-                fn root)
-       | _ -> 
-           None)
 
 (** Read-only filesystem *)
 class std_ro root = 

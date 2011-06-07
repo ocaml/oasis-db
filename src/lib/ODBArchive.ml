@@ -6,12 +6,16 @@ open Lwt
 
 exception NoHandler of string
 
-let string_of_exception =
-  function
-    | NoHandler fn ->
-        Printf.sprintf 
-          (f_ "Don't know how to uncompress '%s'")
-          fn
+let () = 
+  Printexc.register_printer
+    (function 
+       | NoHandler fn ->
+           Some 
+             (Printf.sprintf 
+                (f_ "Don't know how to uncompress '%s'")
+                fn)
+       | e ->
+           None)
 
     | e ->
         raise e

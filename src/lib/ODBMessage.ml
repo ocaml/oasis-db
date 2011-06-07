@@ -14,18 +14,14 @@ let warning ~ctxt fmt =
 let error ~ctxt fmt =
   error_f ~logger:ctxt.logger ~section:ctxt.section fmt
 
-let string_of_exception =
-  function
-    | Unix.Unix_error (e, f, a) ->
-        Printf.sprintf "Unix.Unix_error (%s, %S, %S)"
-          (Unix.error_message e) f a 
-    | e ->
-        OASISMessage.string_of_exception e
-
 let () =
   Printexc.register_printer
-    (fun e ->
-       try
-         Some (string_of_exception e)
-       with _ ->
-         None)
+    (function
+       | Unix.Unix_error (e, f, a) ->
+           Some (Printf.sprintf "Unix.Unix_error (%s, %S, %S)"
+                   (Unix.error_message e) f a)
+       | e ->
+           try 
+             Some (OASISMessage.string_of_exception e)
+           with e -> 
+             None)
