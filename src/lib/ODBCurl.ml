@@ -37,7 +37,7 @@ let with_curl f =
       cleanup ();
       raise e
 
-let download_chn ?curl ?(custom=ignore) url fn chn = 
+let download_chn' ?curl ?(custom=ignore) url fn chn = 
   let curl_write fn chn d = 
     output_string chn d;
     String.length d
@@ -72,11 +72,40 @@ let download_fn ?curl ?custom url fn =
     close_out chn
   in
     try 
-      download_chn ?curl ?custom url fn chn;
+      download_chn' ?curl ?custom url fn chn;
       cleanup ()
     with e ->
       cleanup ();
       raise e
+
+module Lwt =
+struct 
+
+  open Lwt
+
+  let download_chn ?curl ?custom url fn chn =
+    let fn', chn' = 
+      Filename.open_temp_file "oasis-db-curl" ""
+    in
+      finalize
+        (fun () ->
+           try 
+             let () = 
+               download_chn' ?curl ?custom url fn chn';
+               close_out chn'
+             in
+               Lwt_io.with_file ~mode:Lwt_io.input fn'
+                 (fun chn' ->
+                    Lwt_io.write_chars chn 
+                      (Lwt_io.read_chars chn'))
+           with e ->
+             fail e)
+        (fun () ->
+           (try close_out chn' with e -> ());
+           Sys.remove fn';
+           return ())
+
+end
 
 let () =
   Printexc.register_printer 

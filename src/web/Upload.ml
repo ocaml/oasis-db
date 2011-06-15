@@ -19,10 +19,10 @@ open Common
 
 (** Internal state of the upload
   *)
-type t = 
-  | Begin of ([`Begin], ODBUpload.t) Task.t
-  | Edit of ODBUpload.t * LogBox.t
-  | Commit of ODBUpload.t * ([`Commit], ODBPkgVer.t) Task.t
+type 'a t = 
+  | Begin of ([`Begin], 'a ODBUpload.t) Task.t
+  | Edit of 'a ODBUpload.t * LogBox.t
+  | Commit of 'a ODBUpload.t * ([`Commit], ODBPkgVer.t) Task.t
   | Cancel of ([`Cancel], unit) Task.t
 
 
@@ -437,10 +437,9 @@ let upload_init_check tarball_fd publink_opt =
         | fn ->
             FilePath.basename fn 
     in
-    let tarball_fn =
-      get_tmp_filename tarball_fd
-    in
-      return (tarball_fn, tarball_nm, publink_opt)
+      LwtExt.IO.with_file_content (get_tmp_filename tarball_fd)
+      >>= fun tarball_content ->
+      return (tarball_content, tarball_nm, publink_opt)
   with e -> 
     fail e
 
@@ -454,7 +453,7 @@ let upload_init_action =
        Context.get_user ~sp () 
        >>= fun (ctxt, accnt) ->
        upload_init_check tarball_fd (Some publink)
-       >>= fun (tarball_fn, tarball_nm, publink) ->
+       >>= fun (tarball_content, tarball_nm, publink) ->
        begin
          let tsk = 
            Task.create 
@@ -463,7 +462,7 @@ let upload_init_action =
                 upload_begin ~ctxt:ctxt.odb
                   ctxt.stor
                   (Web accnt.OCAAccount.accnt_real_name)
-                  tarball_fn tarball_nm publink)
+                  tarball_content tarball_nm publink)
          in
            upload_data_set ~sp id (Begin tsk);
            return ()

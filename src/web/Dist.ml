@@ -164,22 +164,42 @@ let () =
          Xhtml.send ~sp page
        in
 
-         try 
-           begin
-             let fn = 
-               (ODBStorage.fs ctxt.stor)#rebase 
-                 (FilePath.make_filename lst)
-             in
-               if Sys.file_exists fn && not (Sys.is_directory fn) then
-                 Files.send ~sp fn
-               else
-                 generate_index lst 
-           end
+         catch 
+           (fun () ->
+              let fs = 
+                ODBStorage.fs ctxt.stor
+              in
+              let fn =
+                FilePath.make_filename lst
+              in
+                fs#file_exists fn
+                >>= fun file_exists ->
+                if file_exists then
+                  begin
+                    fs#is_directory fn 
+                    >>= fun is_directory ->
+                    if not is_directory then
+                      begin
+                        ODBVFS.with_file_in fs fn 
+                          (fun chn ->
+                             LwtExt.IO.with_file_content_chn chn) 
+                        >>= fun str ->
+                        (* TODO: use the right mime type *)
+                        Text.send ~sp (str, "application/octet-stream")
+                      end
+                    else
+                      generate_index lst 
+                  end
+                else
+                  begin
+                    generate_index lst
+                  end)
 
-         with ODBFilesystem.Not_subdir _ ->
-           begin
-             fail Eliom_common.Eliom_404
-           end)
+           (function
+              | ODBFSDisk.Not_subdir _ ->
+                  fail Eliom_common.Eliom_404
+              | e ->
+                  fail e))
 
 let a_dist ~sp ~ctxt pkg_ver fcontent fn_t = 
   mk_pkg_ver_fn ~ctxt fn_t pkg_ver

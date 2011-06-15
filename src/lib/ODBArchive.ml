@@ -17,59 +17,78 @@ let () =
        | e ->
            None)
 
-    | e ->
-        raise e
+type filename = string
 
-let uncompress ~ctxt fd nm dn = 
-  let run prg args = 
-    run_logged ~ctxt prg args
+let all = ref []
+
+let register_handler suff t =
+  all := (suff, t) :: !all;
+  t
+
+let handler_prog fprog fargs ctxt ?src chn dn =
+  let prog = fprog ctxt in
+  let args = fargs ctxt dn in
+    (* Uncompress the tarball *)
+    (match src with 
+       | Some fn ->
+           ODBMessage.info ~ctxt (f_ "Uncompressing tarball %s") fn
+       | None ->
+           return ())
+    >>= fun () ->
+    run_logged ~ctxt ~stdin_chn:chn prog args
+
+let register_handler_prog suff fprog fargs =
+  register_handler suff (handler_prog fprog fargs)
+
+let tgz = 
+  register_handler_prog ".tgz"
+    (fun ctxt -> ctxt.tar) 
+    (fun ctxt dn -> ["-C"; dn; "-xz"])
+
+let tgz' = 
+  register_handler ".tar.gz" tgz
+
+let tbz =
+  register_handler_prog ".tar.bz2"
+    (fun ctxt -> ctxt.tar)
+    (fun ctxt dn -> ["-C"; dn; "-xj"])
+
+let tbz' = 
+  register_handler ".tbz" tbz
+
+let zip =
+  let handler ctxt ?src chn dn = 
+    let tarball_fn = 
+      Filename.temp_file "oasis-db-archive-" ".zip"
+    in
+      finalize 
+        (fun () ->
+           Lwt_io.with_file ~mode:Lwt_io.output tarball_fn
+             (fun chn_out ->
+                Lwt_io.write_chars chn_out (Lwt_io.read_chars chn))
+           >>= fun () ->
+           run_logged ~ctxt ctxt.unzip ["-d"; dn; tarball_fn])
+        (fun () ->
+           return (Sys.remove tarball_fn))
   in
-  let tarball_fn = 
-    Filename.concat dn nm
-  in
+    register_handler ".zip" handler
 
-  let handlers = 
-    [ 
-      ".tgz",
-      ctxt.tar,
-      ["-C"; dn; "-xzf"; tarball_fn];
-
-      ".tar.gz",
-      ctxt.tar,
-      ["-C"; dn; "-xzf"; tarball_fn];
-
-      ".tar.bz2",
-      ctxt.tar,
-      ["-C"; dn; "-xjf"; tarball_fn];
-
-      ".zip",
-      ctxt.unzip,
-      ["-d"; dn; tarball_fn];
-    ]
-  in
-
+let of_filename fn =
   let rec find_handler =
     function 
-      | (suf, prg, args) :: tl ->
-          if Filename.check_suffix nm suf then
-            run prg args
-            >>= fun () -> 
-            return (Filename.basename (Filename.chop_suffix nm suf))
+      | (suf, hdl) :: tl ->
+          if Filename.check_suffix fn suf then
+            hdl
           else
             find_handler tl
 
       | [] ->
-          fail (NoHandler nm)
+          raise (NoHandler fn)
   in
-    (* Copy the tarball to temporary directory *)
-    LwtExt.IO.copy_fd fd tarball_fn 
-    >>= fun () ->
-    (* Uncompress the tarball *)
-    find_handler handlers 
-    >>= fun res ->
-    FileUtilExt.rm [tarball_fn]
-    >|= fun _ ->
-    res
+    find_handler !all
+
+let uncompress ~ctxt ?src hdl chn dn =
+  hdl ctxt ?src chn dn 
 
 let uncompress_tmp_dir ~ctxt fd nm f = 
   FileUtilExt.with_temp_dir "oasis-db-" "" 
@@ -78,3 +97,20 @@ let uncompress_tmp_dir ~ctxt fd nm f =
        >>= fun an ->
        (* Do something with content *)
        f nm an dn)
+
+let chop_suffix hdl fn =
+  let rec find =
+    function
+      | (suff, hdl') :: tl ->
+          if hdl' == hdl then
+            if Filename.check_suffix fn suff then
+              String.sub fn 0 ((String.length fn) - (String.length fn))
+            else
+              fn
+          else
+            find tl
+
+      | [] ->
+          raise (NoHandler fn)
+  in
+    find !all

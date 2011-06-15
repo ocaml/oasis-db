@@ -41,11 +41,17 @@ let assert_ver_file ocs pkg ver oasis tarball_org =
           dump_stat tarball_org
       end;
     assert_create_file tarball_fn;
+    assert_changed ~what:tarball_org
+      tarball_fn
+      (fun () ->
+         cmp tarball_fn tarball_org = None);
+(*
     assert_bool 
       (Printf.sprintf 
          "Uploaded tarball '%s' and original tarball '%s' not equal\n%!"
          tarball_fn tarball_org)
       (cmp tarball_fn tarball_org = None);
+ *)
     List.iter 
       (if oasis then 
          (fun nm -> 

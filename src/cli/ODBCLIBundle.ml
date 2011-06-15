@@ -133,40 +133,46 @@ let output = ref None
 let input = ref None
 
 let main () = 
-  let uncompress_and_copy ~ctxt input_fn foutput_dir = 
-    let input_fd = 
-      Unix.openfile input_fn [Unix.O_RDONLY] 0o644
-    in
-      finalize
-        (fun () -> 
-           ODBArchive.uncompress_tmp_dir ~ctxt 
-             input_fd 
-             (Filename.basename input_fn)
-             (fun _ _ dn ->
-                let toplevel_dir = 
-                  match Sys.readdir dn with 
-                    | [| dn' |] ->
-                        let topdn = Filename.concat dn dn' in
-                          if Sys.is_directory topdn then
-                            (* the toplevel is included in the tarball,
-                             * this should be the standard situation 
-                             *)
-                            topdn
+  let uncompress_and_copy ~ctxt input_fn input_chn foutput_dir = 
+    FileUtilExt.with_temp_dir "oasis-db-bundle-" ".dir"
+      (fun dn ->
+         try 
+           let arch_handler =
+             ODBArchive.of_filename input_fn 
+           in
+             ODBArchive.uncompress 
+               ~ctxt 
+               ~src:input_fn 
+               arch_handler 
+               input_chn 
+               dn
+             >>= fun () ->
+             begin
+               let toplevel_dir = 
+                 match Sys.readdir dn with 
+                   | [| dn' |] ->
+                       let topdn = Filename.concat dn dn' in
+                         if Sys.is_directory topdn then
+                           (* the toplevel is included in the tarball,
+                            * this should be the standard situation 
+                            *)
+                           topdn
 
-                          else
-                            dn
+                         else
+                           dn
 
-                    | _ ->
-                        dn
-                in
-                  foutput_dir toplevel_dir 
-                  >>= fun (output_dir, extra_data) ->
-                  (* TODO: use FileUtilExt.cp, to have Lwt version? *)
-                  ODBProcess.run_logged ~ctxt "cp" ["-r"; toplevel_dir; output_dir]
-                  >|= fun () ->
-                  (output_dir, extra_data)))
-        (fun () ->
-           return (Unix.close input_fd))
+                   | _ ->
+                       dn
+               in
+                 foutput_dir toplevel_dir 
+                 >>= fun (output_dir, extra_data) ->
+                 (* TODO: use FileUtilExt.cp, to have Lwt version? *)
+                 ODBProcess.run_logged ~ctxt "cp" ["-r"; toplevel_dir; output_dir]
+                 >|= fun () ->
+                 (output_dir, extra_data)
+             end
+         with e ->
+           fail e)
   in
 
   let input_fn = 
@@ -186,30 +192,32 @@ let main () =
       (fun tmpdn ->
          context_lwt ()
          >>= fun ctxt ->
-         uncompress_and_copy ~ctxt:ctxt.cli_odb input_fn 
-           (fun topdn ->
-              let oasis_fn = Filename.concat topdn "_oasis" in
-                if Sys.file_exists oasis_fn then 
-                  begin
-                    ODBOASIS.from_file ~ctxt:ctxt.cli_odb oasis_fn 
-                    >>= fun oasis ->
-                    begin
-                      let ver_str   = string_of_version oasis.version in
-                      let tgt_nm = Printf.sprintf "%s-%s" oasis.name ver_str in
-                      let bundle_nm = Printf.sprintf "%s-bundle-%s" oasis.name ver_str in
-                      let rootdn = Filename.concat tmpdn bundle_nm in
-                      let pkgdn = Filename.concat rootdn tgt_nm in
-                        FileUtilExt.mkdir rootdn 0o755 
-                        >>= fun () ->
-                        return (pkgdn, (oasis, rootdn, bundle_nm, tgt_nm))
-                    end
-                  end
-                else
-                  fail 
-                    (Failure 
-                       (Printf.sprintf
-                          (f_ "Cannot find an '_oasis' file in tarball '%s'.")
-                          input_fn)))
+         Lwt_io.with_file ~mode:Lwt_io.input input_fn
+           (fun input_chn ->
+              uncompress_and_copy ~ctxt:ctxt.cli_odb input_fn input_chn 
+                (fun topdn ->
+                   let oasis_fn = Filename.concat topdn "_oasis" in
+                     if Sys.file_exists oasis_fn then 
+                       begin
+                         ODBOASIS.from_file ~ctxt:ctxt.cli_odb oasis_fn 
+                         >>= fun oasis ->
+                         begin
+                           let ver_str   = string_of_version oasis.version in
+                           let tgt_nm = Printf.sprintf "%s-%s" oasis.name ver_str in
+                           let bundle_nm = Printf.sprintf "%s-bundle-%s" oasis.name ver_str in
+                           let rootdn = Filename.concat tmpdn bundle_nm in
+                           let pkgdn = Filename.concat rootdn tgt_nm in
+                             FileUtilExt.mkdir rootdn 0o755 
+                             >>= fun () ->
+                             return (pkgdn, (oasis, rootdn, bundle_nm, tgt_nm))
+                         end
+                       end
+                     else
+                       fail 
+                         (Failure 
+                            (Printf.sprintf
+                               (f_ "Cannot find an '_oasis' file in tarball '%s'.")
+                               input_fn))))
          >>= fun (pkgdn, (oasis, rootdn, bundle_nm, tgt_nm)) ->
          (* Gather informations about repositories *)
          Lwt_list.fold_left_s
@@ -235,7 +243,8 @@ let main () =
                        >>= fun fn ->
                        uncompress_and_copy
                          ~ctxt:ctxt.cli_odb 
-                         ((ODBStorage.fs stor)#rebase fn)
+                         fn
+                         chn
                          (fun _ ->
                             let in_bundle_nm =
                               Printf.sprintf "%s-%s" 

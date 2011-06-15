@@ -19,12 +19,12 @@ open ODBGettext
 open ODBMessage
 open ExtLib
 open FileUtilExt
-open ODBFilesystem
+open ODBVFS
 open Sexplib.Conv
 
 TYPE_CONV_PATH "ODBSync"
 
-module FS = ODBFilesystem
+module FS = ODBVFS
 
 type digest = Digest.t
 
@@ -121,10 +121,10 @@ let entry_upgrade ~ctxt =
 
 module MapString = Map.Make(String)
 
-type t =
+type 'a t =
     {
       sync_rev:          int;
-      sync_fs:           FS.std_rw;
+      sync_fs:           (#ODBVFS.read_write as 'a);
       sync_entries:      entry_t list;
       sync_entries_old:  entry_t list;
       sync_map:          (Digest.t * file_size) MapString.t;
@@ -331,7 +331,7 @@ let load t =
             return t 
           in
             with_file_in t.sync_fs fn_sync
-              (LwtExt.IO.with_file_content_chn ~fn:fn_sync)
+              LwtExt.IO.with_file_content_chn
             >>= fun str ->
             Sexp.scan_fold_sexps
               ~f:rebuild
@@ -403,7 +403,10 @@ let autoupdate rsync =
     else
       return ()
   in
+  let (_i: int) =
     !rsync.sync_fs#watch_add watcher
+  in
+    ()
 
 (** Update the sync datastructure with existing data on disc
   *)
@@ -449,14 +452,18 @@ let scan rsync =
 class remote sync uri =
 object (self)
 
-  inherit (FS.std_ro sync.sync_fs#root) as super
+  inherit FS.read_only as super
 
   val uri   = uri
-  val mutable sync  = sync
+  val mutable sync: ODBFSDisk.read_write t  = sync
   val mutable online = SetString.empty
 
   method ctxt = sync.sync_ctxt
   method cache = sync.sync_fs
+
+  method id = 
+    Printf.sprintf "sync_remote(%s, %s)"
+      uri self#cache#id
 
   (** Download an URI to a file using its channel. Use the position
     * of the channel to resume download.
@@ -465,12 +472,7 @@ object (self)
     let ctxt = self#ctxt in
       debug ~ctxt "Downloading '%s' to '%s'" url fn
       >>= fun () ->
-      begin
-        ODBCurl.download_chn 
-          ~custom:(fun c -> Curl.set_resumefromlarge c (LargeFile.pos_out chn))
-          url fn chn;
-        return ()
-      end
+      ODBCurl.Lwt.download_chn url fn chn
       >>= fun () ->
       debug ~ctxt "Download of '%s' to '%s' completed" url fn
 
@@ -478,15 +480,7 @@ object (self)
   (** Same as [download_chn] but open the file *)
   method private download_fn url fn =
     with_file_out self#cache fn
-      (fun _ ->
-         (* TODO: use the chn from with_file_out *) 
-         let chn = 
-           open_out (self#cache#rebase fn)
-         in
-           finalize
-             (fun () -> self#download_chn url fn chn)
-             (fun () -> return (close_out chn)))
-           
+      (self#download_chn url fn)
 
   (** Check if the digest of give file is ok
     *)
@@ -663,23 +657,6 @@ object (self)
     let uri_meta = to_url fn_meta in
     let uri_sync = to_url fn_sync in
 
-    (* Download sync-meta.sexp *)
-    let fn_meta_tmp, chn_meta_tmp = 
-      Filename.open_temp_file "oasis-db-sync-meta-" ".sexp"
-    in
-    let fn_tmp, chn_tmp  = 
-      Filename.open_temp_file "oasis-db-sync-" ".sexp"
-    in
-
-    let clean () = 
-      let safe_close chn = 
-        try close_out chn with _ -> ()
-      in
-        safe_close chn_meta_tmp;
-        safe_close chn_tmp;
-        rm [fn_meta_tmp; fn_tmp]
-        >|= ignore
-    in
 
     let check_sync_tmp meta digest sz = 
       (* Check downloaded data *)
@@ -710,19 +687,24 @@ object (self)
          (f_ "Download synchronization data '%s'")
          uri_sync
        >>= fun () -> 
-       self#download_chn uri_sync fn_tmp chn_tmp
-       >>= fun () ->
-       return (close_out chn_tmp)
-       >>= fun () ->
-       id_fn_ext fn_tmp 
-       >>= fun (digest, sz) ->
+       LwtExt.IO.MemoryOut.with_file_out
+         (fun chn ->
+            self#download_chn uri_sync 
+              (self#cache#vroot "sync.sexp")
+              chn)
+       >>= fun str_sync ->
        begin
+         let digest = Digest.string str_sync in
+         let sz = Int64.of_int (String.length str_sync) in
+
          let sync_ok, reason = 
            check_sync_tmp meta_tmp digest sz
          in
            if sync_ok then
              info ~ctxt 
                (f_ "Download of '%s' successful.") uri_sync
+             >>= fun () ->
+             return str_sync
            else
              fail
                (Failure 
@@ -732,65 +714,65 @@ object (self)
        end
     in
 
-      finalize
-        (fun () -> 
-           info ~ctxt
-             (f_ "Download meta synchronization data '%s'")
-             uri_meta;
-           >>= fun () ->
-           self#download_chn uri_meta fn_meta_tmp chn_meta_tmp
-           >>= fun () ->
-           return (close_out chn_meta_tmp)
-           >>= fun () ->
-           LwtExt.IO.sexp_load ~ctxt
-             v_meta_t_of_sexp meta_upgrade
-             fn_meta_tmp
-           >>= fun meta_tmp ->
-           begin
-             (* Check that the current file sync.sexp match 
-              * the just downloaded sync-meta.sexp.
-              *)
-             id_fn sync fn_sync
-             >>= fun (digest, sz) ->
-             begin
-               let sync_ok, _ =
-                 check_sync_tmp meta_tmp digest sz
-               in
-               let rev_ok =
-                 sync.sync_rev = meta_tmp.sync_meta_rev
-               in
-                 (* Do we need to download sync.sexp ? *)
-                 if sync_ok && rev_ok then
-                   begin
-                     info ~ctxt
-                       (f_ "Synchronization data '%s' up to date")
-                       fn_sync
-                   end
-                 else
-                   begin
-                     download_sync meta_tmp 
-                     >>= fun () ->
-                     (* Install downloaded files to their final destination *)
-                     Lwt.join
-                       [
-                         cp_ext fn_meta_tmp self#cache fn_meta;
-                         cp_ext fn_tmp self#cache fn_sync;
-                       ]
-                     >>= fun () -> 
-                     (* Reload synchronization data *)
-                     load sync
-                     >>= fun sync' ->
-                     begin
-                       sync <- sync';
-                       (* Fix obvious problem in the filesystem tree *)
-                       self#repair
-                     end
-                   end
-             end
-           end)
+      info ~ctxt
+        (f_ "Download meta synchronization data '%s'")
+        uri_meta;
+      >>= fun () ->
+      LwtExt.IO.MemoryOut.with_file_out 
+        (fun chn ->
+           self#download_chn uri_meta 
+             (self#cache#vroot "sync-meta.sexp")
+             chn)
+      >>= fun str_meta ->
 
-        (* Always clean at the end *)
-        clean
+      id_fn sync fn_sync
+      >>= fun (digest, sz) ->
+
+      LwtExt.IO.sexp_load_str ~ctxt ~fn:(self#cache#vroot "sync-meta.sexp")
+        v_meta_t_of_sexp meta_upgrade
+        str_meta
+      >>= fun meta_tmp ->
+
+      begin
+        (* Check that the current file sync.sexp match 
+         * the just downloaded sync-meta.sexp.
+         *)
+        let sync_ok, _ =
+          check_sync_tmp meta_tmp digest sz
+        in
+        let rev_ok =
+          sync.sync_rev = meta_tmp.sync_meta_rev
+        in
+          (* Do we need to download sync.sexp ? *)
+          if sync_ok && rev_ok then
+            begin
+              info ~ctxt
+                (f_ "Synchronization data '%s' up to date")
+                fn_sync
+            end
+          else
+            begin
+              download_sync meta_tmp 
+              >>= fun str_sync ->
+              (* Install downloaded files to their final destination *)
+              ODBVFS.with_file_out self#cache fn_meta 
+                (fun chn ->
+                   Lwt_io.write chn str_meta)
+              >>= fun () ->
+              ODBVFS.with_file_out self#cache fn_sync
+                (fun chn ->
+                   Lwt_io.write chn str_sync)
+              >>= fun () -> 
+              (* Reload synchronization data *)
+              load sync
+              >>= fun sync' ->
+              begin
+                sync <- sync';
+                (* Fix obvious problem in the filesystem tree *)
+                self#repair
+              end
+            end
+      end
 
   (** Override of std_ro methods *)
 
@@ -823,17 +805,17 @@ object (self)
             return res
         end
 
-  method open_in fn =
+  method open_in_low fn =
     self#get fn
     >>= fun () ->
-    sync.sync_fs#open_in fn
+    self#cache#open_in_low fn
 
   method stat fn =
     self#get fn
     >>= fun () ->
-    super#stat fn
+    self#cache#stat fn
 
-  method readdir_nolock dn =
+  method readdir dn =
     let dn = norm_fn dn in
     let all = FilePath.is_current dn in
 
@@ -864,4 +846,7 @@ object (self)
     in
     let lst = SetString.elements res in
       return (Array.of_list lst)
+
+  method real_filename fn =
+    self#cache#real_filename fn
 end

@@ -73,4 +73,7 @@ let _ :: _ | [] =
          TestCLI.tests;
          TestOASISExt.tests;
          TestWeb.tests;
+         TestLwtExt.tests;
+         TestFSTree.tests;
+         TestFSMemory.tests;
        ])

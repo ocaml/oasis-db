@@ -33,9 +33,13 @@ let create ?(log) ?(n=5) fn =
      let output = 
        match log with 
          | Some f ->
-             f 
+             fun s ->
+               prerr_endline "coucou1";
+               f s
          | None ->
-             Lwt_io.eprintl
+             fun s ->
+               prerr_endline "coucou";
+               Lwt_io.eprintl s
      in
        Printf.ksprintf output fmt
    in
@@ -98,8 +102,10 @@ let () =
   Printexc.register_printer
     (function
        | Sqlexpr_sqlite.Error(e) ->
-           Some 
+           Some "Sqlexpr_sqlite.Error(...)" 
+(*
              (Printf.sprintf "Sqlexpr_sqlite.Error(%s)"
                 (Printexc.to_string e))
+ *)
        | _ ->
            None)

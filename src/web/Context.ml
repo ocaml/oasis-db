@@ -10,10 +10,10 @@ type context =
       sqle:  Sqlexpr.t;
       ocaw:  OCAWeb.t;
       mkd:   Mkd.t;
-      stor:  ODBStorage.rw_t;
+      stor:  ODBVFS.read_write ODBStorage.read_write;
       sess:  OCASession.t option;
       accnt: OCAAccount.t option;
-      rsync: ODBSync.t ref;
+      rsync: (ODBVFS.read_write ODBSync.t) ref;
       admin: int list;
 
       upload_delay: float; 
@@ -37,7 +37,9 @@ let mk_var nm =
             "Uninitialized variable '%s'"
             nm))
 
-
+(* TODO: fix all this variables, it should just be used to build a 
+ * default context 
+ *)
 let incoming_dir = mk_var "incoming directory"
 let dist_dir     = mk_var "dist directory"
 let sqle_fn      = mk_var "SQLite DB"
@@ -54,11 +56,9 @@ let mkd_dir      = ref "src/web/mkd"
 let admin        = ref []
 
 let init_mutex   = Lwt_mutex.create () 
-let init_cond    = Lwt_condition.create () 
 let init_val     = ref false
 
-
-let read_config () = 
+let () = 
   let spf fmt = 
     Printf.sprintf fmt 
   in
@@ -134,6 +134,7 @@ let read_config () =
     ignore (!sqle_fn ())
 
 let get_odb () = 
+
   let logger = 
     Lwt_log.make
       ~output:
@@ -189,9 +190,6 @@ let get_odb () =
     ODBContext.default ~logger (!incoming_dir ())
 
 let init () = 
-  let () = 
-    read_config ()
-  in
 
   let log ~timestamp ev = 
     Log.add ~timestamp (!sqle ()) ev
@@ -221,11 +219,19 @@ let init () =
              Log.get ~filter:(`Event `VersionCreated) (!sqle ())
              >>= fun pkg_ver_created_evs ->
              begin 
-               let fs = 
-                new ODBFilesystem.rwlock (!dist_dir ())
+               let fs :> ODBVFS.read_write = 
+                 new ODBFSDiskLock.read_write
+                   (new ODBFSDisk.read_write (!dist_dir ()))
+                   (ODBRWLock.create ())
                in
-                 ODBFilesystem.spy fs
-                 >>= fun () ->
+               let () = 
+                 ODBVFS.spy 
+                   ~log:(fun msg -> 
+                           log 
+                             ~timestamp:(CalendarLib.Calendar.now ())
+                             (`Sys ("VFS(dist)", `Message(`Debug, msg))))
+                   fs
+               in
                  ODBStorage.create
                    ~ctxt:(get_odb ()) 
                    fs
@@ -239,55 +245,55 @@ let init () =
            >>= fun () ->
            begin
              let dist_fs = ODBStorage.fs storage' in
-               ODBSync.create ~ctxt:(get_odb ()) dist_fs 
+               ODBSync.create ~ctxt:(get_odb ()) dist_fs
                >>= fun sync ->
                return (ref sync)
                >>= fun rsync ->
-               ODBSync.autoupdate rsync
-               >>= fun () ->
-               ODBSync.scan rsync
+               begin
+                 let () = 
+                   ODBSync.autoupdate rsync
+                 in
+                   ODBSync.scan rsync
+               end
                >>= fun () ->
                return rsync 
            end
            >>= fun rsync' ->
            return (rsync := (fun () -> rsync'))
 
-           >>= fun () ->
-           return (init_val := true)
+           >|= fun () ->
+           begin
+             init_val := true;
+             true
+           end
          end
        else
          begin
-           return ()
+           return false
          end)
-  >>= fun () ->
-  return (Lwt_condition.broadcast init_cond ())
-  >>= fun () ->
 
-  (* Start incoming watch *)
-  begin
-    let _bkgrd_job = 
-    (* TODO: get a semaphore to stop this background job *)
-    ODBIncoming.start
-      ~ctxt:(get_odb ()) 
-      (!storage ())
-      log
-    in
+  >>= fun first_init ->
+
+  if first_init then
+    (* Start incoming watch *)
+    begin
+      let _bkgrd_job = 
+      (* TODO: get a semaphore to stop this background job *)
+      ODBIncoming.start
+        ~ctxt:(get_odb ()) 
+        (!storage ())
+        log
+      in
+        Log.add (!sqle ()) 
+          (`Sys ("oasis-db web context", `Started))
+    end
+  else
+    begin
       return ()
-  end 
-  >>= fun () ->
-
-  Log.add (!sqle ()) 
-    (`Sys ("oasis-db web context", `Started))
+    end
 
 let get_sys () =
-  Lwt_mutex.with_lock init_mutex
-    (fun () ->
-       begin
-         if !init_val then
-           return ()
-         else
-           Lwt_condition.wait ~mutex:init_mutex init_cond
-       end)
+  init ()
   >>= fun () ->
   begin
     let ocaw = 
@@ -299,7 +305,7 @@ let get_sys () =
           sqle  = !sqle ();
           ocaw  = ocaw;
           mkd   = {Mkd.mkd_dir = !mkd_dir};
-          stor  = !storage ();
+          stor  = (!storage ());
           sess  = None;
           accnt = None;
           admin = !admin;

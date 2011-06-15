@@ -21,7 +21,4 @@ let () =
            Some (Printf.sprintf "Unix.Unix_error (%s, %S, %S)"
                    (Unix.error_message e) f a)
        | e ->
-           try 
-             Some (OASISMessage.string_of_exception e)
-           with e -> 
-             None)
+           None)

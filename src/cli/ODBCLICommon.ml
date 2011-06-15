@@ -3,8 +3,6 @@ open Lwt
 open FileUtil
 open ODBRepository
 
-module FS = ODBFilesystem
-
 type ctxt = 
     {
       cli_odb:       ODBContext.t;
@@ -85,7 +83,7 @@ let context_lwt ?(error_repos=true) () =
     in
     let repo_fs = 
       mkdir ~parent:true dn_repo; 
-      new FS.std_rw dn_repo
+      new ODBFSDisk.read_write dn_repo
     in
       ODBSync.create ~ctxt repo_fs
       >|= fun sync ->

@@ -5,7 +5,7 @@ open Lwt
 
 type t =
     {
-      rst_stor: ODBFilesystem.std_ro ODBStorage.t;
+      rst_stor: ODBVFS.read_only ODBStorage.read_only;
     }
 
 (** Current version of the API *)

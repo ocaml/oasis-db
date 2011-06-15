@@ -25,8 +25,17 @@ let edit_pkg_ver_box ~ctxt sp (pkg_str, ver) =
       ~name:"edit_pkg_ver_action" 
       ~post_params:(opt (string "publink"))
       (fun sp _ publink -> 
-         (* TODO: modify the storage in a memory copy *)
-         return ())
+         let stor = ctxt.stor in
+           Context.get_user ~sp () 
+           >>= fun (ctxt, _) ->
+           begin
+             let ctxt = {ctxt with stor = stor} in
+               ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
+               >>= fun pkg_ver ->
+               ODBStorage.PkgVer.replace ctxt.stor 
+                 (`PkgVer pkg_ver) 
+                 {pkg_ver with publink = publink}
+           end)
   in
 
   let display () = 
@@ -94,8 +103,16 @@ let edit_oasis_box ~ctxt sp (pkg_str, ver) =
       ~name:"edit_oasis_action" 
       ~post_params:(string "oasis")
       (fun sp _ oasis_str ->
-         (* TODO: modify in memory storage *)
-         return ())
+         let stor = ctxt.stor in
+           Context.get_user ~sp () 
+           >>= fun (ctxt, _) ->
+           begin
+             let ctxt = {ctxt with stor = stor} in
+               ODBStorage.PkgVer.with_file_out ctxt.stor (`StrVer (pkg_str, ver))
+                 `OASIS
+                 (fun chn ->
+                    Lwt_io.write chn oasis_str)
+           end)
   in
 
   let display () = 
@@ -108,7 +125,7 @@ let edit_oasis_box ~ctxt sp (pkg_str, ver) =
                 | e ->
                     fail e)
       (fun chn  ->
-         LwtExt.IO.with_file_content_chn ~fn:"_oasis" chn)
+         LwtExt.IO.with_file_content_chn chn)
     >|= fun oasis_str ->
     let form = 
       post_form
@@ -137,129 +154,153 @@ let edit_oasis_box ~ctxt sp (pkg_str, ver) =
 
 
 let start_edit ~ctxt sp ((pkg_str, ver) as k) edited =
-  let edit_pkg_ver_box = 
-    edit_pkg_ver_box ~ctxt sp k
-  in
+  begin
+    let mem_fs = 
+      new ODBFSMemory.read_write (ODBFSTree.root ())
+    in
+    let stor_fs = 
+      ODBStorage.fs ctxt.stor
+    in
+      ODBFSMemory.cp_directories stor_fs mem_fs
+      >>= fun () ->
+      begin
+        let phantom_fs = 
+          new ODBVFSUnion.read_write mem_fs [stor_fs]
+        in
+          ODBStorage.create ~ctxt:ctxt.odb phantom_fs
+            (fun ~timestamp _ -> return ())
+            []
+      end
+  end
+  >>= fun stor ->
+  begin
+    let ctxt = {ctxt with stor = stor} 
+    in
 
-  let edit_oasis_box = 
-    edit_oasis_box ~ctxt sp k
-  in
+    let edit_pkg_ver_box = 
+      edit_pkg_ver_box ~ctxt sp k
+    in
 
-  let action = 
-    Eliom_predefmod.Action.register_new_post_coservice_for_session
-      ~fallback:Common.view_pkg_ver
-      ~sp
-      ~post_params:(string "action")
-      (fun sp _ action ->
-         begin
-           let lst = 
-             [edit_pkg_ver_box; 
-              edit_oasis_box]
-           in
-             match action with 
-               | "cancel" ->
-                   BoxedForms.rollbacks () lst
+    let edit_oasis_box = 
+      edit_oasis_box ~ctxt sp k
+    in
 
-               | "confirm" ->
-                   BoxedForms.commits () lst
+    let action = 
+      Eliom_predefmod.Action.register_new_post_coservice_for_session
+        ~fallback:Common.view_pkg_ver
+        ~sp
+        ~post_params:(string "action")
+        (fun sp _ action ->
+           begin
+             let lst = 
+               [edit_pkg_ver_box; 
+                edit_oasis_box]
+             in
+               match action with 
+                 | "cancel" ->
+                     BoxedForms.rollbacks () lst
 
-               | _ ->
-                   fail 
-                     (Failure 
-                        (Printf.sprintf 
-                           (f_ "Unknown action '%s'")
-                           action))
-         end
-         >|= fun () ->
-         Hashtbl.remove edited k)
-  in
+                 | "confirm" ->
+                     BoxedForms.commits () lst
 
-  let action_box = 
-    post_form
-      ~service:action
-      ~sp
-      (fun action_nm ->
-         [p 
-            [string_button 
-               ~name:action_nm 
-               ~value:"cancel" 
-               [pcdata (s_ "Cancel")];
-             string_button 
-               ~name:action_nm 
-               ~value:"confirm"
-               [pcdata (s_ "Confirm")]]])
-      (pkg_str, Version ver) 
-  in
+                 | _ ->
+                     fail 
+                       (Failure 
+                          (Printf.sprintf 
+                             (f_ "Unknown action '%s'")
+                             action))
+           end
+           >|= fun () ->
+           Hashtbl.remove edited k)
+    in
 
-  let preview_box ~ctxt () = 
-    (* TODO: move this to PkgVerView *)
-    catch 
-      (fun () ->
-         ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
-         >>= fun pkg_ver ->
-         ODBStorage.PkgVer.oasis ctxt.stor (`PkgVer pkg_ver)
-         >>= fun oasis_opt -> 
-         PkgVerView.box ~ctxt:(Context.anonymize ctxt) ~sp
-           pkg_ver 
-           (fun () ->
-              return 
-                (XHTML.M.a  
-                   (* TODO: temporary service for upload *)
-                   ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
-                   [pcdata pkg_ver.tarball; pcdata (s_ " (backup)")],
-                 pkg_ver.tarball))
-           oasis_opt
-         >|= fun content ->
-           (h3 [pcdata (s_ "Preview")])
-           ::
-           content)
-      (fun e ->
-         return 
-           [h3 [pcdata (s_ "Preview")];
-            p [pcdata (s_ "Not enough data to build a preview")]])
-      >|= fun lst ->
-      div lst
-  in
+    let action_box = 
+      post_form
+        ~service:action
+        ~sp
+        (fun action_nm ->
+           [p 
+              [string_button 
+                 ~name:action_nm 
+                 ~value:"cancel" 
+                 [pcdata (s_ "Cancel")];
+               string_button 
+                 ~name:action_nm 
+                 ~value:"confirm"
+                 [pcdata (s_ "Confirm")]]])
+        (pkg_str, Version ver) 
+    in
 
-  let fpage () = 
-    ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
-    >>= fun pkg_ver ->
-    BoxedForms.display edit_pkg_ver_box ()
-    >>= fun edit_pkg_ver_box ->
-    BoxedForms.display edit_oasis_box ()
-    >>= fun edit_oasis_box ->
-    preview_box ~ctxt () 
-    >>= fun preview_box ->
-    begin
-      let browser_ttl = 
-        Printf.sprintf (f_ "%s v%s")
-          pkg_str (string_of_version ver)
-      in
-      let page_ttl =
-        Printf.sprintf (f_ "Edit %s v%s")
-          pkg_str (string_of_version ver)
-      in
-        template
-          ~ctxt
-          ~sp
-          ~title:(BrowserAndPageTitle (browser_ttl, page_ttl))
-          ~div_id:"pkg_ver_edit"
-          [
-            edit_pkg_ver_box;
-            edit_oasis_box;
-            preview_box;
-            action_box;
+    let preview_box ~ctxt () = 
+      (* TODO: move this to PkgVerView *)
+      catch 
+        (fun () ->
+           ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
+           >>= fun pkg_ver ->
+           ODBStorage.PkgVer.oasis ctxt.stor (`PkgVer pkg_ver)
+           >>= fun oasis_opt -> 
+           PkgVerView.box ~ctxt:(Context.anonymize ctxt) ~sp
+             pkg_ver 
+             (fun () ->
+                return 
+                  (XHTML.M.a  
+                     (* TODO: temporary service for upload *)
+                     ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
+                     [pcdata pkg_ver.tarball; pcdata (s_ " (backup)")],
+                   pkg_ver.tarball))
+             oasis_opt
+           >|= fun content ->
+             (h3 [pcdata (s_ "Preview")])
+             ::
+             content)
+        (fun e ->
+           return 
+             [h3 [pcdata (s_ "Preview")];
+              p [pcdata (s_ "Not enough data to build a preview")]])
+        >|= fun lst ->
+        div lst
+    in
 
-            js_script 
-              ~uri:(make_uri ~service:(static_dir sp) 
-              ~sp 
-              ["form-disabler.js"]) ();
-          ]
-    end
-  in
+    let fpage () = 
+      ODBStorage.PkgVer.find ctxt.stor (`StrVer (pkg_str, ver))
+      >>= fun pkg_ver ->
+      BoxedForms.display edit_pkg_ver_box ()
+      >>= fun edit_pkg_ver_box ->
+      BoxedForms.display edit_oasis_box ()
+      >>= fun edit_oasis_box ->
+      preview_box ~ctxt () 
+      >>= fun preview_box ->
+      begin
+        let browser_ttl = 
+          Printf.sprintf (f_ "%s v%s")
+            pkg_str (string_of_version ver)
+        in
+        let page_ttl =
+          Printf.sprintf (f_ "Edit %s v%s")
+            pkg_str (string_of_version ver)
+        in
+          template
+            ~ctxt
+            ~sp
+            ~title:(BrowserAndPageTitle (browser_ttl, page_ttl))
+            ~div_id:"pkg_ver_edit"
+            [
+              edit_pkg_ver_box;
+              edit_oasis_box;
+              preview_box;
+              action_box;
 
-    Hashtbl.add edited k fpage;
-    fpage () 
+              js_script 
+                ~uri:(make_uri ~service:(static_dir sp) 
+                ~sp 
+                ["form-disabler.js"]) ();
+            ]
+      end
+    in
+
+      Hashtbl.add edited k fpage;
+      fpage () 
+  end
 
 let rec handler sp (pkg_str, ver) () = 
     Context.get_user ~sp ()

@@ -29,7 +29,7 @@ let update_repo (repo, repo_sync) =
   in
     repo_sync#update
     >>= fun () ->
-    FS.fold
+    ODBVFS.fold
       (fun fne acc ->
          match fne with 
            | `File fn ->
@@ -43,7 +43,7 @@ let update_repo (repo, repo_sync) =
     >>= fun lst ->
     Lwt_list.iter_s
       (fun fn ->
-         FS.with_file_in 
+         ODBVFS.with_file_in 
            repo_sync 
            fn 
            (fun _ -> return ()))

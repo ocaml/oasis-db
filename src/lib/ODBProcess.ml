@@ -27,14 +27,16 @@ let () =
                        cmd_str
                        n
 
-              | Unix.WSTOPPED n ->
-                  Printf.sprintf
-                    (f_ "Process '%s' stopped by signal %d")
-                    cmd_str
-                    n
-        end
-    |  e  ->
-        raise e 
+                 | Unix.WSTOPPED n ->
+                     Printf.sprintf
+                       (f_ "Process '%s' stopped by signal %d")
+                       cmd_str
+                       n
+             in
+               Some msg
+           end
+       | e  ->
+           None)
 
 type handle_status = 
   | StatusIgnore
@@ -43,7 +45,7 @@ type handle_status =
 
 let run_logged 
       ~ctxt ?timeout ?env 
-      ?stdin_fd
+      ?stdin_chn
       ?(status=StatusExpected [Unix.WEXITED 0])
       cmd args = 
 
@@ -66,7 +68,7 @@ let run_logged
                 let exc = 
                   EStatus (cmd, args, st)
                 in
-                  error ~ctxt "%s" (string_of_exception exc)
+                  error ~ctxt "%s" (Printexc.to_string exc)
                   >>= fun () ->
                   fail exc
               end
@@ -97,9 +99,9 @@ let run_logged
       let cmd_line = 
         String.concat " " (cmd :: args)
       in
-        match stdin_fd with
+        match stdin_chn with
           | Some fd ->
-              debug ~ctxt (f_ "Running '%s' with fd as input") 
+              debug ~ctxt (f_ "Running '%s' with chn as input") 
                 cmd_line
           | None ->
               debug ~ctxt (f_ "Running '%s'") 
@@ -111,23 +113,16 @@ let run_logged
       (cmd, Array.of_list (cmd :: args))
       (fun p ->
          let stdin_task =
-           match stdin_fd with 
-             | Some fd ->
+           match stdin_chn with 
+             | Some chn_in ->
                  (* Copy fd into stdin of the process *)
-                 let chn = 
-                   Lwt_io.of_unix_fd 
-                     ~mode:Lwt_io.input 
-                     (Unix.dup fd)
-                 in
-                   finalize
-                     (fun () ->
-                        Lwt_io.write_chars
-                          p#stdin
-                          (Lwt_io.read_chars chn))
-                     (fun () ->
-                        Lwt_io.close chn
-                        >>= fun () ->
-                        Lwt_io.close p#stdin)
+                 finalize
+                   (fun () ->
+                      Lwt_io.write_chars
+                        p#stdin
+                        (Lwt_io.read_chars chn_in))
+                   (fun () ->
+                      Lwt_io.close p#stdin)
 
              | None ->
                  Lwt_io.close p#stdin

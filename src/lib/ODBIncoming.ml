@@ -48,10 +48,14 @@ let inject ~ctxt stor sexp_fn tarball_fn =
     in
       from_file ~ctxt sexp_fn 
       >>= fun t ->
+
+      LwtExt.IO.with_file_content tarball_fn
+      >>= fun tarball_content ->
+
       ODBUpload.upload_begin ~ctxt 
         stor
         (Incoming user) 
-        tarball_fn 
+        tarball_content
         (Filename.basename tarball_fn)
         t.publink
       >>=

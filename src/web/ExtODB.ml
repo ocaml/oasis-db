@@ -1523,13 +1523,14 @@ let () =
                                  String_redirection.send ~sp 
                                    (uri_of_string uri_str)
                              | None ->
-                                 ODBStorage.PkgVer.filename 
+                                 ODBStorage.PkgVer.with_file_in
                                    ctxt.stor 
                                    (`Str (pkg_str, ver_str)) 
                                    `Tarball
-                                 >>= fun fn -> 
-                                 Files.send ~sp 
-                                   ((ODBStorage.fs ctxt.stor)#rebase fn)
+                                   LwtExt.IO.with_file_content_chn
+                                 >>= fun content -> 
+                                 Text.send ~sp 
+                                   (content, "application/octet-stream")
                          end
 
                      with Not_found ->
@@ -1544,13 +1545,14 @@ let () =
                        let (pkg_str, ver_str) = 
                          MapString.find tarball_bn mp_tarball
                        in
-                         ODBStorage.PkgVer.filename 
+                         ODBStorage.PkgVer.with_file_in
                            ctxt.stor 
                            (`Str (pkg_str, ver_str)) 
                            `Tarball
-                         >>= fun fn -> 
-                         Files.send ~sp 
-                           ((ODBStorage.fs ctxt.stor)#rebase fn)
+                           LwtExt.IO.with_file_content_chn
+                         >>= fun content -> 
+                         Text.send ~sp 
+                           (content, "application/octet-stream")
 
                      with Not_found ->
                        fail Eliom_common.Eliom_404

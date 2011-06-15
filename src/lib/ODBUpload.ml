@@ -10,13 +10,10 @@ open ODBPkgVer
 open ODBGettext
 open Lwt
 
-type t = 
+type 'a t = 
     {
-      mutable tarball_closed: bool;
-      (* Is tarball_fd closed *)
-
-      tarball_fd: Unix.file_descr;
-      (* Handle to the tarball *)
+      tarball_content: string;
+      (* Content of the tarball *)
 
       tarball_nm: filename;
       (* File name of the tarball *)
@@ -33,24 +30,9 @@ type t =
       upload_method: ODBPkgVer.upload_method;
       (* Method of upload *)
 
-      storage: ODBStorage.rw_t;
+      storage: 'a ODBStorage.read_write;
       (* Where the package's version will be stored *)
     }
-
-let safe_clean t = 
-  if not t.tarball_closed then
-    begin
-      try 
-        prerr_endline ("Close fd "^t.tarball_nm);
-        Unix.close t.tarball_fd;
-        t.tarball_closed <- true;
-      with _ ->
-        prerr_endline ("Error while closing "^t.tarball_nm)
-    end
-  else
-    begin
-      prerr_endline ("Fd "^t.tarball_nm^" already closed");
-    end
 
 let pkg_ver_of_upload t = 
   let value_of_answer =
@@ -116,68 +98,49 @@ let check_exists ~ctxt ~assume_sure t =
     return t
 
 
-let upload_begin ~ctxt (stor: ODBStorage.rw_t) upload_method tarball_fn tarball_nm publink =  
+let upload_begin ~ctxt stor upload_method tarball_content tarball_nm publink =  
   let upload_date =
-    CalendarLib.Calendar.from_unixfloat
-      (Unix.stat tarball_fn).Unix.st_mtime
+    CalendarLib.Calendar.now ()
   in
-  let tmp_fn, tarball_fd = 
-    let tmp_dir = 
-      Filename.dirname tarball_fn
-    in
-    let rec find_fn idx cnt = 
-      if cnt = 0 then
-        begin
-          failwith 
-            (Printf.sprintf 
-               (f_ "Unable to find a temporary name for tarball in '%s'")
-               tmp_dir)
-        end
-      else
-        begin
-          let fn = 
-            Filename.concat
-              tmp_dir
-              (Printf.sprintf "tarball-%06d" idx)
-          in
-            try 
-              let fd = 
-                Unix.link tarball_fn fn;
-                Unix.openfile fn [Unix.O_RDONLY] 0o640
-              in
-                (* On Unix if we remove an open file, we still have access
-                 * to data, but the file will get removed when the fd will
-                 * be closed -> this is a temporary file.
-                 *)
-                Unix.unlink fn;
-                fn, fd
-            with _ ->
-              find_fn (idx + 1) (cnt - 1)
-        end
-    in
-      find_fn (Random.bits ()) 100
+  let tarball_fn = 
+    Filename.concat "tmp://" tarball_nm
   in
-    ODBMessage.debug ~ctxt (f_ "Hardlink uploaded tarball '%s' ('%s') to '%s'")
-      tarball_nm tarball_fn tmp_fn
-    >>= fun () ->
-    ODBArchive.uncompress_tmp_dir ~ctxt tarball_fd tarball_nm 
-    (fun nm an dn ->
-      ODBCompletion.run ~ctxt stor nm an dn)
+    begin
+      try 
+        let arch_handler =
+          ODBArchive.of_filename tarball_nm 
+        in
+        let arch_name =
+          ODBArchive.chop_suffix arch_handler tarball_nm 
+        in
+          FileUtilExt.with_temp_dir "oasis-db-upload-" ".dir"
+            (fun dn ->
+               LwtExt.IO.MemoryIn.with_file_in tarball_content
+                 (fun chn -> 
+                    ODBArchive.uncompress 
+                      ~ctxt 
+                      ~src:tarball_fn 
+                      arch_handler
+                      chn
+                      dn)
+                 >>= fun () ->
+                 ODBCompletion.run ~ctxt stor tarball_nm arch_name dn)
+      with e ->
+        fail e
+    end
     >>= fun ct ->
     begin
       let t = 
         {
-          tarball_closed = false;
-          tarball_fd     = tarball_fd;
-          tarball_nm     = tarball_nm;
-          publink        = publink;
-          completion     = ct;
-          upload_date    = upload_date;
-          upload_method  = upload_method;
-          storage        = stor;
+          tarball_content = tarball_content;
+          tarball_nm      = tarball_nm;
+          publink         = publink;
+          completion      = ct;
+          upload_date     = upload_date;
+          upload_method   = upload_method;
+          storage         = stor;
         }
       in
-        Gc.finalise safe_clean t;
         check_exists ~ctxt ~assume_sure:false t
     end
 
@@ -209,7 +172,9 @@ let upload_commit ~ctxt t =
   end 
   >>= fun evs ->
 
-  ODBStorage.PkgVer.create ~ctxt t.storage pkg_ver t.tarball_fd
+  LwtExt.IO.MemoryIn.with_file_in t.tarball_content
+    (fun chn ->
+       ODBStorage.PkgVer.create ~ctxt t.storage pkg_ver chn)
   >>= fun (timestamp, ev, pkg_ver) ->
   return ((timestamp, ev) :: evs)
   >>= fun evs ->
@@ -238,12 +203,8 @@ let upload_commit ~ctxt t =
 
   (* Clean environment *)
   >>= fun () ->
-  begin
-    safe_clean t;
-    return (List.rev evs, pkg_ver)
-  end
+  return (List.rev evs, pkg_ver)
 
 let upload_rollback ~ctxt t = 
-  safe_clean t;
   return ()
 

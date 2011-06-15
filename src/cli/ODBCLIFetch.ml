@@ -190,33 +190,30 @@ let main () =
     end
 
     >>= fun (repo, stor, fs, pkg_ver) ->
+    ODBStorage.PkgVer.filename stor (`PkgVer pkg_ver) what
+    >>= fun fn ->
     ODBStorage.PkgVer.with_file_in
       stor (`PkgVer pkg_ver) what
       (fun chn -> 
-         let fn = 
-           fs#rebase 
-             (Lwt_unix.run
-                (ODBStorage.PkgVer.filename stor (`PkgVer pkg_ver) what))
-         in
-           match output with 
-             | Filename ->
-                 begin
-                   return (print_endline fn)
-                 end
+         match output with 
+           | Filename ->
+               begin
+                 Lwt_io.printl (fs#real_filename fn)
+               end
 
-             | Content ->
-                 begin
-                   Lwt_io.write_chars
-                     Lwt_io.stdout
-                     (Lwt_io.read_chars chn)
-                 end
+           | Content ->
+               begin
+                 Lwt_io.write_chars
+                   Lwt_io.stdout
+                   (Lwt_io.read_chars chn)
+               end
 
-             | Copy tgt_fn ->
-                 begin
-                   Lwt_io.chars_to_file
-                     tgt_fn
-                     (Lwt_io.read_chars chn)
-                 end)
+           | Copy tgt_fn ->
+               begin
+                 Lwt_io.chars_to_file
+                   tgt_fn
+                   (Lwt_io.read_chars chn)
+               end)
   in
     
     (* Do the job *)

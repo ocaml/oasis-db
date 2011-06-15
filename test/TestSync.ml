@@ -3,8 +3,6 @@ open OUnit
 open TestCommon
 open Lwt
 
-module FS = ODBFilesystem
-
 let tests = 
   "Sync" >::
   bracket_ocsigen 
@@ -31,9 +29,7 @@ let tests =
            (fun cache_dir ->
               let add_spy fs = 
                 if !TestCommon.verbose then
-                  FS.spy fs
-                else
-                  return ()
+                  ODBVFS.spy fs
               in
               (* Create src sync *)
               let src_fs = 
@@ -41,32 +37,28 @@ let tests =
                   FilePath.concat ocs.ocs_rootdir "dist"
                 in
                   FileUtil.mkdir dist;
-                  new FS.std_rw dist
-              in
-              let rsrc_sync =
-                ref
-                  (Lwt_unix.run 
-                     (add_spy src_fs
-                      >>= fun () ->
-                      ODBSync.create ~ctxt src_fs))
+                  new ODBFSDisk.read_write dist
               in
               let () = 
-                Lwt_unix.run
-                  (ODBSync.autoupdate rsrc_sync
-                   >>= fun () ->
-                   ODBSync.scan rsrc_sync)
+                add_spy src_fs
+              in
+              let rsrc_sync =
+                ref (Lwt_main.run (ODBSync.create ~ctxt src_fs))
+              in
+              let () = 
+                ODBSync.autoupdate rsrc_sync;
+                Lwt_unix.run (ODBSync.scan rsrc_sync)
               in
 
               (* Create tgt sync *)
               let tgt_fs = 
-                new FS.std_rw cache_dir
+                new ODBFSDisk.read_write cache_dir
               in
 
               let tgt_sync = 
+                add_spy tgt_fs;
                 Lwt_unix.run
-                  (add_spy tgt_fs
-                   >>= fun () ->
-                   ODBSync.create ~ctxt tgt_fs
+                  (ODBSync.create ~ctxt tgt_fs
                    >|= fun sync ->
                    new ODBSync.remote sync (ocs.ocs_base_url^"dist"))
               in
@@ -83,8 +75,8 @@ let tests =
                   if exp_exists then
                     let ctnt' =
                       Lwt_unix.run
-                        (FS.with_file_in tgt_sync fn
-                           (LwtExt.IO.with_file_content_chn ~fn))
+                        (ODBVFS.with_file_in tgt_sync fn
+                           LwtExt.IO.with_file_content_chn)
                     in
                       assert_equal
                         ~msg:(Printf.sprintf "File content of '%s'" fn)
@@ -99,7 +91,7 @@ let tests =
                      (FilePath.dirname fn) 
                      0o755
                    >>= fun () ->
-                   FS.with_file_out src_fs fn 
+                   ODBVFS.with_file_out src_fs fn 
                      (fun chn -> 
                         Lwt_io.write chn cnt))
               in

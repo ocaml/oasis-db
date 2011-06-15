@@ -7,8 +7,8 @@ open ODBContext
 open ODBUtils
 open Lwt
 
+module FS = ODBVFS
 module HLS = ODBHLS
-module FS = ODBFilesystem
 
 (** Storage information for a version 
   *)
@@ -44,9 +44,10 @@ type 'a t =
       stor_fs:   'a;
       stor_all:  pkg_t HLS.t;
       stor_ctxt: ODBContext.t;
-    } constraint 'a = #FS.std_ro
+    } 
 
-type rw_t = FS.std_rw t
+type 'a read_only = (#FS.read_only as 'a) t
+type 'a read_write = (#FS.read_write as 'a) t
 
 type ver_str = string
 type pkg_str = string
@@ -174,7 +175,7 @@ struct
       catch FileDoesntExist
 
   (* See ODBStorage.mli *)
-  let with_file_out t k fn f =
+  let with_file_out (t: 'a read_write) k fn f =
     filename t k fn 
     >>= fun fn ->
     FS.with_file_out t.stor_fs fn f 
@@ -287,7 +288,7 @@ struct
       end
 
   (* See ODBStorage.mli *)
-  let create ~ctxt (t: rw_t) pkg = 
+  let create ~ctxt (t: 'a read_write) pkg = 
     let pkg_str = 
       pkg.pkg_name
     in
@@ -370,6 +371,33 @@ struct
        end)
 
   include Common
+
+  (* See ODBStorage.mli *)
+  let replace t k pkg_ver = 
+    let ku = 
+      match k with 
+        | `Str (pkg_str, _) 
+        | `StrVer (pkg_str, _)
+        | `PkgVer {pkg = pkg_str} ->
+            `Str pkg_str
+    in
+    let ver_str =
+      match k with 
+        | `Str (_, ver_str) ->
+            ver_str
+        | `StrVer (_, ver)
+        | `PkgVer {ver = ver} ->
+            OASISVersion.string_of_version ver
+    in
+      Pkg.find_container t ku
+      >>= fun pkg_cont ->
+      HLS.find pkg_cont.pkg_vers ver_str 
+      >>= fun pkg_ver_frmr ->
+      (* TODO: remove former version or assert(old_ver = new_ver) *)
+      HLS.add pkg_cont.pkg_vers 
+        (OASISVersion.string_of_version pkg_ver.ver)
+        {pkg_ver_frmr with 
+             pkg_ver = pkg_ver}
 
   (* See ODBStorage.mli *)
   let elements ?extra t pkg_k = 
@@ -500,7 +528,7 @@ struct
       end
 
   (* See ODBStorage.mli *)
-  let create ~ctxt (t: rw_t) pkg_ver tarball_fd = 
+  let create ~ctxt (t: 'a read_write) pkg_ver tarball_chn = 
     catch 
       (fun () -> 
          Pkg.dirname t (`PkgVer pkg_ver))
@@ -526,7 +554,7 @@ struct
           (fun () ->
              (* Create storage.sexp *)
              begin
-               let fn =  storage_filename dn in
+               let fn = storage_filename dn in
                  FS.with_file_out 
                    t.stor_fs fn
                    (ODBPkgVer.to_chn ~ctxt ~fn pkg_ver)
@@ -534,9 +562,14 @@ struct
              >>= fun () ->
 
              (* Copy the tarball *)
-             t.stor_fs#copy_fd
-               tarball_fd 
-               (Filename.concat dn pkg_ver.ODBPkgVer.tarball)
+             begin
+               let fn = Filename.concat dn pkg_ver.ODBPkgVer.tarball in
+                 FS.with_file_out
+                   t.stor_fs fn 
+                   (fun chn_out ->
+                      Lwt_io.write_chars chn_out 
+                        (Lwt_io.read_chars tarball_chn))
+             end
              >>= fun () ->
 
              (* Notify installation of a new package version *)
@@ -558,7 +591,9 @@ struct
                 | e ->
                     return `Error)
       (fun chn ->
-         ODBOASIS.from_chn ~ctxt:t.stor_ctxt ~fn:(t.stor_fs#rebase fn) chn
+         ODBOASIS.from_chn 
+           ~ctxt:t.stor_ctxt 
+           ~fn:(t.stor_fs#vroot fn) chn
          >|= fun oasis ->
          `Set oasis)
     >>= fun oasis_set ->
@@ -708,7 +743,7 @@ let create ~ctxt fs log prev_log_event =
     log 
       ~timestamp:(CalendarLib.Calendar.now ())
       (`Sys 
-         (Printf.sprintf "ODBStorage(%s)" fs#root, 
+         (Printf.sprintf "ODBStorage(%s)" fs#id, 
           `Started))
     >>= fun () ->
     return res
@@ -717,5 +752,5 @@ let create ~ctxt fs log prev_log_event =
 let fs t = t.stor_fs
 
 (* See ODBStorage.mli *)
-let to_ro t = 
-  {t with stor_fs = (t.stor_fs :> FS.std_ro)}
+let to_ro (t: 'a read_write) = 
+  {t with stor_fs = (t.stor_fs :> FS.read_only)}
