@@ -60,8 +60,8 @@ let inject ~ctxt stor sexp_fn tarball_fn =
         t.publink
       >>=
       ODBUpload.upload_commit ~ctxt 
-      >>= fun (evs, _) ->
-      return evs
+      >>= fun _ ->
+      return ()
   with e ->
     fail e
 
@@ -71,7 +71,7 @@ let wait_complete ~ctxt stor ev changed =
   match ev with 
     | Created fn ->
         begin
-          return ([], changed)
+          return changed
         end
     
     | Changed fn ->
@@ -117,75 +117,57 @@ let wait_complete ~ctxt stor ev changed =
                      error ~ctxt 
                        (f_ "Cannot process '%s': %s")
                        tarball_fn
-                       (Printexc.to_string e)
-                     >>= fun () ->
-                     return [])
-                >>= fun evs ->
+                       (Printexc.to_string e))
+                >>= fun () ->
                 FileUtilExt.rm [sexp_fn; tarball_fn]
                 >>= fun _ ->
-                return evs
+                return ()
 
               else
                 begin
-                  let dbg = 
-                    if not sexp_changed && not tarball_changed then
-                      debug ~ctxt
-                        (f_ "File '%s' and '%s' are missing or not signaled \
-                             as changed.")
-                        sexp_fn tarball_fn
+                  if not sexp_changed && not tarball_changed then
+                    debug ~ctxt
+                      (f_ "File '%s' and '%s' are missing or not signaled \
+                           as changed.")
+                      sexp_fn tarball_fn
 
-                    else if not sexp_changed then
-                      debug ~ctxt
-                        (f_ "File '%s' are missing or not signaled as \
-                           changed.") 
-                        sexp_fn
+                  else if not sexp_changed then
+                    debug ~ctxt
+                      (f_ "File '%s' are missing or not signaled as \
+                         changed.") 
+                      sexp_fn
 
-                    else if tarball_changed then
-                      debug ~ctxt
-                        (f_ "File '%s' are missing or not signaled as \
-                           changed") 
-                        tarball_fn
-                    else 
-                      return ()
-                  in
-                    dbg >>= fun () -> return []
+                  else if tarball_changed then
+                    debug ~ctxt
+                      (f_ "File '%s' are missing or not signaled as \
+                         changed") 
+                      tarball_fn
+                  else 
+                    return ()
                 end
             end
-            >>= fun evs ->
-            return (evs, changed)
+            >>= fun () ->
+            return changed
         end
 
     | Deleted fn ->
         begin
-          return ([], SetString.remove fn changed)
+          return (SetString.remove fn changed)
         end
 
 (** Main loop for incoming/ watch
   *)
-let start ~ctxt stor log  = 
+let start ~ctxt stor = 
   let ctxt = 
     ODBContext.sub ctxt "incoming" 
   in
 
-  log 
-    ~timestamp:(CalendarLib.Calendar.now ())
-    (`Sys 
-       (Printf.sprintf "ODBIncoming(%s)" ctxt.incoming_dir, 
-        `Started))
-  >>= fun () ->
   (* TODO: find a way to stop monitoring 
    * run a task in parallel...
    *)
   ODBInotify.monitor_dir ~ctxt 
     (fun iev changed ->
-       wait_complete ~ctxt stor iev changed
-       >>= fun (levs, changed) ->
-       Lwt_list.iter_p 
-         (fun (timestamp, ev) -> 
-            log ~timestamp ev) 
-         levs
-       >>= fun () ->
-       return changed)
+       wait_complete ~ctxt stor iev changed)
     ctxt.incoming_dir SetString.empty
   >>= fun changed ->
   if SetString.cardinal changed > 0 then

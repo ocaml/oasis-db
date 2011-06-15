@@ -29,8 +29,7 @@ let main () =
              (ODBStorage.create 
                 ~ctxt:ctxt.cli_odb 
                 repo_sync
-                (fun ~timestamp _ -> return ())
-                []
+                (fun _ _ -> return ())
               >>= fun stor ->
               ODBStorage.Pkg.elements stor
               >>= fun lst ->

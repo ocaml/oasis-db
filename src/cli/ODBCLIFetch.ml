@@ -158,11 +158,7 @@ let main () =
       (fun acc (repo, fs) -> 
          catch 
            (fun () ->
-              ODBStorage.create 
-                ~ctxt:ctxt.cli_odb 
-                fs
-                (fun ~timestamp _ -> return ())
-                []
+              ODBStorage.create ~ctxt:ctxt.cli_odb fs (fun _ _ -> return ())
               >>= fun stor ->
               one_stor stor 
               >|= fun pkg_ver ->

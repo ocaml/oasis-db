@@ -43,12 +43,7 @@ sig
   
   (** Create a package 
     *)
-  val create :
-    ctxt:ODBContext.t -> 'a read_write -> ODBPkg.t ->
-    (* TODO: rewrite *)
-    (CalendarLib.Calendar.t *
-     [> `Pkg of pkg_str * [> `Created ] ] * ODBPkg.t)
-    Lwt.t
+  val create : ctxt:ODBContext.t -> 'a read_write -> ODBPkg.t -> ODBPkg.t Lwt.t
 
   (** Check the existence of a package
    *)
@@ -134,14 +129,7 @@ sig
 
   (** Create a package version 
     *)
-  val create :
-    ctxt:ODBContext.t -> 'a read_write ->
-    ODBPkgVer.t ->
-    Lwt_io.input_channel ->
-    (ODBTypes.date *
-     [> `Pkg of pkg_str * [> `VersionCreated of ODBTypes.version ] ] *
-     ODBPkgVer.t)
-    Lwt.t
+  val create : ctxt:ODBContext.t -> 'a read_write -> ODBPkgVer.t -> Lwt_io.input_channel -> ODBPkgVer.t Lwt.t
 
   (** Get the directory name of package's version
     *)
@@ -181,13 +169,11 @@ sig
   val oasis_status: 'a read_only -> key -> [`OK | `Not_found | `Error] Lwt.t
 end
 
+type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t
+
 (** Create the datastructure, using the content of the filesystem 
   *)
-val create :
-  ctxt:ODBContext.t ->
-  (#ODBVFS.read_only as 'a) ->
-  (timestamp:CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t) ->
-  ODBLog.t list -> 'a t Lwt.t
+val create : ctxt:ODBContext.t -> (#ODBVFS.read_only as 'a) -> watch -> 'a t Lwt.t
 
 (** Access to the underlying filesystem 
   *)

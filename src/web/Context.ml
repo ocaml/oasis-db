@@ -218,7 +218,37 @@ let init () =
              >>= fun pkg_created_evs ->
              Log.get ~filter:(`Event `VersionCreated) (!sqle ())
              >>= fun pkg_ver_created_evs ->
-             begin 
+             begin
+               (* Filter log from storage *)
+               let module SetLog = 
+                  Set.Make
+                    (struct
+                       type t = ODBLog.event
+
+                       let compare ev1 ev2 = 
+                         Pervasives.compare ev1 ev2
+                     end)
+               in
+               let storage_events =
+                 List.fold_left
+                   (fun st log ->
+                      SetLog.add log.ODBLog.log_event st)
+                   SetLog.empty
+                   (List.rev_append 
+                      pkg_created_evs 
+                      pkg_ver_created_evs)
+               in
+               let rstorage_events =
+                 ref storage_events
+               in
+               let log_storage timestamp ev =
+                 if SetLog.mem ev !rstorage_events then
+                   return (rstorage_events := SetLog.remove ev !rstorage_events)
+                 else
+                   log ~timestamp ev
+               in
+
+               (* Create storage *)
                let fs :> ODBVFS.read_write = 
                  new ODBFSDiskLock.read_write
                    (new ODBFSDisk.read_write (!dist_dir ()))
@@ -232,11 +262,14 @@ let init () =
                              (`Sys ("VFS(dist)", `Message(`Debug, msg))))
                    fs
                in
-                 ODBStorage.create
-                   ~ctxt:(get_odb ()) 
-                   fs
-                   log
-                   (List.rev_append pkg_created_evs pkg_ver_created_evs)
+                 ODBStorage.create ~ctxt:(get_odb ()) fs log_storage
+                 >>= fun stor ->
+                  log ~timestamp:(CalendarLib.Calendar.now ())
+                    (`Sys 
+                       (Printf.sprintf "ODBStorage(%s)" fs#id, 
+                        `Started))
+                 >|= fun () ->
+                 stor
              end
            end
            >>= fun storage' ->
@@ -279,10 +312,10 @@ let init () =
     begin
       let _bkgrd_job = 
       (* TODO: get a semaphore to stop this background job *)
-      ODBIncoming.start
-        ~ctxt:(get_odb ()) 
-        (!storage ())
-        log
+        ODBIncoming.start ~ctxt:(get_odb ()) (!storage ())
+        >>= fun () ->
+        Log.add (!sqle ()) 
+          (`Sys ("incoming watch started", `Started))
       in
         Log.add (!sqle ()) 
           (`Sys ("oasis-db web context", `Started))

@@ -168,8 +168,7 @@ let start_edit ~ctxt sp ((pkg_str, ver) as k) edited =
           new ODBVFSUnion.read_write mem_fs [stor_fs]
         in
           ODBStorage.create ~ctxt:ctxt.odb phantom_fs
-            (fun ~timestamp _ -> return ())
-            []
+            (fun _ _ -> return ())
       end
   end
   >>= fun stor ->

@@ -26,7 +26,7 @@ let add_repository ~ctxt repo fs t =
   (* Build a list of available package version. Take into account
    * repository priority.
    *)
-  ODBStorage.create ~ctxt fs (fun ~timestamp _ -> return ()) []
+  ODBStorage.create ~ctxt fs (fun _ _ -> return ()) 
   >>= fun stor ->
   ODBStorage.Pkg.elements stor 
   >>= fun pkg_lst ->

@@ -160,24 +160,22 @@ let upload_commit ~ctxt t =
   begin
     function 
       | true ->
-          return []
+          return ()
       | false ->
           ODBStorage.Pkg.create 
             ~ctxt 
             t.storage 
             {ODBPkg.pkg_name  = pkg_ver.ODBPkgVer.pkg;
              ODBPkg.pkg_watch = None}
-          >>= fun (timestamp, ev, _) ->
-          return [timestamp, ev]
+          >>= fun pkg ->
+          return ()
   end 
-  >>= fun evs ->
+  >>= fun () ->
 
   LwtExt.IO.MemoryIn.with_file_in t.tarball_content
     (fun chn ->
        ODBStorage.PkgVer.create ~ctxt t.storage pkg_ver chn)
-  >>= fun (timestamp, ev, pkg_ver) ->
-  return ((timestamp, ev) :: evs)
-  >>= fun evs ->
+  >>= fun pkg_ver ->
 
   (* Create _oasis and _oasis.pristine *)
   begin
@@ -203,7 +201,7 @@ let upload_commit ~ctxt t =
 
   (* Clean environment *)
   >>= fun () ->
-  return (List.rev evs, pkg_ver)
+  return pkg_ver
 
 let upload_rollback ~ctxt t = 
   return ()

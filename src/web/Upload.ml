@@ -339,14 +339,7 @@ let upload_confirm_action =
                              (upload,
                               Task.create ~ctxt
                                 (fun ctxt ->
-                                   upload_commit ~ctxt:ctxt.odb upload
-                                   >>= fun (evs, pkg_ver) ->
-                                   Lwt_list.iter_p 
-                                     (fun (timestamp, ev) ->
-                                        Log.add ~timestamp ctxt.Context.sqle ev) 
-                                     evs
-                                   >|= fun () ->
-                                   pkg_ver))
+                                   upload_commit ~ctxt:ctxt.odb upload))
 
                        | str ->
                            failwith (Printf.sprintf (f_ "Unknow action '%s'") str)

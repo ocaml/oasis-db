@@ -86,7 +86,7 @@ let pkg_ver_upload =
        >>= fun upload ->
        ODBUpload.upload_commit ~ctxt:ctxt.odb
          upload
-       >|= fun (_, pkg_ver) ->
+       >|= fun pkg_ver ->
        Printf.sprintf
          (f_ "Package's version %s v%s successfully uploaded.")
          pkg_ver.pkg (OASISVersion.string_of_version pkg_ver.ver),
