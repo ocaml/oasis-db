@@ -72,7 +72,7 @@ let bracket_tmpdir f =
 
 module InotifyExt =
 struct 
-  let default_timeout = 5.0
+  let default_timeout = 10.0
 
   let wait_create ~is_file ?(timeout=default_timeout) topfn = 
 

@@ -26,10 +26,7 @@ let main () =
       (fun acc (repo, repo_sync) ->
          let lst =
            Lwt_unix.run
-             (ODBStorage.create 
-                ~ctxt:ctxt.cli_odb 
-                repo_sync
-                (fun _ _ -> return ())
+             (ODBStorage.create_read_only ~ctxt:ctxt.cli_odb repo_sync
               >>= fun stor ->
               ODBStorage.Pkg.elements stor
               >>= fun lst ->

@@ -10,7 +10,7 @@
     @author Sylvain Le Gall
   *)
 
-type 'a t
+type 'a t constraint 'a = #ODBVFS.read_only
 
 (* Read-only storage *)
 type 'a read_only = (#ODBVFS.read_only as 'a) t
@@ -39,27 +39,27 @@ sig
 
   (** All available packages
     *)
-  val elements : 'a t -> ODBPkg.t list Lwt.t
+  val elements : 'a read_only -> ODBPkg.t list Lwt.t
   
   (** Create a package 
     *)
-  val create : ctxt:ODBContext.t -> 'a read_write -> ODBPkg.t -> ODBPkg.t Lwt.t
+  val create : 'a read_write -> ODBPkg.t -> ODBPkg.t Lwt.t
 
   (** Check the existence of a package
    *)
-  val mem : 'a t -> key -> bool Lwt.t
+  val mem : 'a read_only -> key -> bool Lwt.t
                                      
   (** Get a specific package
     *)
-  val find : 'a t -> key -> ODBPkg.t Lwt.t
+  val find : 'a read_only -> key -> ODBPkg.t Lwt.t
   
   (** Get the directory name of a package 
     *)
-  val dirname : 'a t -> key -> ODBTypes.dirname Lwt.t
+  val dirname : 'a read_only -> key -> dirname
 
   (** Get the relative filename of a package file_type
     *)
-  val filename : 'a t -> key -> file_type -> string Lwt.t
+  val filename : 'a read_only -> key -> file_type -> string Lwt.t
 
   (** Open a package file_type for writing
     *)
@@ -102,42 +102,35 @@ sig
   (** All available version of a package, beginning with the older
       one. You can add an extra elements, if needed.
     *)
-  val elements :
-    ?extra:ODBPkgVer.t ->
-    'a t -> Pkg.key -> 
-    ODBPkgVer.t list Lwt.t
+  val elements : 'a read_only -> Pkg.key -> ODBPkgVer.t list Lwt.t
 
   (** Check the existence of a package's version
    *)
-  val mem : 'a t -> key -> bool Lwt.t
+  val mem : 'a read_only -> key -> bool Lwt.t
 
   (** Get a specific version
     *)
-  val find : 'a t -> key -> ODBPkgVer.t Lwt.t
+  val find : 'a read_only -> key -> ODBPkgVer.t Lwt.t
 
   (** Replace a version 
     *)
-  val replace : 'a t -> key -> ODBPkgVer.t -> unit Lwt.t
+  val replace : 'a read_write -> key -> ODBPkgVer.t -> unit Lwt.t
 
   (** Get the latest version
     *)
-  val latest :
-    ?extra:ODBPkgVer.t -> 
-    'a t -> 
-    Pkg.key -> 
-    ODBPkgVer.t Lwt.t
+  val latest : 'a read_only -> Pkg.key -> ODBPkgVer.t Lwt.t
 
   (** Create a package version 
     *)
-  val create : ctxt:ODBContext.t -> 'a read_write -> ODBPkgVer.t -> Lwt_io.input_channel -> ODBPkgVer.t Lwt.t
+  val create : 'a read_write -> ODBPkgVer.t -> Lwt_io.input_channel -> ODBPkgVer.t Lwt.t
 
   (** Get the directory name of package's version
     *)
-  val dirname : 'a t -> key -> dirname Lwt.t
+  val dirname : 'a read_only -> key -> dirname 
 
   (** Get the relative filename of a package's version file_type
     *)
-  val filename : 'a t -> key -> file_type -> filename Lwt.t
+  val filename : 'a read_only -> key -> file_type -> filename Lwt.t
 
   (** Open a package's version file_type for writing
     *)
@@ -173,7 +166,15 @@ type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t
 
 (** Create the datastructure, using the content of the filesystem 
   *)
-val create : ctxt:ODBContext.t -> (#ODBVFS.read_only as 'a) -> watch -> 'a t Lwt.t
+val create_read_only : ctxt:ODBContext.t -> 'a -> 'a read_only Lwt.t
+
+(** Create the datastructure, using the content of the filesystem 
+  *)
+val create_read_write : ctxt:ODBContext.t -> ?watchers:(watch list) -> 'a -> 'a read_write Lwt.t
+
+(** Go through all packages and generate matching events for watchers
+  *)
+val scan : 'a read_only -> unit Lwt.t
 
 (** Access to the underlying filesystem 
   *)

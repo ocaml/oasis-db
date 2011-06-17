@@ -197,10 +197,13 @@ let upload_completion_box ~ctxt ~sp id upload =
   in
 
   let form =
+    (* TODO: if has_oasis than ver and pkg are not used as parameters
+     * and it creates an error.
+     *)
     post_form 
       ~service:upload_completion_action
       ~sp
-      (fun (publink, (pkg, (ver, (ord, id')))) ->
+      (fun (publink_nm, (pkg_nm, (ver_nm, (ord_nm, id_nm)))) ->
          [p 
             (List.flatten
                [tmpl_field
@@ -218,7 +221,7 @@ let upload_completion_box ~ctxt ~sp id upload =
                   (s_ "Public link: ") 
                   (string_input
                      ~input_type:`Text
-                     ~name:publink
+                     ~name:publink_nm
                      ~value:(match get (fun v -> v.ODBPkgVer.publink) upload.publink with
                                | Some lnk -> lnk
                                | None -> "")
@@ -227,7 +230,7 @@ let upload_completion_box ~ctxt ~sp id upload =
                 string_field_answer
                   ~disabled:has_oasis
                   (s_ "Package: ") 
-                  pkg 
+                  pkg_nm
                   (fun i -> i) 
                   ""
                   (get 
@@ -242,7 +245,7 @@ let upload_completion_box ~ctxt ~sp id upload =
                          else
                            [])
                      ~input_type:`Text
-                     ~name:ver
+                     ~name:ver_nm
                      ~value:(value_of_answer 
                                (fun v -> v)
                                (OASISVersion.version_of_string "")
@@ -254,14 +257,14 @@ let upload_completion_box ~ctxt ~sp id upload =
 
                 int_field_answer
                   (s_ "Order: ")
-                  ord
+                  ord_nm
                   (fun i -> i)
                   0
                   (get 
                      (fun v -> Sure v.ODBPkgVer.ord) 
                      upload.completion.ct_ord);
                 [
-                  int_input ~input_type:`Hidden ~name:id' ~value:id ();
+                  int_input ~input_type:`Hidden ~name:id_nm ~value:id ();
                   string_input ~input_type:`Submit ~value:(s_ "Save") ();
                 ]
                ]);
@@ -273,41 +276,38 @@ let upload_completion_box ~ctxt ~sp id upload =
 (** Preview of the package version page
   *)
 let upload_preview_box ~ctxt ~sp id upload = 
-  begin
-    match upload.completion.ct_oasis with 
-      | Some str -> 
-          ODBOASIS.from_string ~ctxt:ctxt.odb str
-          >>= fun pkg ->
-          return (Some pkg)
-      | None -> 
-          return None
-  end
-  >>= fun pkg_opt ->
-    (* Test our ability to preview a valid storage datastructure *)
-    try 
-      let pkg_ver = 
-        pkg_ver_of_upload upload
-      in
-        PkgVerView.box ~ctxt:(Context.anonymize ctxt) ~sp
-          pkg_ver 
-          (fun () ->
-             return 
-               (XHTML.M.a  
-                  (* TODO: temporary service for upload *)
-                  ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
-                  [pcdata upload.tarball_nm; pcdata (s_ " (backup)")],
-                upload.tarball_nm))
-          pkg_opt
-        >|= fun content ->
-          (h3 [pcdata (s_ "Preview")])
-          ::
-          content
-
-    with Not_found ->
-      return 
-        [h3 [pcdata (s_ "Preview")];
-         p [pcdata (s_ "Not enough data to build a preview")]]
-
+  catch 
+    (fun () ->
+       upload_phantom_storage ~ctxt:ctxt.odb upload
+       >>= fun (pkg_ver, stor) ->
+       ODBStorage.PkgVer.oasis stor (`PkgVer pkg_ver)
+       >>= fun oasis_opt ->
+       begin
+         let ctxt = 
+           {(Context.anonymize ctxt) with stor = stor}
+         in
+           PkgVerView.preview_box ~ctxt ~sp
+             pkg_ver 
+             (fun () ->
+                return 
+                  (XHTML.M.a  
+                     (* TODO: temporary service for upload *)
+                     ~a:[a_href (uri_of_string "http://NOT_UPLOADED")]
+                     [pcdata upload.tarball_nm; pcdata (s_ " (backup)")],
+                   upload.tarball_nm))
+             oasis_opt
+       end)
+    (fun e ->
+       return
+         [html_error
+            [pcdata
+               (Printf.sprintf 
+                  (f_ "Unable to create the package: %s") 
+                  (Printexc.to_string e))]])
+  >|= fun content ->
+  (h3 [pcdata (s_ "Preview")])
+  ::
+  content
 
 (* 
  * Cancel/confirm uploads

@@ -163,7 +163,6 @@ let upload_commit ~ctxt t =
           return ()
       | false ->
           ODBStorage.Pkg.create 
-            ~ctxt 
             t.storage 
             {ODBPkg.pkg_name  = pkg_ver.ODBPkgVer.pkg;
              ODBPkg.pkg_watch = None}
@@ -174,7 +173,7 @@ let upload_commit ~ctxt t =
 
   LwtExt.IO.MemoryIn.with_file_in t.tarball_content
     (fun chn ->
-       ODBStorage.PkgVer.create ~ctxt t.storage pkg_ver chn)
+       ODBStorage.PkgVer.create t.storage pkg_ver chn)
   >>= fun pkg_ver ->
 
   (* Create _oasis and _oasis.pristine *)
@@ -206,3 +205,12 @@ let upload_commit ~ctxt t =
 let upload_rollback ~ctxt t = 
   return ()
 
+let upload_phantom_storage ~ctxt t =
+  ODBStorage.create_read_write ~ctxt 
+    (new ODBVFSUnion.read_write
+       (new ODBFSMemory.read_write (ODBFSTree.root ()))
+       [ODBStorage.fs t.storage])
+  >>= fun storage ->
+  upload_commit ~ctxt {t with storage = storage}
+  >|= fun pkg_ver ->
+  pkg_ver, storage

@@ -235,3 +235,6 @@ let versions_field ~sp pkg_ver_lst pkg_ver_cur_opt pkg_ver_latest =
   in
     add_comma (List.rev lst)
 
+let html_error content = 
+  span ~a:[a_class ["error"]] content
+

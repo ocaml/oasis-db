@@ -167,8 +167,7 @@ let start_edit ~ctxt sp ((pkg_str, ver) as k) edited =
         let phantom_fs = 
           new ODBVFSUnion.read_write mem_fs [stor_fs]
         in
-          ODBStorage.create ~ctxt:ctxt.odb phantom_fs
-            (fun _ _ -> return ())
+          ODBStorage.create_read_write ~ctxt:ctxt.odb phantom_fs
       end
   end
   >>= fun stor ->

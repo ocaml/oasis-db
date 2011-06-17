@@ -8,54 +8,31 @@ open ODBUtils
 open Lwt
 
 module FS = ODBVFS
-module HLS = ODBHLS
-
-(** Storage information for a version 
-  *)
-type pkg_ver_t =
-  {
-    pkg_ver: ODBPkgVer.t;
-    pkg_ver_dir: dirname;
-
-    pkg_ver_oasis_rwlock: ODBRWLock.t;
-    mutable pkg_ver_oasis: 
-      [ `Set of OASISTypes.package 
-      | `Not_set
-      | `Not_found
-      | `Error]
-  }
-
-(** Storage information for a package
-  *)
-type pkg_t = 
-  {
-    pkg:        ODBPkg.t;
-    pkg_dir:    dirname;
-
-    pkg_latest_rwlock: ODBRWLock.t;
-    mutable pkg_latest: ODBPkgVer.t option;
-
-    pkg_vers: pkg_ver_t HLS.t
-  }
 
 type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t
 
-(** Main datastructure *)
-type 'a t = 
-    {
-      stor_fs:       'a;
-      stor_all:      pkg_t HLS.t;
-      stor_ctxt:     ODBContext.t;
-      stor_watchers: watch list; 
-    } 
-
-type 'a read_only = (#FS.read_only as 'a) t
-type 'a read_write = (#FS.read_write as 'a) t
+type oasis_content = 
+    [ `Set of OASISTypes.package 
+    | `Not_found 
+    | `Error
+    ]
 
 type ver_str = string
 type pkg_str = string
 type filename = string
 type dirname = string
+
+(** Main datastructure *)
+type 'a t = 
+    {
+      stor_fs:          'a;
+      stor_ctxt:        ODBContext.t;
+      stor_watchers:    watch list; 
+      stor_cache_oasis: (filename, oasis_content) Hashtbl.t;
+    } constraint 'a = #ODBVFS.read_only
+
+type 'a read_only = (#FS.read_only as 'a) t
+type 'a read_write = (#FS.read_write as 'a) t
 
 exception FileDoesntExist 
 
@@ -66,111 +43,81 @@ let watch_notify t timestamp ev =
        watcher timestamp ev)
     t.stor_watchers
 
+let watch_notify_msg t lvl fmt =
+  Printf.ksprintf
+    (fun s ->
+       watch_notify t 
+         (CalendarLib.Calendar.now ())
+         (`Sys 
+            (Printf.sprintf "ODBStorage(%s)" t.stor_fs#id, 
+             `Message (lvl, s))))
+    fmt
+
 (* Name of the file handling ODBStorage data for a Pkg or a PkgVer *)
 let storage_filename dn =
   Filename.concat dn "storage.sexp"
 
-let check_list ~ctxt msg lst = 
-  let proceed, lst =
-    List.fold_left
-      (fun (proceed, lst) (cond, is_error, msg) ->
-        if cond then
-          if is_error then
-            false, (error ~ctxt "%s" msg :: lst)
-          else
-            proceed, (warning ~ctxt "%s" msg :: lst)
-        else
-          proceed, lst)
-      (true, [])
-      lst
-  in
-    join lst 
-    >>= fun () ->
-    if proceed then 
-      return ()
+let explode_filename fn =
+  let rec explode' acc fn =
+    if FilePath.is_current fn then
+      acc
     else
-      fail (Failure msg)
+      explode' 
+        (FilePath.basename fn :: acc) 
+        (FilePath.dirname fn)
+  in
+    explode' [] fn
 
 module type OPS =
 sig
-  type key_up
-  type key_cur
-  type container_t
-  type element_t
-  type file_type_t
+  type key 
+  type file_type
+  type data 
 
-  val key_up_of_key_cur: key_cur -> key_up
-  val key_str: key_cur -> string
-  val hls_get: 'a t -> key_up -> container_t HLS.t Lwt.t
-  val to_element: container_t -> element_t
-  val to_dir: container_t -> dirname
-  val to_fn: element_t -> file_type_t -> filename
+  val filename: 'a t -> key -> file_type -> data -> filename
+  val dirname:  'a t -> key -> dirname 
+  val from_chn: ctxt:ODBContext.t -> fn:filename -> Lwt_io.input_channel -> data Lwt.t
 end
 
 module Common (O: OPS) =
 struct
-  let hls_get =
-    O.hls_get 
+  type key = O.key 
+  type file_type = O.file_type 
+  type data = O.data
 
-  let get t k =
-    O.hls_get t (O.key_up_of_key_cur k)
+  let dirname = O.dirname 
 
-  (* See ODBStorage.mli *)
-  let elements t ku = 
-    O.hls_get t ku
-    >>= 
-    HLS.elements
-    >|= 
-    List.map (fun (_, cont) -> O.to_element cont)
+  let load t k = 
+    let fn = storage_filename (dirname t k) in
+      ODBVFS.with_file_in t.stor_fs fn
+        (O.from_chn ~ctxt:t.stor_ctxt ~fn)
 
-  (* See ODBStorage.mli *)
-  let mem t k = 
-    catch 
+  let filename t k ft = 
+    load t k 
+    >|= fun data ->
+    O.filename t k ft data
+
+  let mem t k =
+    catch
       (fun () ->
-         get t k 
-         >>= fun hls ->
-         HLS.mem hls (O.key_str k))
-      (function
-         | Not_found ->
-             return false
-         | e ->
-             fail e)
+         load t k
+         >|= fun (data : O.data) ->
+         true)
+      (fun _ ->
+         return false)
 
-  let find_container t k =
-    get t k
-    >>= fun hls ->
-    HLS.find hls (O.key_str k)
-
-  (* See ODBStorage.mli *)
   let find t k =
-    find_container t k
-    >|= fun container -> 
-    O.to_element container
+    catch 
+      (fun () -> 
+         load t k)
+      (fun e ->
+         fail Not_found)
 
-  (* Return dirname and element *)
-  let dirname_and_element t k = 
-    find_container t k
-    >>= fun cont ->
-    return (O.to_element cont, O.to_dir cont)
+  let with_file_out t k ft f =
+    filename t k ft 
+    >>= fun fn ->
+    ODBVFS.with_file_out t.stor_fs fn f
 
-  (* See ODBStorage.mli *)
-  let dirname t k = 
-    dirname_and_element t k
-    >|= fun (_, dn) ->
-    dn
-
-  (* See ODBStorage.mli *)
-  let filename t k fn =
-    dirname_and_element t k 
-    >|= fun (e, dn) ->
-    begin
-      let bn = 
-        O.to_fn e fn
-      in
-        Filename.concat dn bn
-    end
-
-  (* See ODBStorage.mli *)
   let with_file_in ?(catch=(fun e -> fail e)) t k fn read =
     filename t k fn 
     >>= fun fn ->
@@ -179,147 +126,105 @@ struct
     if exists then
       Lwt.catch 
         (fun () ->
-           FS.with_file_in t.stor_fs fn read)
+           ODBVFS.with_file_in t.stor_fs fn read)
         catch
     else
       catch FileDoesntExist
 
-  (* See ODBStorage.mli *)
-  let with_file_out (t: 'a read_write) k fn f =
-    filename t k fn 
+  let file_exists t k ft =
+    filename t k ft 
     >>= fun fn ->
-    FS.with_file_out t.stor_fs fn f 
-
-  (* See ODBStorage.mli *)
-  let file_exists t k fn =
-    filename t k fn
-    >>= fun fn' ->
-    t.stor_fs#file_exists fn'
+    t.stor_fs#file_exists fn
 end
 
 module Pkg = 
 struct
   open ODBPkg 
 
-  type file_type = 
-      [ `Other of string 
-      | `PluginData of string]
-
-  type key =
-      [ `Str of pkg_str
-      | `Pkg of t
-      | `PkgVer of ODBPkgVer.t]
-
   module Common = 
     Common
       (struct
-         type key_up = unit
-         type key_cur = key
-         type container_t = pkg_t
-         type element_t = ODBPkg.t
-         type file_type_t = file_type
+         type file_type = 
+             [ `Other of string 
+             | `PluginData of string]
 
-         let key_up_of_key_cur = ignore
+         type key =
+             [ `Str of pkg_str
+             | `Pkg of t
+             | `PkgVer of ODBPkgVer.t]
 
-         let key_str =
+         type data = ODBPkg.t
+
+         let dirname t =
            function
              | `Str s -> s
              | `Pkg t -> t.pkg_name
              | `PkgVer pkg_ver -> pkg_ver.ODBPkgVer.pkg
 
-         let hls_get t _ = return t.stor_all
-         let to_element cont = cont.pkg
-         let to_dir cont = cont.pkg_dir
-         let to_fn _ =
-           function 
-             | `PluginData plg -> plg^".sexp"
-             | `Other fn -> fn
+         let filename t k ft _ =
+           let fdn fn = FilePath.concat (dirname t k) fn in
+             match ft with
+               | `Other fn -> fdn fn
+               | `PluginData fn -> fdn (fn^".sexp")
+
+         let from_chn ~ctxt ~fn chn = 
+           ODBPkg.from_chn ~ctxt ~fn chn
        end)
 
   include Common
 
   (* See ODBStorage.mli *)
   let elements t = 
-    elements t ()
-
-  (* Add a package that is already in the filesystem *)
-  let add ~ctxt t dn =  
-    let storage_fn = 
-      storage_filename dn 
-    in
-      FS.with_file_in t.stor_fs storage_fn
-        (ODBPkg.from_chn ~ctxt ~fn:storage_fn)
-      >>= fun ({pkg_name = pkg_str} as pkg) ->
-      HLS.mem t.stor_all pkg_str
-      >>= fun pkg_exists ->
-      begin
-        let bn = 
-          Filename.basename dn
-        in
-          check_list ~ctxt 
-            (spf 
-               (f_ "Adding package '%s' from directory '%s'")
-               pkg_str dn)
-            [
-              bn <> pkg_str,
-              false,
-              spf (f_ "Storage file '%s' matches package '%s' but is in \
-                       directory '%s'")
-                storage_fn pkg_str bn;
-
-              pkg_exists,
-              true,
-              spf (f_ "Storage file '%s' defines package '%s' previously \
-                       defined.") 
-                storage_fn pkg_str;
-            ]
-      end 
-      >>= fun () ->
-      t.stor_fs#stat storage_fn
-      >>= fun stat ->
-      begin
-        let date =
-          CalendarLib.Calendar.from_unixfloat
-            stat.Unix.LargeFile.st_mtime
-        in
-        let pkg_t = 
-          {
-            pkg      = pkg;
-            pkg_dir  = dn;
-            pkg_vers = HLS.create ();
-
-            pkg_latest = None;
-            pkg_latest_rwlock = ODBRWLock.create ();
-          }
-        in
-          HLS.add t.stor_all pkg_str pkg_t
-          >>= fun () ->
-          watch_notify t date (`Pkg (pkg_str, `Created))
-          >|= fun () ->
-          pkg
-      end
+    catch 
+      (fun () ->
+         t.stor_fs#readdir ""
+         >>= fun arr ->
+         Lwt_list.fold_left_s
+           (fun acc pkg_str ->
+              catch 
+                (fun () ->
+                   load t (`Str pkg_str)
+                   >>= fun pkg ->
+                   if pkg.pkg_name = pkg_str then
+                     return (pkg :: acc)
+                   else
+                     watch_notify_msg t 
+                       `Error
+                       (f_ "Storage file '%s' matches packages '%s' \
+                            but is in directory '%s'")
+                       (storage_filename (dirname t (`Str pkg_str)))
+                       pkg.pkg_name 
+                       pkg_str
+                     >|= fun () ->
+                     acc)
+                (fun _ ->
+                   return acc))
+           []
+           (Array.to_list arr))
+      (function
+         | Unix.Unix_error (Unix.ENOENT, _, _) 
+         | Sys_error _ ->
+             fail Not_found
+         | e ->
+             fail e)
 
   (* See ODBStorage.mli *)
-  let create ~ctxt (t: 'a read_write) pkg = 
-    let pkg_str = 
-      pkg.pkg_name
-    in
-      t.stor_fs#mkdir pkg_str 0o755
+  let create (t: 'a read_write) pkg = 
+    let dn = dirname t (`Str pkg.pkg_name) in
+      t.stor_fs#mkdir dn 0o755
       >>= fun () ->
       catch 
         (fun () ->
            begin
-             let fn = 
-               storage_filename pkg_str
-             in
+             let fn = storage_filename dn in
                FS.with_file_out 
                  t.stor_fs fn
-                 (ODBPkg.to_chn ~ctxt ~fn pkg)
-           end
-           >>= fun () ->
-           add ~ctxt t pkg.pkg_name)
+                 (ODBPkg.to_chn ~ctxt:t.stor_ctxt ~fn pkg)
+               >>= fun () ->
+               load t (`Pkg pkg)
+           end)
         (fun e ->
-           t.stor_fs#rm ~recurse:true [pkg_str]
+           t.stor_fs#rm ~recurse:true [dn]
            >>= fun () ->
            fail e)
 end
@@ -329,253 +234,160 @@ struct
 
   open ODBPkgVer
 
-  type file_type =
-    [ `OASIS
-    | `OASISPristine
-    | `Other of filename
-    | `PluginData of string
-    | `Tarball ]
-
-  type key = 
-      [ `Str of pkg_str * ver_str
-      | `StrVer of pkg_str * OASISVersion.t
-      | `PkgVer of ODBPkgVer.t]
-
-  module Common =
+  module Common = 
     Common
       (struct
-         type key_up = Pkg.key
-         type key_cur = key
-         type container_t = pkg_ver_t
-         type element_t = ODBPkgVer.t
-         type file_type_t = file_type
+          type file_type =
+            [ `OASIS
+            | `OASISPristine
+            | `Other of filename
+            | `PluginData of string
+            | `Tarball ]
 
-         let key_up_of_key_cur =
-           function
-             | `Str (pkg_str, _) 
-             | `StrVer (pkg_str, _)
-             | `PkgVer {pkg = pkg_str} -> 
-                 `Str pkg_str
+          type key = 
+              [ `Str of pkg_str * ver_str
+              | `StrVer of pkg_str * OASISVersion.t
+              | `PkgVer of ODBPkgVer.t]
 
-         let key_str =
-           function
-             | `Str (_, ver_str) -> 
-                 ver_str
-             | `StrVer (_, ver) ->
-                 OASISVersion.string_of_version ver
-             | `PkgVer pkg_ver -> 
-                 OASISVersion.string_of_version pkg_ver.ver
+          type data = ODBPkgVer.t
 
-         let hls_get t ku =
-           Pkg.find_container t ku
-           >>= fun pkg_strg ->
-           return pkg_strg.pkg_vers
 
-         let to_element cont = cont.pkg_ver
-         let to_dir cont = cont.pkg_ver_dir
-         let to_fn e = 
-           function 
-             | `OASIS -> "_oasis"
-             | `OASISPristine -> "_oasis.pristine"
-             | `Tarball -> e.tarball
-             | `PluginData nm -> nm^".sexp"
-             | `Other fn -> fn
+          let key_str =
+            function
+              | `Str (_, ver_str) -> 
+                  ver_str
+              | `StrVer (_, ver) ->
+                  OASISVersion.string_of_version ver
+              | `PkgVer pkg_ver -> 
+                  OASISVersion.string_of_version pkg_ver.ver
+
+          let dirname t k = 
+            let pkg_str, dn2 =
+              match k with 
+                | `Str (pkg_str, ver_str) -> 
+                    pkg_str, ver_str
+                | `StrVer (pkg_str, ver) ->
+                    pkg_str, 
+                    OASISVersion.string_of_version ver
+                | `PkgVer pkg_ver ->
+                    pkg_ver.pkg,
+                    OASISVersion.string_of_version pkg_ver.ver 
+            in
+              FilePath.concat (Pkg.dirname t (`Str pkg_str)) dn2
+
+          let from_chn ~ctxt ~fn chn = 
+            ODBPkgVer.from_chn ~ctxt ~fn chn
+
+          let filename t k ft pkg_ver = 
+            let fdn fn = FilePath.concat (dirname t k) fn in
+              match ft with 
+                | `OASIS -> 
+                    fdn "_oasis"
+                | `OASISPristine -> 
+                    fdn "_oasis.pristine"
+                | `PluginData nm -> 
+                    fdn (nm^".sexp")
+                | `Other fn ->
+                    fdn fn
+                | `Tarball -> 
+                    FilePath.concat (dirname t k) pkg_ver.tarball
        end)
 
   include Common
 
   (* See ODBStorage.mli *)
   let replace t k pkg_ver = 
-    let ku = 
-      match k with 
-        | `Str (pkg_str, _) 
-        | `StrVer (pkg_str, _)
-        | `PkgVer {pkg = pkg_str} ->
-            `Str pkg_str
-    in
-    let ver_str =
-      match k with 
-        | `Str (_, ver_str) ->
-            ver_str
-        | `StrVer (_, ver)
-        | `PkgVer {ver = ver} ->
-            OASISVersion.string_of_version ver
-    in
-      Pkg.find_container t ku
-      >>= fun pkg_cont ->
-      HLS.find pkg_cont.pkg_vers ver_str 
-      >>= fun pkg_ver_frmr ->
-      (* TODO: remove former version or assert(old_ver = new_ver) *)
-      HLS.add pkg_cont.pkg_vers 
-        (OASISVersion.string_of_version pkg_ver.ver)
-        {pkg_ver_frmr with 
-             pkg_ver = pkg_ver}
+    let dn  = dirname t k in
+    let dn' = dirname t (`PkgVer pkg_ver) in
+      if dn <> dn' then
+        fail
+          (Failure
+             (Printf.sprintf 
+                (f_ "Unable to replace '%s' by '%s'")
+                dn dn'))
+      else
+        let fn = storage_filename dn in
+          ODBVFS.with_file_out t.stor_fs fn
+            (ODBPkgVer.to_chn ~ctxt:t.stor_ctxt ~fn pkg_ver)
 
   (* See ODBStorage.mli *)
-  let elements ?extra t pkg_k = 
-    elements t pkg_k
-    >|= fun lst ->
-    begin
-      let lst = 
-        match extra with 
-          | Some pkg_ver -> 
-              if List.exists 
-                   (fun pkg_ver' ->
-                      pkg_ver'.ODBPkgVer.ver = pkg_ver.ODBPkgVer.ver &&
-                      pkg_ver'.ODBPkgVer.pkg = pkg_ver.ODBPkgVer.pkg)
-                   lst then
-                lst
-              else
-                pkg_ver :: lst
-          | None -> lst
-      in
-        List.sort ODBPkgVer.compare lst
-    end
+  let elements t pkg_k = 
+    let dn = Pkg.dirname t pkg_k in
+    let pkg_str = 
+      match pkg_k with 
+        | `Str pkg_str 
+        | `Pkg {ODBPkg.pkg_name = pkg_str}
+        | `PkgVer {pkg = pkg_str} ->
+            pkg_str
+    in
+      catch 
+        (fun () -> 
+           t.stor_fs#readdir dn
+           >>= fun arr ->
+           Lwt_list.fold_left_s
+             (fun acc ver_str ->
+                catch 
+                  (fun () -> 
+                     let k = `Str (pkg_str, ver_str) in
+                     let dn = dirname t k in
+                       t.stor_fs#is_directory dn 
+                       >>= fun is_dir ->
+                       begin
+                         if is_dir then
+                           begin
+                             load t k
+                             >|= fun pkg_ver ->
+                             pkg_ver :: acc
+                           end
+                         else
+                           begin
+                             return acc
+                           end
+                       end)
+                  (fun _ ->
+                     return acc))
+             []
+             (Array.to_list arr)
+           >|= fun lst ->
+           List.sort ODBPkgVer.compare lst)
+        (function
+           | Unix.Unix_error (Unix.ENOENT, _, _) 
+           | Sys_error _ ->
+               fail Not_found
+           | e ->
+               fail e)
     
   (* See ODBStorage.mli *)
-  let latest ?extra t ku = 
-    Pkg.find_container t ku
-    >>= fun pkg_cont ->
-    ODBRWLock.with_read_lock 
-      pkg_cont.pkg_latest_rwlock
-      (fun () ->
-         match pkg_cont.pkg_latest, extra with
-           | Some e, Some e' ->
-               begin
-                 try 
-                   if ODBPkgVer.compare e e' < 0 then
-                     begin
-                       return e'
-                     end
-                   else
-                     begin
-                       return e
-                     end
-                 with e ->
-                   fail e
-               end
-
-           | None, Some e 
-           | Some e, None ->
-               return e
-           | None, None ->
-               fail Not_found)
-
-  (** Add a package version that is already in the dist_dir 
-    *)
-  let add ~ctxt t pkg_str dn = 
-    let storage_fn = 
-      storage_filename dn 
-    in
-      FS.with_file_in t.stor_fs storage_fn 
-        (ODBPkgVer.from_chn ~ctxt ~fn:storage_fn)
-      >>= fun pkg_ver ->
-      return (OASISVersion.string_of_version pkg_ver.ODBPkgVer.ver)
-      >>= fun ver_str ->
-      Pkg.find_container t (`Str pkg_str)
-      >>= fun pkg_cont ->
-      HLS.mem pkg_cont.pkg_vers ver_str
-      >>= fun ver_exists ->
-      Pkg.dirname t (`Str pkg_str)
-      >>= fun pkg_dn ->
-      begin
-        let bn = 
-          Filename.basename dn 
-        in
-          check_list ~ctxt
-            (spf 
-               (f_ "Adding version '%s' to package '%s' from directory '%s'")
-               ver_str pkg_str dn)
-            [
-              FilePath.is_subdir pkg_dn dn,
-              false,
-              spf (f_ "Directory '%s' is not a subdirectory of package dir '%s'")
-                dn pkg_dn;
-
-              bn <> ver_str,
-              false,
-              spf (f_ "Storage file '%s' is version '%s' but is contained \
-                       in directory '%s'") storage_fn ver_str bn;
-
-              ver_exists,
-              false,
-              spf (f_ "Storage file '%s' defines version '%s' previously \
-                       defined.") storage_fn ver_str;
-
-              pkg_ver.ODBPkgVer.pkg <> pkg_str,
-              true, 
-              spf (f_ "Storage file '%s' belongs to package '%s' but \
-                       is stored in package '%s'.")
-                storage_fn pkg_ver.ODBPkgVer.pkg pkg_str;
-            ]
-      end
-      >>= fun () ->
-      begin
-        let pkg_ver_t = 
-          {
-            pkg_ver              = pkg_ver;
-            pkg_ver_dir          = dn;
-            pkg_ver_oasis        = `Not_set;
-            pkg_ver_oasis_rwlock = ODBRWLock.create ();
-          }
-        in
-          latest ~extra:pkg_ver t (`Str pkg_str)
-          >>= fun e ->
-          begin
-            if e = pkg_ver then
-              ODBRWLock.with_write_lock 
-                pkg_cont.pkg_latest_rwlock
-                (fun () ->
-                   return (pkg_cont.pkg_latest <- Some pkg_ver))
-            else
-              return ()
-          end
-          >>= fun () ->
-          HLS.add pkg_cont.pkg_vers ver_str pkg_ver_t
-          >>= fun () ->
-          watch_notify 
-            t
-            pkg_ver.ODBPkgVer.upload_date
-            (`Pkg (pkg_ver.ODBPkgVer.pkg, 
-                   `VersionCreated pkg_ver.ODBPkgVer.ver))
-          >|= fun () ->
-          pkg_ver
-      end
+  let latest t pkg_k = 
+    elements t pkg_k 
+    >>= fun lst ->
+      match List.rev lst with 
+        | hd :: tl ->
+            return hd
+        | [] -> 
+            fail Not_found
 
   (* See ODBStorage.mli *)
-  let create ~ctxt (t: 'a read_write) pkg_ver tarball_chn = 
-    catch 
-      (fun () -> 
-         Pkg.dirname t (`PkgVer pkg_ver))
-      (function
-         | Not_found as e -> 
-             error ~ctxt 
-               (f_ "Package '%s' doesn't exist") 
-               pkg_ver.ODBPkgVer.pkg
-             >>= fun () ->
-             fail e
-         | e ->
-             fail e)
-    >>= fun pkg_dn ->
+  let create (t: 'a read_write) pkg_ver tarball_chn = 
+    Pkg.mem t (`PkgVer pkg_ver)
+    >>= fun pkg_exists ->
     begin
-      let dn = 
-        Filename.concat pkg_dn 
-          (OASISVersion.string_of_version 
-             pkg_ver.ODBPkgVer.ver)
-      in
+      if pkg_exists then
+        return ()
+      else
+        fail
+          (Failure 
+             (Printf.sprintf 
+                (f_ "Package '%s' doesn't exist") 
+                pkg_ver.ODBPkgVer.pkg))
+    end
+    >>= fun () ->
+    begin
+      let dn = dirname t (`PkgVer pkg_ver) in
         t.stor_fs#mkdir dn 0o755 
         >>= fun () ->
         catch 
           (fun () ->
-             (* Create storage.sexp *)
-             begin
-               let fn = storage_filename dn in
-                 FS.with_file_out 
-                   t.stor_fs fn
-                   (ODBPkgVer.to_chn ~ctxt ~fn pkg_ver)
-             end
-             >>= fun () ->
-
              (* Copy the tarball *)
              begin
                let fn = Filename.concat dn pkg_ver.ODBPkgVer.tarball in
@@ -587,8 +399,16 @@ struct
              end
              >>= fun () ->
 
-             (* Notify installation of a new package version *)
-             add ~ctxt t pkg_ver.ODBPkgVer.pkg dn)
+             (* Create storage.sexp *)
+             begin
+               let fn = storage_filename dn in
+                 FS.with_file_out 
+                   t.stor_fs fn
+                   (ODBPkgVer.to_chn ~ctxt:t.stor_ctxt ~fn pkg_ver)
+             end
+             >>= fun () ->
+
+             load t (`PkgVer pkg_ver))
 
           (fun e ->
              t.stor_fs#rm ~recurse:true [dn]
@@ -597,54 +417,37 @@ struct
     end
 
   let oasis_load t k =
+      filename t k `OASIS 
+      >>= fun fn ->
+      catch 
+        (fun () -> 
+           ODBVFS.with_file_in t.stor_fs fn
+             (fun chn ->
+                ODBOASIS.from_chn 
+                  ~ctxt:t.stor_ctxt 
+                  ~fn:(t.stor_fs#vroot fn) chn
+                >|= fun oasis ->
+                `Set oasis))
+        (fun _ ->
+           t.stor_fs#file_exists fn
+           >|= fun exists ->
+             if exists then
+               `Error
+             else
+               `Not_found)
+      >|= fun oasis_set ->
+      begin
+        Hashtbl.replace t.stor_cache_oasis fn oasis_set;
+        oasis_set
+      end
+
+  let oasis_get t k =
     filename t k `OASIS
     >>= fun fn ->
-    with_file_in t k `OASIS
-      ~catch:(function 
-                | FileDoesntExist ->
-                    return `Not_found
-                | e ->
-                    return `Error)
-      (fun chn ->
-         ODBOASIS.from_chn 
-           ~ctxt:t.stor_ctxt 
-           ~fn:(t.stor_fs#vroot fn) chn
-         >|= fun oasis ->
-         `Set oasis)
-    >>= fun oasis_set ->
-    find_container t k
-    >>= fun pkg_ver_cont ->
-    ODBRWLock.with_write_lock 
-      pkg_ver_cont.pkg_ver_oasis_rwlock
-      (fun () ->
-         return (pkg_ver_cont.pkg_ver_oasis <- oasis_set))
-
-  let with_file_out t k fn write =
-    finalize
-      (fun () -> 
-         with_file_out t k fn write)
-      (fun () ->
-         find_container t k 
-         >>= fun pkg_ver_cont ->
-         ODBRWLock.with_write_lock
-           pkg_ver_cont.pkg_ver_oasis_rwlock
-           (fun () ->
-              return (pkg_ver_cont.pkg_ver_oasis <- `Not_set)))
-
-  let rec oasis_get t k =
-    find_container t k 
-    >>= fun pkg_ver_cont ->
-    ODBRWLock.with_read_lock 
-      pkg_ver_cont.pkg_ver_oasis_rwlock
-      (fun () -> return pkg_ver_cont.pkg_ver_oasis)
-    >>= 
-      function
-        | `Set _ | `Not_found | `Error as e ->
-            return e
-        | `Not_set ->
-            oasis_load t k
-            >>= fun () ->
-            oasis_get t k
+    try 
+      return (Hashtbl.find t.stor_cache_oasis fn)
+    with Not_found ->
+      oasis_load t k
 
   let rec oasis t k = 
     oasis_get t k
@@ -665,50 +468,91 @@ struct
             e
 end
 
-(* See ODBStorage.mli *)
-let create ~ctxt fs watch =
+(* Generate events for the watchers *)
+let fs_watcher t fn ev = 
+  catch 
+    (fun () ->
+       t.stor_fs#stat fn 
+       >|= fun st ->
+       CalendarLib.Calendar.from_unixfloat st.Unix.LargeFile.st_mtime )
+    (fun _ ->
+       return (CalendarLib.Calendar.now ()))
+  >>= fun fn_time ->
+  match explode_filename fn with 
+    | [pkg_str; "storage.sexp"] ->
+        begin
+          match ev with 
+            | ODBVFS.FSCreated ->
+                watch_notify t fn_time (`Pkg (pkg_str, `Created))
+            | ODBVFS.FSDeleted ->
+                watch_notify t fn_time (`Pkg (pkg_str, `Deleted))
+            | ODBVFS.FSChanged 
+            | ODBVFS.FSMovedTo _ 
+            | ODBVFS.FSCopiedFrom _ ->
+                return ()
+        end
+    | [pkg_str; ver_str; "storage.sexp"] ->
+        begin
+          let ver = OASISVersion.version_of_string ver_str in
+            match ev with 
+              | ODBVFS.FSCreated ->
+                  watch_notify t fn_time (`Pkg (pkg_str, `VersionCreated ver))
+              | ODBVFS.FSDeleted ->
+                  watch_notify t fn_time (`Pkg (pkg_str, `VersionDeleted ver))
+              | ODBVFS.FSChanged 
+              | ODBVFS.FSMovedTo _ 
+              | ODBVFS.FSCopiedFrom _ ->
+                  return ()
+        end
+    | _ ->
+        if FilePath.basename fn = "_oasis" then
+          return (Hashtbl.remove t.stor_cache_oasis fn)
+        else
+          return ()
+
+let create ~ctxt ?(watchers=[]) fs  =
   let res =
     {
-      stor_fs       = fs;
-      stor_all      = HLS.create ();
-      stor_ctxt     = ctxt;
-      stor_watchers = [watch];
+      stor_fs          = fs;
+      stor_ctxt        = ctxt;
+      stor_watchers    = watchers;
+      stor_cache_oasis = Hashtbl.create 13;
     }
   in
-
-  let add_versions pkg_str dn =
-    FS.fold_dir
-      (fun fn bn () ->
-         fs#is_directory fn
-         >>= fun is_dir ->
-           if is_dir then
-             (* Maybe a version *)
-             PkgVer.add ~ctxt res pkg_str fn 
-             >|= fun pkg_ver ->
-             ()
-           else
-             return ())
-      fs dn ()
-  in
-
-  let add_packages dn = 
-    FS.fold_dir 
-      (fun fn bn () ->
-         fs#is_directory fn
-         >>= fun is_dir ->
-           if is_dir then
-             (* Maybe a package *)
-             Pkg.add ~ctxt res fn
-             >>= fun {ODBPkg.pkg_name = pkg_str} ->
-             add_versions pkg_str fn
-           else
-             return ())
-      fs dn ()
-  in
-
-    add_packages "" 
+    watch_notify res
+      (CalendarLib.Calendar.now ())
+      (`Sys 
+         (Printf.sprintf "ODBStorage(%s)" fs#id, 
+          `Started))
     >>= fun () ->
     return res
+
+(* See ODBStorage.mli *)
+let create_read_only ~ctxt fs =
+  create ~ctxt fs 
+
+(* See ODBStorage.mli *)
+let create_read_write ~ctxt ?watchers fs  =
+  create ~ctxt ?watchers fs
+  >|= fun res ->
+  begin
+    let _i : int =
+      res.stor_fs#watch_add (fs_watcher res)
+    in
+      res
+  end
+
+(* See ODBStorage.mli *)
+let scan t =
+  FS.fold 
+    (fun efn () ->
+       match efn with 
+         | `PostDir _ | `PreDir _ ->
+             return ()
+
+         | `File fn ->
+             fs_watcher t fn ODBVFS.FSCreated)
+    t.stor_fs "" () 
 
 (* See ODBStorage.mli *)
 let fs t = t.stor_fs

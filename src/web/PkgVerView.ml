@@ -124,7 +124,7 @@ let oasis_fields ~ctxt ~sp pkg =
             | Some e ->
                 f e
             | None ->
-                span ~a:[a_class ["error"]] err
+                html_error err
         in
 
         let vcs_get = 
@@ -357,29 +357,9 @@ let oasis_fields ~ctxt ~sp pkg =
   end
 
 let box ~ctxt ~sp pkg_ver backup_link oasis_opt = 
-  (catch 
-     (fun () ->
-        ODBStorage.PkgVer.elements 
-          ~extra:pkg_ver 
-          ctxt.stor 
-          (`PkgVer pkg_ver))
-     (function 
-        | Not_found ->
-            return [pkg_ver]
-        | e ->
-            fail e))
+  ODBStorage.PkgVer.elements ctxt.stor (`PkgVer pkg_ver)
   >>= fun pkg_ver_lst ->
-  catch 
-    (fun () ->
-       ODBStorage.PkgVer.latest 
-         ~extra:pkg_ver 
-         ctxt.stor
-         (`PkgVer pkg_ver))
-    (function 
-       | Not_found ->
-           return pkg_ver
-       | e ->
-           fail e)
+  ODBStorage.PkgVer.latest  ctxt.stor (`PkgVer pkg_ver)
   >>= fun pkg_ver_latest ->
   backup_link () 
   >>= fun (a_backup, fn_backup) ->
@@ -485,6 +465,17 @@ let box ~ctxt ~sp pkg_ver backup_link oasis_opt =
       comment_box;
     ]
 
+let preview_box ~ctxt ~sp pkg_ver backup_link oasis_opt =
+  catch 
+    (fun () ->
+       box ~ctxt ~sp pkg_ver backup_link oasis_opt)
+    (fun e ->
+       return
+         [html_error
+            [pcdata 
+               (s_ "An error occured while creating the preview \
+                    of the package")]])
+
 let page ~ctxt ~sp pkg_ver = 
   (* Load OASIS file *)
   ODBStorage.PkgVer.oasis ctxt.stor (`PkgVer pkg_ver) 
@@ -502,7 +493,17 @@ let page ~ctxt ~sp pkg_ver =
                  (FilePath.basename fn))])
         `Tarball
     in
-      box ~ctxt ~sp pkg_ver backup_link oasis_opt
+      catch 
+        (fun () ->
+           box ~ctxt ~sp pkg_ver backup_link oasis_opt)
+        (fun e ->
+           return
+             [html_error
+                [pcdata 
+                   (Printf.sprintf
+                      (f_ "An error occured while creating the \
+                           view of the package: %s")
+                      (Printexc.to_string e))]])
   end
   >>= fun box ->
   Monitor.pkg_ver_box ~sp ~ctxt ()

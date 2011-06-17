@@ -262,14 +262,38 @@ let init () =
                              (`Sys ("VFS(dist)", `Message(`Debug, msg))))
                    fs
                in
-                 ODBStorage.create ~ctxt:(get_odb ()) fs log_storage
+                 ODBStorage.create_read_write 
+                   ~ctxt:(get_odb ()) 
+                   ~watchers:[log_storage] 
+                   fs 
                  >>= fun stor ->
-                  log ~timestamp:(CalendarLib.Calendar.now ())
-                    (`Sys 
-                       (Printf.sprintf "ODBStorage(%s)" fs#id, 
-                        `Started))
-                 >|= fun () ->
-                 stor
+                 (* This function generates Created and Version created events
+                  *)
+                 ODBStorage.scan stor
+(* TODO: activate when we will filter event creation with already made 
+                 >>= fun () ->
+                 (* Once we finish the previous function rstorage_events 
+                  * contains only creation that doesn't appear anymore in
+                  * the storage, we generate matching events to fix that
+                  *)
+ * event deletion
+                 SetLog.fold
+                   (fun cont ev ->
+                      let ev' = 
+                        match ev with 
+                          | `Pkg (pkg_str, `Created) ->
+                              `Pkg (pkg_str, `Deleted)
+                          | `Pkg (pkg_str, `VersionCreated ver) ->
+                              `Pkg (pkg_str, `VersionDeleted ver) 
+                      in
+                        cont >>= fun () ->
+                        log_storage (CalendarLib.Calendar.now ()) ev')
+                   (return ())
+                   !rstorage_events
+ *)
+                >|= fun () ->
+                rstorage_events := SetLog.empty;
+                stor
              end
            end
            >>= fun storage' ->

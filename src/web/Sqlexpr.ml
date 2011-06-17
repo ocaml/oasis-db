@@ -34,11 +34,9 @@ let create ?(log) ?(n=5) fn =
        match log with 
          | Some f ->
              fun s ->
-               prerr_endline "coucou1";
                f s
          | None ->
              fun s ->
-               prerr_endline "coucou";
                Lwt_io.eprintl s
      in
        Printf.ksprintf output fmt
