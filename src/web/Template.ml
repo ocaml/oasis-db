@@ -126,7 +126,7 @@ let template_skeleton ~sp ~title ?(extra_headers=[]) ~div_id account_box ctnt =
                [
                  (div ~a:[a_class ["copyright"]]
                     [
-                      pcdata (s_ "(C) Copyright 2010-2011, ");
+                      pcdata (s_ "(C) 2010-2011, ");
                       ocamlcore_link;
                       pcdata ", ";
                       janest_link
