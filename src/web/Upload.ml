@@ -83,195 +83,161 @@ let upload_template ~ctxt ~sp ?extra_headers ctnt =
  * Edit data of completion
  *)
 
-let upload_completion_action =
-  Eliom_predefmod.Action.register_new_post_coservice'
-    ~name:"upload_completion_action" 
-    ~post_params:(opt (string "publink") **
-                  string "package" **
-                  ExtParams.version "version" **
-                  int "order" **
-                  int "id")
-    ~keep_get_na_params:false
-    (fun sp _ (publink, (pkg, (version, (ord, id)))) ->
-       Context.get_user ~sp ()
-       >>= fun (ctxt, _) ->
-       begin
-         match upload_data_get ~sp id with
-           | Edit (upload, log) ->
-               begin
-                 let ctxt = 
-                   LogBox.set log ctxt
-                 in
+let upload_completion_box ~ctxt ~sp id upload =
 
-                 let completion =
-                   let completion = 
-                     upload.completion 
+  let service =
+    Eliom_predefmod.Action.register_new_post_coservice_for_session'
+      ~sp
+      ~name:"upload_completion_action" 
+      ~post_params:(opt (string "publink") **
+                    string "package" **
+                    ExtParams.version "version" **
+                    int "order" **
+                    int "id")
+      ~keep_get_na_params:false
+      (fun sp _ (publink, (pkg, (version, (ord, id)))) ->
+         Context.get_user ~sp ()
+         >>= fun (ctxt, _) ->
+         begin
+           match upload_data_get ~sp id with
+             | Edit (upload, log) ->
+                 begin
+                   let upload = 
+                     {upload with 
+                          publink = publink;
+                          completion = {upload.completion with 
+                                            ct_pkg = Sure pkg;
+                                            ct_ver = Sure version;
+                                            ct_ord = Sure ord}}
                    in
-                     if completion.ct_oasis <> None then
-                       (* If we have _oasis, never set pkg/ver *)
-                       {completion with ct_ord = Sure ord}
-                     else
-                       {completion with 
-                            ct_pkg = Sure pkg;
-                            ct_ver = Sure version;
-                            ct_ord = Sure ord}
-                 in
+                     upload_data_set ~sp id (Edit (upload, log));
+                     return ()
+                 end
 
-                 let upload = 
-                   {upload with 
-                        publink = publink;
-                        completion = completion}
-                 in
-                 let pkg_ver =
-                   pkg_ver_of_upload upload
-                 in
-                   if ODBPkgVer.check ~ctxt:ctxt.odb pkg_ver then 
-                     upload_data_set ~sp 
-                       id (Edit (upload, log));
-                   return ()
-               end
-
-           | Begin _ | Commit _ | Cancel _ ->
-               fail StateTransitionNotAllowed
-       end)
-
-let upload_completion_box ~ctxt ~sp id upload = 
-  let value_of_answer printer dflt vl = 
-    match vl with 
-      | Sure vl ->
-          printer vl
-      | Unsure (_, vl) ->
-          printer vl
-      | NotFound ->
-          dflt
+             | Begin _ | Commit _ | Cancel _ ->
+                 fail StateTransitionNotAllowed
+         end)
   in
 
-  let tmpl_field ttl input =
-    [
-      pcdata ttl; input; br ();
-    ]
-  in
-
-  let string_field_answer ?(disabled=false) ttl nm printer dflt vl = 
-    let vl = 
-      value_of_answer printer dflt vl
-    in
-      tmpl_field 
-        ttl 
-        (string_input
-           ~a:(if disabled then
-                 [a_disabled `Disabled]
-               else
-                 [])
-           ~input_type:`Text
-           ~name:nm 
-           ~value:vl ())
-  in
-
-  let int_field_answer ttl nm printer dflt vl = 
-    let vl = 
-      value_of_answer printer dflt vl
-    in
-      tmpl_field
-        ttl
-        (int_input
-           ~input_type:`Text
-           ~name:nm ~value:vl ())
-  in
-
-  let pkg_ver_opt = 
-    try 
-      Some (pkg_ver_of_upload upload)
-    with Not_found ->
-      None
-  in
-
-  let has_oasis = 
-    upload.completion.ct_oasis <> None  
-  in
-
-  let get fver vt = 
-    match pkg_ver_opt with 
-      | Some v -> fver v
-      | None -> vt
+  let has_oasis =
+    upload.completion.ct_oasis <> None 
   in
 
   let form =
-    (* TODO: if has_oasis than ver and pkg are not used as parameters
-     * and it creates an error.
-     *)
-    post_form 
-      ~service:upload_completion_action
-      ~sp
+    post_form ~service ~sp
       (fun (publink_nm, (pkg_nm, (ver_nm, (ord_nm, id_nm)))) ->
-         [p 
-            (List.flatten
-               [tmpl_field
-                  (s_ "Tarball: ")
-                  (pcdata (get (fun v -> v.ODBPkgVer.tarball) upload.tarball_nm));
-                tmpl_field
-                  (s_ "Has _oasis file: ")
-                  (pcdata 
-                     (if has_oasis then
-                        "true"
-                      else
-                        "false"));
+         [p
+            [pcdata (s_ "Tarball: ");
+             pcdata upload.tarball_nm;
+             br ();
 
-                 tmpl_field
-                  (s_ "Public link: ") 
-                  (string_input
+             pcdata (s_ "Public link: ");
+             string_input
+               ~input_type:`Text
+               ~name:publink_nm
+               ~value:(match upload.publink with
+                         | Some lnk -> lnk
+                         | None -> "")
+               ();
+             br ();
+
+             pcdata (s_ "Package: ");
+             begin
+               let value =
+                 match upload.completion.ct_pkg with 
+                   | Sure v | Unsure (_, v) -> v
+                   | NotFound -> ""
+               in
+                 if has_oasis then 
+                   span 
+                     [pcdata value;
+                      pcdata (s_ " (from _oasis)");
+                      string_input
+                        ~input_type:`Hidden
+                        ~name:pkg_nm
+                        ~value
+                        ()]
+                 else
+                   string_input
                      ~input_type:`Text
-                     ~name:publink_nm
-                     ~value:(match get (fun v -> v.ODBPkgVer.publink) upload.publink with
-                               | Some lnk -> lnk
-                               | None -> "")
-                     ());
+                     ~name:pkg_nm
+                     ~value
+                     ()
+             end;
+             br ();
 
-                string_field_answer
-                  ~disabled:has_oasis
-                  (s_ "Package: ") 
-                  pkg_nm
-                  (fun i -> i) 
-                  ""
-                  (get 
-                     (fun v -> Sure v.ODBPkgVer.pkg) 
-                     upload.completion.ct_pkg);
-
-                tmpl_field 
-                  (s_ "Version: ") 
-                  (user_type_input
-                     ~a:(if has_oasis then
-                           [a_disabled `Disabled]
-                         else
-                           [])
+             pcdata (s_ "Version: ");
+             begin
+               let value = 
+                 match upload.completion.ct_ver with
+                   | Sure v | Unsure (_, v) -> v
+                   | NotFound -> 
+                       OASISVersion.version_of_string ""
+               in
+                 if has_oasis then
+                   span
+                     [pcdata (OASISVersion.string_of_version value);
+                      pcdata (s_ " (from _oasis)");
+                      user_type_input
+                        ~input_type:`Hidden
+                        ~name:ver_nm
+                        ~value
+                        OASISVersion.string_of_version
+                        ()]
+                 else
+                   user_type_input
                      ~input_type:`Text
                      ~name:ver_nm
-                     ~value:(value_of_answer 
-                               (fun v -> v)
-                               (OASISVersion.version_of_string "")
-                               (get 
-                                  (fun v -> Sure v.ODBPkgVer.ver) 
-                                  upload.completion.ct_ver))
+                     ~value
                      OASISVersion.string_of_version
-                     ());
+                     ()
+             end;
+             br ();
 
-                int_field_answer
-                  (s_ "Order: ")
-                  ord_nm
-                  (fun i -> i)
-                  0
-                  (get 
-                     (fun v -> Sure v.ODBPkgVer.ord) 
-                     upload.completion.ct_ord);
-                [
-                  int_input ~input_type:`Hidden ~name:id_nm ~value:id ();
-                  string_input ~input_type:`Submit ~value:(s_ "Save") ();
-                ]
-               ]);
-       ])
-    ()
+             pcdata (s_ "Order: ");
+             int_input
+               ~input_type:`Text
+               ~name:ord_nm
+               ~value:(match upload.completion.ct_ord with
+                         | Sure v | Unsure (_, v) -> v
+                         | NotFound -> 0)
+               ();
+             br ();
+             
+             int_input ~input_type:`Hidden ~name:id_nm ~value:id ();
+             raw_input ~input_type:`Reset ~value:(s_ "Reset") ();
+             string_input ~input_type:`Submit ~value:(s_ "Save") ();
+            ]
+         ])
+      ()
   in
-    return form
+
+  let msg_lst = 
+    ODBPkgVer.check (pkg_ver_of_upload upload)
+  in
+
+  let is_ok = 
+    not (List.exists (function (`Error, _) -> true | _ -> false) msg_lst)
+  in
+
+  let content = 
+    let to_html (lvl, msg) = 
+      match lvl with 
+        | `Error -> html_error [pcdata msg]
+        | _ -> pcdata msg
+    in
+      match msg_lst with 
+        | hd :: tl ->
+            div 
+              [ul
+                 (li [to_html hd]) 
+                 (List.map (fun e -> li [to_html e]) tl);
+               form]
+        | [] ->
+            form 
+  in
+
+    return (is_ok, content)
 
 (** Preview of the package version page
   *)
@@ -296,18 +262,19 @@ let upload_preview_box ~ctxt ~sp id upload =
                      [pcdata upload.tarball_nm; pcdata (s_ " (backup)")],
                    upload.tarball_nm))
              oasis_opt
+           >|= fun ctnt ->
+           true, ctnt
        end)
     (fun e ->
        return
-         [html_error
-            [pcdata
-               (Printf.sprintf 
-                  (f_ "Unable to create the package: %s") 
-                  (Printexc.to_string e))]])
-  >|= fun content ->
-  (h3 [pcdata (s_ "Preview")])
-  ::
-  content
+         (false,
+          [html_error
+             [pcdata
+                (Printf.sprintf 
+                   (f_ "Unable to create the package: %s") 
+                   (Printexc.to_string e))]]))
+  >|= fun (is_ok, content) ->
+  is_ok, ((h3 [pcdata (s_ "Preview")]) :: content)
 
 (* 
  * Cancel/confirm uploads
@@ -355,7 +322,7 @@ let upload_confirm_action =
                fail StateTransitionNotAllowed
        end)
 
-let upload_confirm_box ~ctxt ~sp id _ = 
+let upload_confirm_box ~ctxt ~sp id is_ok upload = 
   return
     (post_form 
        ~service:upload_confirm_action
@@ -373,6 +340,7 @@ let upload_confirm_box ~ctxt ~sp id _ =
                  ~value:"cancel" 
                  [pcdata (s_ "Cancel upload")];
                string_button 
+                 ~a:(if is_ok then [] else [a_disabled `Disabled])
                  ~name:action
                  ~value:"confirm" 
                  [pcdata (s_ "Confirm upload")];
@@ -383,10 +351,12 @@ let upload_confirm_box ~ctxt ~sp id _ =
   *)
 let upload_edit_box ~ctxt ~sp id upload log = 
   upload_preview_box ~ctxt ~sp id upload
-  >>= fun preview_box ->
+  >>= fun (is_ok_preview, preview_box) ->
   upload_completion_box ~ctxt ~sp id upload
-  >>= fun completion_box ->
-  upload_confirm_box ~ctxt ~sp id upload 
+  >>= fun (is_ok_completion, completion_box) ->
+  upload_confirm_box ~ctxt ~sp id 
+    (is_ok_preview && is_ok_completion) 
+    upload 
   >>= fun action_box ->
   LogBox.log_box ~ctxt ~sp log
   >>= fun log_box ->
@@ -400,7 +370,12 @@ let upload_edit_box ~ctxt ~sp id upload log =
        @
        preview_box
        @
-       [action_box])
+       [action_box;
+        js_script 
+          ~uri:(make_uri ~service:(static_dir sp) 
+          ~sp 
+          ["form-disabler.js"]) ();
+       ])
   end
 
 (* 

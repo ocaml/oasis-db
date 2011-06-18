@@ -84,32 +84,26 @@ let compare t1 t2 =
     | n ->
         n
 
-let check ~ctxt t =
-  List.for_all
-    (fun e -> e)
+let check t =
+  List.fold_left
+    (fun acc -> 
+       function 
+         | Some v -> v :: acc
+         | None -> acc)
+    []
     [
       if t.pkg = "" then
-        begin
-(*           error ~ctxt "Empty package name"; *)
-          false
-        end
+        Some (`Error, s_ "Empty package name")
       else
-        true;
+        None;
 
       if OASISVersion.string_of_version t.ver = "" then
-        begin
-(*           error ~ctxt "Empty version name"; *)
-          false
-        end
+        Some (`Error, s_"Empty version name")
       else
-        true;
+        None;
 
       if t.tarball = "" then 
-        begin
-          (* TODO: check that tarball exist *)
-(*           error ~ctxt "Empty tarball name"; *)
-          false
-        end
+        Some (`Error, s_ "Empty tarball name")
       else
-        true;
+        None;
     ]
