@@ -153,16 +153,11 @@ object (self)
       fail e 
 
 
-  method mkdir ?(ignore_exist=false) fn perm = 
-    try 
-      if ODBFSTree.mem fstree fn && 
-         ODBFSTree.is_dir fstree fn && 
-         ignore_exist then
-        return ()
-      else
+  method mkdir_low fn perm =
+      try 
         return (ODBFSTree.add_dir fstree fn ())
-    with e ->
-      fail e
+      with e ->
+        fail e
 
   method rmdir fn = 
     try 
@@ -194,7 +189,7 @@ let cp_directories ?ignore_exist fs_src fs_tgt =
                begin
                  fs_src#stat fn 
                  >>= fun st ->
-                 fs_tgt#mkdir ?ignore_exist fn st.Unix.LargeFile.st_perm
+                 ODBVFS.mkdir fs_tgt ?ignore_exist fn st.Unix.LargeFile.st_perm
                end
              else
                begin

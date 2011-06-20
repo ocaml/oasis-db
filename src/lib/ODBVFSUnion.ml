@@ -96,8 +96,8 @@ object (self)
   method open_out_low ?flags fn =
     wrt#open_out_low ?flags fn
 
-  method mkdir ?ignore_exist fn perm =
-    wrt#mkdir ?ignore_exist fn perm
+  method mkdir_low fn perm =
+    wrt#mkdir_low fn perm
 
   method unlink fn =
     wrt#unlink fn

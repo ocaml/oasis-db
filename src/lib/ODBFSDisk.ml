@@ -106,19 +106,11 @@ object (self)
     (fun () -> return ()), chn
 
   (** Create a directory with given permissions *)
-  method mkdir ?(ignore_exist=false) dn perm =
-     catch 
-       (fun () ->
-          self#rebase_lwt dn 
-          >>= fun fn' ->
-          FileUtilExt.mkdir fn' perm
-          >>= fun () ->
-          self#watch_notify dn ODBVFS.FSCreated)
-       (function
-          | Unix.Unix_error (e, _, _) when e = Unix.EEXIST && ignore_exist ->
-              return ()
-          | e ->
-              fail e)
+  method mkdir_low dn perm =
+    self#rebase_lwt dn 
+    >>= fun fn' ->
+    FileUtilExt.mkdir fn' perm
+
 
   method rmdir fn =
     return (Unix.rmdir (self#rebase fn))
@@ -126,8 +118,4 @@ object (self)
   method unlink fn =
     return (Unix.unlink (self#rebase fn))
 
-end
-
-module Lock =
-struct
 end

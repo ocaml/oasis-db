@@ -97,6 +97,23 @@ let cp_ext src fs tgt =
   with e ->
     fail e
 
+let mkdir ?(ignore_exist=false) fs fn perm = 
+  fs#file_exists fn 
+  >>= fun exists ->
+  begin
+    if exists then
+      fs#is_directory fn
+    else
+      return false
+  end
+  >>= fun is_dir ->
+  begin
+    if exists && is_dir && ignore_exist then
+      return ()
+    else
+      fs#mkdir fn perm 
+  end
+
 (** Read-only filesystem *)
 class virtual read_only = 
 object (self) 
@@ -209,8 +226,14 @@ object (self)
        else 
          FSCreated)
 
-  (** Create a directory with given permissions *)
-  method virtual mkdir: ?ignore_exist:bool -> filename -> int -> unit Lwt.t
+  (** Create a directory with given permissionsi, low level *)
+  method virtual mkdir_low: filename -> int -> unit Lwt.t
+
+  (** Create a directory with given permissionsi *)
+  method mkdir dn perm = 
+    self#mkdir_low dn perm 
+    >>= fun () ->
+    self#watch_notify dn FSCreated
 
   (** Remove a file *)
   method virtual unlink: filename -> unit Lwt.t
@@ -252,7 +275,7 @@ object (self)
       () lst
 
   (** Copy files to the filesystem *)
-  method cp (other_fs : read_only) lst tgt =
+  method cp (other_fs : #read_only) lst tgt =
 
     let notify src tgt =
       let ev =

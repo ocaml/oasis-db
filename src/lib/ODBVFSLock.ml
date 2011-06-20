@@ -100,8 +100,8 @@ object (self)
       close_fun', chn
 
 
-  method mkdir ?ignore_exist fn perm =
-    self#do_write (fun () -> fs#mkdir ?ignore_exist fn perm)
+  method mkdir_low fn perm =
+    self#do_write (fun () -> fs#mkdir_low fn perm)
 
   method unlink fn =
     self#do_write (fun () -> fs#unlink fn)

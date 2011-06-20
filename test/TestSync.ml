@@ -86,7 +86,7 @@ let tests =
 
               let add_fn (fn, cnt) =
                 Lwt_unix.run
-                  (src_fs#mkdir 
+                  (ODBVFS.mkdir src_fs
                      ~ignore_exist:true 
                      (FilePath.dirname fn) 
                      0o755

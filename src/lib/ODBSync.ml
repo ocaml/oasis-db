@@ -529,7 +529,8 @@ object (self)
                 uri 
                 (String.concat "/" (explode_filename fn))
             in
-              self#cache#mkdir 
+              ODBVFS.mkdir 
+                self#cache
                 ~ignore_exist:true 
                 (FilePath.dirname fn)
                 0o755
