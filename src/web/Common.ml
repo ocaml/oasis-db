@@ -238,3 +238,29 @@ let versions_field ~sp pkg_ver_lst pkg_ver_cur_opt pkg_ver_latest =
 let html_error content = 
   span ~a:[a_class ["error"]] content
 
+let box_check msg_lst ctnt = 
+  let is_ok = 
+    not 
+      (List.exists 
+         (function (`Error, _) -> true | _ -> false) 
+         msg_lst)
+  in
+
+  let content = 
+    let to_html (lvl, msg) = 
+      match lvl with 
+        | `Error -> html_error [pcdata msg]
+        | _ -> pcdata msg
+    in
+      match msg_lst with 
+        | hd :: tl ->
+            div 
+              [ul
+                 (li [to_html hd]) 
+                 (List.map (fun e -> li [to_html e]) tl);
+               ctnt]
+        | [] ->
+            ctnt
+  in
+    is_ok, content
+

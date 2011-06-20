@@ -232,7 +232,7 @@ let oasis ~ctxt fn an dn =
   let oasis_extract fn _ =
     LwtExt.IO.with_file_content fn 
     >>= fun oasis_content ->
-    ODBOASIS.from_string ~ctxt oasis_content
+    ODBOASIS.from_string_lwt ~ctxt oasis_content
     >>= fun pkg ->
     return 
       (Some oasis_content,

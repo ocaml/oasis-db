@@ -9,7 +9,7 @@ open Lwt
 
 type ('a, 'b) t =
     {
-      display:  'a -> 'b XHTML.M.elt Lwt.t;
+      display:  'a -> (bool * 'b XHTML.M.elt) Lwt.t;
       commit:   'a -> 'a Lwt.t;
       rollback: 'a -> 'a Lwt.t;
     }

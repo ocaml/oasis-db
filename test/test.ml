@@ -76,4 +76,5 @@ let _ :: _ | [] =
          TestLwtExt.tests;
          TestFSTree.tests;
          TestFSMemory.tests;
+         TestODBOASIS.tests;
        ])
