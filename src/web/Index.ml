@@ -127,7 +127,8 @@ let home_handler sp () () =
                  begin
                    let to_li ver =
                      let date =
-                       CalendarLib.Printer.Calendar.to_string 
+                       CalendarLib.Printer.Calendar.sprint
+                         "%F"
                          ver.upload_date
                      in
                      let ver_s = 
