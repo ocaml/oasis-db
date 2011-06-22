@@ -208,11 +208,15 @@ let rss2_handler =
                  ~pubdate:(Rss.float_to_date 
                              (Calendar.to_unixfloat pkg_ver.upload_date)) 
 
-                 ~link:(make_string_uri 
-                          ~sp 
-                          ~absolute:true
-                          ~service:(preapply view_pkg_ver (pkg_ver.pkg, Version pkg_ver.ver))
-                          ())
+                 ~link:(string_of_uri
+                          (OCAWeb.Redirect.rewrite 
+                             ~ctxt:ctxt.Context.ocaw
+                             sp
+                             (make_uri 
+                                ~sp 
+                                ~absolute:true
+                                ~service:(preapply view_pkg_ver (pkg_ver.pkg, Version pkg_ver.ver))
+                                ())))
                  ?desc
                  ()
            in
@@ -222,11 +226,15 @@ let rss2_handler =
            let channel = 
              Rss.channel 
                ~title:(s_ rss2_title)
-               ~link:(make_string_uri
-                        ~sp
-                        ~absolute:true
-                        ~service:rss2
-                        ())
+               ~link:(string_of_uri
+                        (OCAWeb.Redirect.rewrite
+                           ~ctxt:ctxt.Context.ocaw
+                           sp 
+                           (make_uri
+                              ~sp
+                              ~absolute:true
+                              ~service:rss2
+                              ())))
                ~desc:(s_ "Uploads of OCaml packages on OASIS-DB and related news.")
                ~language:(s_ "en")
                items 

@@ -24,7 +24,7 @@ type help =
 let help_data =
   ref []
 
-let register_new_service get_t base_path api_fun = 
+let register_new_service (rewrite:server_params -> uri -> uri) get_t base_path api_fun = 
 
   let get_params =
     let rec get_params' p = 
@@ -67,7 +67,10 @@ let register_new_service get_t base_path api_fun =
       List.map 
         (fun (help, params, data) ->
            help, 
-           (fun sp -> make_string_uri ~absolute:true ~service ~sp params),
+           (fun sp -> 
+              string_of_uri 
+                (rewrite sp 
+                   (make_uri ~absolute:true ~service ~sp params))),
            try 
              conv data
            with _ ->

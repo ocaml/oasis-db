@@ -23,12 +23,18 @@ let descr_sexp =
             repo_priority        = 500;
             repo_dist_uri        = 
               string_of_uri 
-                (make_uri ~absolute:true ~service:Dist.dist ~sp []);
+                (OCAWeb.Redirect.rewrite 
+                   ~ctxt:ctxt.Context.ocaw
+                   sp
+                   (make_uri ~absolute:true ~service:Dist.dist ~sp []));
             repo_incoming_uri    = None;
             repo_api_uri         = 
               Some 
                 (string_of_uri 
-                   (make_uri ~absolute:true ~service:API.api_help ~sp ()));
+                   (OCAWeb.Redirect.rewrite
+                      ~ctxt:ctxt.Context.ocaw
+                      sp
+                      (make_uri ~absolute:true ~service:API.api_help ~sp ())));
             repo_download_policy = `Minimal;
           }
         in

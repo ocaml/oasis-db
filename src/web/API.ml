@@ -13,6 +13,9 @@ let base_path =
 
 let register_new_service api_fun = 
   RESTOcsigen.register_new_service 
+    (fun sp uri ->
+       let ctxt = !Context.ocaw () in
+         OCAWeb.Redirect.rewrite ~ctxt sp uri)
     (fun sp ->
        Context.get ~sp ()
        >>= fun ctxt ->
