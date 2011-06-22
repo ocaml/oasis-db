@@ -1,6 +1,6 @@
 OASISFormat: 0.2
 Name:        oasis-db
-Version:     0.1.0~alpha2
+Version:     0.1.0~alpha3
 Authors:     Sylvain Le Gall
 Copyrights:  (C) 2010 OCamlCore SARL 
 Homepage:    http://oasis.forge.ocamlcore.org/

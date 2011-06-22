@@ -1,4 +1,4 @@
 
-let version = "0.1.0~alpha2"
+let version = "0.1.0~alpha3"
 
 let dev = true
