@@ -230,7 +230,7 @@ let upload_preview_box ~ctxt ~sp id upload =
          let ctxt = 
            {(Context.anonymize ctxt) with stor = stor}
          in
-           PkgVerView.preview_box ~ctxt ~sp
+           PkgVerViewCommon.preview_box ~ctxt ~sp
              pkg_ver 
              (fun () ->
                 return 

@@ -68,6 +68,13 @@ let edit_pkg_ver =
         ExtParams.version "ver"))
     ()
 
+let derive_pkg_ver =
+  new_service ["derive"]
+    (string "pkg" **
+     ExtParams.version "from_ver" **
+     ExtParams.version "to_ver")
+    ()
+
 let my_account =
   new_service ["my_account"] 
     (opt (string "redirect"))

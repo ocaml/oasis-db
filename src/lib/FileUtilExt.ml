@@ -258,7 +258,7 @@ let mv src tgt =
     let fln_dst_abs =  FilePath.make_absolute pwd fln_dst in
       if compare fln_src_abs fln_dst_abs <> 0 then
         begin
-          if Sys.is_directory fln_dst_abs then
+          if Sys.file_exists fln_dst_abs && Sys.is_directory fln_dst_abs then
             begin
               mv' 
                 acc
@@ -305,3 +305,14 @@ let mv src tgt =
   in
     mv' ([], [], []) src tgt
 ;;
+
+let topdir dn = 
+  match Sys.readdir dn with
+    | [|bn|] ->
+        let fn = FilePath.concat dn bn in
+          if Sys.is_directory fn then
+            fn
+          else
+            dn
+    | _ ->
+        dn

@@ -46,6 +46,7 @@ type handle_status =
 let run_logged 
       ~ctxt ?timeout ?env 
       ?stdin_chn
+      ?stdout_chn
       ?(status=StatusExpected [Unix.WEXITED 0])
       cmd args = 
 
@@ -127,9 +128,19 @@ let run_logged
              | None ->
                  Lwt_io.close p#stdin
          in
+         let stdout_task = 
+           match stdout_chn with
+             | Some chn_out ->
+                 Lwt_io.write_chars
+                   chn_out
+                   (Lwt_io.read_chars p#stdout)
+             | None ->
+                 read_and_log (info ~ctxt "%s") p#stdout
+         in
+
            join 
              [       
-               read_and_log (info ~ctxt "%s") p#stdout;
+               stdout_task;
                read_and_log (error ~ctxt "%s") p#stderr;
                stdin_task;
              ]

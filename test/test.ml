@@ -77,4 +77,5 @@ let _ :: _ | [] =
          TestFSTree.tests;
          TestFSMemory.tests;
          TestODBOASIS.tests;
+         TestPkgVerDerive.tests;
        ])

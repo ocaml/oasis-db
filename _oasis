@@ -108,7 +108,8 @@ Library "oasis-db"
            ODBHLS,
            ODBRepository,
            ODBCurl,
-           ODBPkgVerSolver
+           ODBPkgVerSolver,
+           ODBDerive
   BuildDepends: lwt (>= 2.3.0), lwt.unix,
                 unix, 
                 pcre,
@@ -151,9 +152,12 @@ Library "oasis-db-ocsigen"
            Feeds,
            API,
            MarkdownExt,
+           PkgVerViewCommon,
+           PkgVerEditCommon,
            PkgView,
            PkgVerView,
            PkgVerEdit,
+           PkgVerDerive,
            Sqlexpr,
            Distro,
            Monitor,
@@ -165,6 +169,8 @@ Library "oasis-db-ocsigen"
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 
+                ocsigen.ext.eliom,
+                ocsigen.ext.ocsipersist-sqlite,
                 netstring, 
                 threads, 
                 calendar,
@@ -173,7 +179,8 @@ Library "oasis-db-ocsigen"
                 sexplib,
                 rest.ocsigen, 
                 sqlexpr,
-                ocamlcore-api (>= 0.0.2)
+                ocamlcore-api (>= 0.0.2),
+                ocamlcore-api.ocsigen
 
 Library "oasis-db-cli"
   FindlibParent: oasis-db

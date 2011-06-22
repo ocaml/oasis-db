@@ -233,6 +233,7 @@ module PkgVer =
 struct 
 
   open ODBPkgVer
+  open OASISVersion
 
   module Common = 
     Common
@@ -257,9 +258,9 @@ struct
               | `Str (_, ver_str) -> 
                   ver_str
               | `StrVer (_, ver) ->
-                  OASISVersion.string_of_version ver
+                  string_of_version ver
               | `PkgVer pkg_ver -> 
-                  OASISVersion.string_of_version pkg_ver.ver
+                  string_of_version pkg_ver.ver
 
           let dirname t k = 
             let pkg_str, dn2 =
@@ -268,10 +269,10 @@ struct
                     pkg_str, ver_str
                 | `StrVer (pkg_str, ver) ->
                     pkg_str, 
-                    OASISVersion.string_of_version ver
+                    string_of_version ver
                 | `PkgVer pkg_ver ->
                     pkg_ver.pkg,
-                    OASISVersion.string_of_version pkg_ver.ver 
+                    string_of_version pkg_ver.ver 
             in
               FilePath.concat (Pkg.dirname t (`Str pkg_str)) dn2
 
@@ -466,6 +467,189 @@ struct
             `OK
         | `Not_found | `Error as e ->
             e
+
+  let tarball_repack t k ?ver_to content_mod tarball_post = 
+    let ver_to = 
+      match ver_to with 
+        | Some ver -> 
+            ver
+        | None ->
+            begin
+              match k with 
+                | `PkgVer pkg_ver -> 
+                    pkg_ver.ver
+                | `StrVer (_, ver) -> 
+                    ver
+                | `Str (_, ver_str) -> 
+                    version_of_string ver_str
+            end
+    in
+      find t k 
+      >>= fun pkg_ver ->
+      filename t k `Tarball 
+      >>= fun tarball_fn ->
+      begin
+        (* Rebuild the tarball *)
+        let arch_handler =
+          ODBArchive.of_filename 
+            (FilePath.basename tarball_fn)
+        in
+          FileUtilExt.with_temp_dir 
+            "oasis-db-repack-src-" ".dir"
+            (fun dn_src ->
+               with_file_in t k `Tarball 
+                 (fun chn ->
+                  ODBArchive.uncompress
+                    ~ctxt:t.stor_ctxt
+                    ~src:tarball_fn
+                    arch_handler 
+                    chn 
+                    dn_src)
+                 >>= fun () ->
+                 FileUtilExt.with_temp_dir
+                   "oasis-db-repack-tgt-" ".dir"
+                   (fun dn_tgt ->
+                      let topdir_src = 
+                        FileUtilExt.topdir dn_src 
+                      in
+                      let topdir_tgt = 
+                        FilePath.concat 
+                          dn_tgt
+                          (Printf.sprintf "%s-%s"
+                             pkg_ver.pkg 
+                             (string_of_version ver_to))
+                      in
+                      let arch_handler_tgt = 
+                        ODBArchive.tgz 
+                      in
+                      let tarball_tgt =
+                        ODBArchive.add_suffix arch_handler_tgt topdir_tgt 
+                      in
+
+                        FileUtilExt.mv topdir_src topdir_tgt
+                        >>= fun (_, _, _) ->
+                        content_mod topdir_tgt
+                        >>= fun () ->
+                        Lwt_io.with_file ~mode:Lwt_io.output tarball_tgt
+                          (fun chn ->
+                             ODBArchive.compress
+                               ~ctxt:t.stor_ctxt
+                               ~tgt:tarball_tgt
+                               arch_handler_tgt 
+                               topdir_tgt 
+                               chn)
+                        >>= fun () ->
+                        Lwt_io.with_file ~mode:Lwt_io.input tarball_tgt
+                          (fun chn ->
+                             tarball_post tarball_tgt chn)))
+      end
+
+  let derive t k ver_to = 
+    find t k 
+    >>= fun pkg_ver_from ->
+    begin
+      mem t (`StrVer (pkg_ver_from.pkg, ver_to)) 
+      >>= fun already_exists ->
+        if already_exists then
+          fail 
+            (Failure 
+               (Printf.sprintf 
+                  (f_ "Package's version %s v%s already exists")
+                  pkg_ver_from.pkg (string_of_version ver_to)))
+        else
+          return ()
+    end
+    >>= fun () ->
+    begin
+      let ver_from = pkg_ver_from.ver in
+      let pkg_ver_to = 
+        {pkg_ver_from with
+             publink = None;
+             ver     = ver_to}
+      in
+        t.stor_fs#readdir (dirname t (`PkgVer pkg_ver_from))
+        >>= fun file_array ->
+        filename t k `OASIS
+        >>= fun oasis_fn ->
+        filename t k `OASISPristine
+        >>= fun oasis_pristine_fn ->
+        filename t k `Tarball 
+        >>= fun tarball_fn ->
+        (* Rebuild the tarball *)
+        tarball_repack t k ~ver_to 
+          (fun _ -> return ())
+          (fun tarball_tgt chn ->
+             create t 
+               {pkg_ver_to with 
+                    tarball = Filename.basename tarball_tgt} 
+               chn)
+        >>= fun pkg_ver_to ->
+        let oasis_fn' = FilePath.basename oasis_fn in
+        let oasis_pristine_fn' = FilePath.basename oasis_pristine_fn in
+        let tarball_fn' = FilePath.basename tarball_fn in
+        let rex = 
+          ignore "(*";
+          Pcre.regexp 
+            ("(Version *: *)"^(Pcre.quote (string_of_version ver_from))^" *")
+        in
+        let itempl = 
+          Pcre.subst 
+            ("$1$!"^(string_of_version ver_to)) 
+        in
+        let replace_ver ft = 
+          with_file_in t k ft
+            (LwtExt.IO.with_file_content_chn)
+          >>= fun str ->
+          begin
+            let str = Pcre.replace_first ~rex ~itempl str in
+              with_file_out t (`PkgVer pkg_ver_to) ft
+                (fun chn_out -> Lwt_io.write chn_out str)
+          end
+        in
+          prerr_endline (dirname t (`PkgVer pkg_ver_from));
+          Lwt_list.iter_s
+            (fun fn ->
+               prerr_endline fn;
+               if fn = oasis_fn' then 
+                 replace_ver `OASIS 
+               else if fn = oasis_pristine_fn' then
+                 replace_ver `OASISPristine
+               else if fn = tarball_fn' || fn = "storage.sexp" then
+                 return ()
+               else
+                 with_file_in t k (`Other fn)
+                   (fun chn_in ->
+                      with_file_out t k (`Other fn)
+                        (fun chn_out ->
+                           Lwt_io.write_chars chn_out
+                             (Lwt_io.read_chars chn_in))))
+            (Array.to_list file_array)
+    end
+
+
+  let update_tarball t k = 
+    (* Rebuild the tarball *)
+    tarball_repack t k
+      (fun topdir -> 
+         with_file_in t k `OASIS
+           (fun chn_in ->
+              Lwt_io.with_file 
+                ~mode:Lwt_io.output 
+                (FilePath.concat topdir "_oasis")
+                (fun chn_out ->
+                   Lwt_io.write_chars chn_out
+                     (Lwt_io.read_chars chn_in)))
+         >>= fun () ->
+         ODBProcess.run_logged 
+           ~ctxt:t.stor_ctxt
+           t.stor_ctxt.oasis 
+           ["-C"; topdir; "setup"]) 
+      (fun tarball_tgt chn_in ->
+         with_file_out t k `Tarball
+           (fun chn_out -> 
+              Lwt_io.write_chars chn_out
+                (Lwt_io.read_chars chn_in)))
+
 end
 
 (* Generate events for the watchers *)

@@ -303,7 +303,12 @@ object (self)
     let rec cp_aux lst tgt =
       self#file_exists tgt 
       >>= fun file_exists ->
-      self#is_directory tgt 
+      begin
+        if file_exists then
+          self#is_directory tgt 
+        else 
+          return false
+      end
       >>= fun is_directory ->
       if file_exists && is_directory then
         Lwt_list.iter_s

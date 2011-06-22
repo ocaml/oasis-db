@@ -160,6 +160,12 @@ sig
 
   (** Get oasis status *)
   val oasis_status: 'a read_only -> key -> [`OK | `Not_found | `Error] Lwt.t
+
+  (** Create a package's version using another version *)
+  val derive: 'a read_write -> key -> OASISVersion.t -> unit Lwt.t
+
+  (** Rebuild tarball using _oasis *)
+  val update_tarball: 'a read_write -> key -> unit Lwt.t
 end
 
 type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t

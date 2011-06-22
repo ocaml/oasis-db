@@ -13,6 +13,7 @@ let () =
     Xhtml.register browse Browse.browse_handler;
     Xhtml.register view_pkg_ver PkgVerView.view_handler;
     Xhtml.register edit_pkg_ver PkgVerEdit.handler;
+    Xhtml.register derive_pkg_ver PkgVerDerive.handler;
     Redirection.register upload Upload.upload_handler;
     Xhtml.register contribute Index.contribute_handler;
     Xhtml.register about Index.about_handler

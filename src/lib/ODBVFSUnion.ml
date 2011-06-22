@@ -6,6 +6,7 @@
   *)
 
 open Lwt
+open OASISUtils
 
 class read_only lst = 
 object (self)
@@ -68,15 +69,44 @@ object (self)
            (Unix.Unix_error
               (Unix.ENOENT, "stat", fn)))
 
+
   method readdir fn =
-    self#find_fs
-      fn
-      (fun fs ->
-         fs#readdir fn)
-      (fun () ->
-         fail 
-           (Unix.Unix_error
-              (Unix.ENOENT, "opendir", fn)))
+    Lwt_list.fold_left_s
+      (fun (found, acc) fs ->
+         fs#file_exists fn
+         >>= fun exists ->
+         if exists then
+           begin
+             fs#is_directory fn
+             >>= fun is_dir ->
+               if is_dir then
+                 begin
+                   fs#readdir fn
+                   >|= fun arr ->
+                   (true,
+                    Array.fold_left
+                      (fun acc e -> SetString.add e acc)
+                      acc
+                      arr)
+                 end
+               else
+                 return (found, acc)
+           end
+         else
+           begin
+             return (found, acc)
+           end)
+      (false, SetString.empty)
+      lst
+    >>= fun (found, acc) ->
+    begin
+      if found then
+        return (Array.of_list (SetString.elements acc))
+      else
+       fail 
+         (Unix.Unix_error
+            (Unix.ENOENT, "opendir", fn))
+    end
 end
 
 class read_write wrt lst =

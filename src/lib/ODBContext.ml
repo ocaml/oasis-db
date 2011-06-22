@@ -9,6 +9,7 @@ type t =
     logger:            logger;
     tar:               program;
     unzip:             program;
+    oasis:             program;
     incoming_dir:      dirname;
   }
 
@@ -26,6 +27,7 @@ let default ?logger incoming_dir =
       logger           = logger;
       tar              = "tar";
       unzip            = "unzip";
+      oasis            = "oasis";
       incoming_dir     = incoming_dir;
     }
 
