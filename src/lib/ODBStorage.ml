@@ -224,7 +224,7 @@ struct
                load t (`Pkg pkg)
            end)
         (fun e ->
-           t.stor_fs#rm ~recurse:true [dn]
+           t.stor_fs#rm [dn]
            >>= fun () ->
            fail e)
 end
@@ -412,7 +412,7 @@ struct
              load t (`PkgVer pkg_ver))
 
           (fun e ->
-             t.stor_fs#rm ~recurse:true [dn]
+             t.stor_fs#rm [dn]
              >>= fun _ ->
              fail e)
     end
@@ -606,10 +606,8 @@ struct
                 (fun chn_out -> Lwt_io.write chn_out str)
           end
         in
-          prerr_endline (dirname t (`PkgVer pkg_ver_from));
           Lwt_list.iter_s
             (fun fn ->
-               prerr_endline fn;
                if fn = oasis_fn' then 
                  replace_ver `OASIS 
                else if fn = oasis_pristine_fn' then
@@ -650,6 +648,8 @@ struct
               Lwt_io.write_chars chn_out
                 (Lwt_io.read_chars chn_in)))
 
+  let remove t k =
+    t.stor_fs#rm [dirname t k]
 end
 
 (* Generate events for the watchers *)

@@ -158,6 +158,7 @@ Library "oasis-db-ocsigen"
            PkgVerView,
            PkgVerEdit,
            PkgVerDerive,
+           PkgVerRemove,
            Sqlexpr,
            Distro,
            Monitor,

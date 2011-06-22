@@ -75,8 +75,8 @@ let start_edit ~ctxt sp ((pkg_str, (from_ver, to_ver)) as k) derived =
     end
 
 let handler sp k () = 
-  Context.get ~sp () 
-  >>= fun ctxt ->
+  Context.get_user ~sp () 
+  >>= fun (ctxt, _) ->
   begin
     let derived = 
       Hashtbl.create 13

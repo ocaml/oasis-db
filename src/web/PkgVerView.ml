@@ -50,6 +50,8 @@ let page ~ctxt ~sp pkg_ver =
   >>= fun (_, rating_box) ->
   PkgVerDerive.box ~sp ~ctxt pkg_ver
   >>= fun derive_box ->
+  PkgVerRemove.box ~sp ~ctxt pkg_ver
+  >>= fun remove_box ->
   begin
 
     let edit_box =
@@ -95,6 +97,7 @@ let page ~ctxt ~sp pkg_ver =
                 [li [monitor_box];
                  li [edit_box];
                  li [derive_box];
+                 li [remove_box];
                  li [rating_box]]
             ]
         ]

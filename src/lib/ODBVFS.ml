@@ -242,9 +242,9 @@ object (self)
   method virtual rmdir: filename -> unit Lwt.t
 
   (** Remove a file or a directory *)
-  method rm ?(recurse=false) lst =
-    Lwt_list.fold_left_s
-      (fun acc fn ->
+  method rm lst =
+    Lwt_list.iter_s
+      (fun fn ->
          self#file_exists fn
          >>= fun file_exists ->
            if file_exists then
@@ -253,7 +253,7 @@ object (self)
                   match fnt with
                     | `PreDir fn ->
                         begin
-                          return () 
+                          return ()
                         end
 
                     | `PostDir fn ->
@@ -269,10 +269,10 @@ object (self)
                           >>= fun () ->
                           self#watch_notify fn FSDeleted
                         end)
-               self fn acc
+               self fn ()
            else
-             return acc)
-      () lst
+             return ())
+      lst
 
   (** Copy files to the filesystem *)
   method cp (other_fs : #read_only) lst tgt =

@@ -375,7 +375,14 @@ let autoupdate rsync =
     if fn <> fn_sync && fn <> fn_meta then
       begin
         let sync = !rsync in
-          sync.sync_fs#is_directory fn
+          sync.sync_fs#file_exists fn 
+          >>= fun exists ->
+          begin
+            if exists then
+              sync.sync_fs#is_directory fn
+            else
+              return false
+          end
           >>= fun is_dir ->
           if not is_dir then 
             begin
@@ -587,7 +594,7 @@ object (self)
           | [] ->
               return ()
           | lst ->
-              self#cache#rm ~recurse:true lst
+              self#cache#rm lst
               >>=
               one_pass
     in

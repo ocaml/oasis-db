@@ -166,6 +166,9 @@ sig
 
   (** Rebuild tarball using _oasis *)
   val update_tarball: 'a read_write -> key -> unit Lwt.t
+
+  (** Remove a package's version *)
+  val remove: 'a read_write -> key -> unit Lwt.t
 end
 
 type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t
