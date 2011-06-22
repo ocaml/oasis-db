@@ -544,7 +544,7 @@ struct
                              tarball_post tarball_tgt chn)))
       end
 
-  let derive t k ver_to = 
+  let derive t k upload_method ver_to = 
     find t k 
     >>= fun pkg_ver_from ->
     begin
@@ -564,8 +564,10 @@ struct
       let ver_from = pkg_ver_from.ver in
       let pkg_ver_to = 
         {pkg_ver_from with
-             publink = None;
-             ver     = ver_to}
+             upload_method = upload_method;
+             upload_date   = CalendarLib.Calendar.now ();
+             publink       = None;
+             ver           = ver_to}
       in
         t.stor_fs#readdir (dirname t (`PkgVer pkg_ver_from))
         >>= fun file_array ->

@@ -54,7 +54,20 @@ let start_edit ~ctxt sp ((pkg_str, (from_ver, to_ver)) as k) derived =
       in
         ODBStorage.create_read_write ~ctxt:ctxt.odb phantom_fs
         >>= fun stor -> 
-        ODBStorage.PkgVer.derive stor (`StrVer (pkg_str, from_ver)) to_ver
+        begin
+          let upload_method = 
+            match ctxt.accnt with 
+              | Some accnt -> 
+                  Web accnt.OCAAccount.accnt_real_name
+              | None -> 
+                  assert false
+          in
+            ODBStorage.PkgVer.derive 
+              stor 
+              (`StrVer (pkg_str, from_ver)) 
+              upload_method 
+              to_ver
+        end
         >>= fun () -> 
         PkgVerEditCommon.start_edit ~ctxt sp 
           {PkgVerEditCommon.

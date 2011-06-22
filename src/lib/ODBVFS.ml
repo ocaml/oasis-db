@@ -211,20 +211,18 @@ object (self)
     >>= fun exists_before ->
     self#open_out_low ?flags fn 
     >|= fun (close_fun, chn) ->
-    ((exists_before, fn, close_fun), chn)
+      if exists_before then
+        ((FSChanged, fn, close_fun), chn)
+      else
+        ((FSCreated, fn, close_fun), chn)
 
   (** Close an output channel *)
-  method close_out ((exists_before, fn, close_chn), chn) =
+  method close_out ((ev, fn, close_chn), chn) =
     Lwt_io.close chn
     >>= fun () ->
     close_chn () 
     >>= fun () ->
-    self#watch_notify
-      fn 
-      (if exists_before then 
-         FSChanged 
-       else 
-         FSCreated)
+    self#watch_notify fn ev
 
   (** Create a directory with given permissionsi, low level *)
   method virtual mkdir_low: filename -> int -> unit Lwt.t
@@ -277,14 +275,11 @@ object (self)
   (** Copy files to the filesystem *)
   method cp (other_fs : #read_only) lst tgt =
 
-    let notify src tgt =
-      let ev =
-        if other_fs == (self :> read_only) then
-          FSCopiedFrom src
-        else 
-          FSCreated
-      in
-        self#watch_notify tgt ev
+    let event src tgt =
+      if other_fs == (self :> read_only) then
+        FSCopiedFrom src
+      else 
+        FSCreated
     in
 
     let cp_one src tgt =
@@ -292,12 +287,12 @@ object (self)
       (* TODO: fix perms/date *)
       with_file_in other_fs src 
         (fun src_chn ->
-          with_file_out self tgt
-            (fun tgt_chn ->
-               Lwt_io.write_chars tgt_chn
-                 (Lwt_io.read_chars src_chn)))
-      >>= fun () ->
-      notify src tgt
+           self#open_out tgt
+           >>= fun ((ev, fn, close_chn), tgt_chn) ->
+           Lwt_io.write_chars tgt_chn
+             (Lwt_io.read_chars src_chn)
+           >>= fun () ->
+           self#close_out ((event src tgt, fn, close_chn), tgt_chn))
     in
 
     let rec cp_aux lst tgt =

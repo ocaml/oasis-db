@@ -162,7 +162,7 @@ sig
   val oasis_status: 'a read_only -> key -> [`OK | `Not_found | `Error] Lwt.t
 
   (** Create a package's version using another version *)
-  val derive: 'a read_write -> key -> OASISVersion.t -> unit Lwt.t
+  val derive: 'a read_write -> key -> ODBPkgVer.upload_method -> OASISVersion.t -> unit Lwt.t
 
   (** Rebuild tarball using _oasis *)
   val update_tarball: 'a read_write -> key -> unit Lwt.t
