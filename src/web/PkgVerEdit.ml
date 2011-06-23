@@ -6,6 +6,15 @@
 
 open Lwt
 open Context
+open ODBGettext
+open Eliom_services
+open ODBPkgVer
+
+let box ~sp ~ctxt pkg_ver =
+  return 
+    (Session.link_need_login ~sp ~ctxt 
+       (s_ "Edit")
+       (preapply Common.edit_pkg_ver (pkg_ver.pkg, pkg_ver.ver)))
 
 let start_edit ~ctxt sp ((pkg_str, ver) as k) edited =
   let mem_fs = 

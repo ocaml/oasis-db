@@ -41,6 +41,41 @@ struct
          | Version ver ->
              string_of_version ver)
 
+  let pkg_ver =
+    user_type
+      ~of_string:
+      (fun str ->
+         let pkg_str, ver_str = 
+           ExtLib.String.split str "/"
+         in
+           `Str (pkg_str, ver_str))
+      ~to_string:
+      (fun (k: ODBStorage.PkgVer.key)  ->
+         let pkg_str, ver_str = 
+           match k with 
+             | `Str (pkg_str, ver_str) -> 
+                 pkg_str, ver_str
+             | `StrVer (pkg_str, ver) ->
+                 pkg_str, string_of_version ver
+             | `PkgVer pkg_ver ->
+                 pkg_ver.pkg,
+                 string_of_version pkg_ver.ver
+         in
+           pkg_str^"/"^ver_str)
+           
+
+  let pkg = 
+    user_type
+      ~of_string:
+      (fun str ->
+         `Str str)
+      ~to_string:
+      (fun (k: ODBStorage.Pkg.key) ->
+         match k with 
+           | `Str pkg_str -> pkg_str
+           | `Pkg pkg -> pkg.ODBPkg.pkg_name
+           | `PkgVer pkg_ver -> pkg_ver.pkg)
+
 end
 
 exception Timeout of string

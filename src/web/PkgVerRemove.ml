@@ -96,6 +96,6 @@ let remove =
 
 let box ~sp ~ctxt pkg_ver = 
   return 
-    (Account.link_need_login ~sp ~ctxt
+    (Session.link_need_login ~sp ~ctxt
        (s_ "Remove")
        (preapply remove (pkg_ver.pkg, pkg_ver.ver)))

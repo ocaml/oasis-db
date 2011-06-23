@@ -27,13 +27,3 @@ let of_id ~ctxt user_id =
 let list ~ctxt () = 
   list ~ctxt:(OCAWeb.to_oca_context ctxt.ocaw) ()
 
-open XHTML.M
-open Eliom_predefmod.Xhtml
-
-let link_need_login ~sp ~ctxt txt srvc = 
-  match get_id ~ctxt () with
-    | Some _ ->
-        a srvc sp [pcdata txt] ()
-    | None ->
-        (* TODO: redirect link for login *)
-        span [pcdata txt]

@@ -10,6 +10,7 @@ open ODBGettext
 open ODBPkgVer
 open XHTML.M
 open Eliom_predefmod.Xhtml
+open Eliom_services
 open Template
 open Context
 
@@ -24,20 +25,9 @@ let box ~sp ~ctxt pkg_ver =
     let new_ver = 
       ODBDerive.version ver_lst pkg_ver.ver
     in
-      match Account.get_id ~ctxt () with 
-        | Some id ->
-            a Common.derive_pkg_ver sp 
-              [pcdata 
-                 (Printf.sprintf 
-                    (f_ "Derive v%s")
-                    (string_of_version new_ver))]
-              (pkg_ver.pkg, (pkg_ver.ver, new_ver))
-        | None ->
-            (* TODO: redirect link for login *)
-            span [pcdata 
-                    (Printf.sprintf
-                       (f_ "Derive v%s")
-                       (string_of_version new_ver))]
+      Session.link_need_login ~sp ~ctxt
+        (Printf.sprintf (f_ "Derive v%s") (string_of_version new_ver))
+        (preapply Common.derive_pkg_ver (pkg_ver.pkg, (pkg_ver.ver, new_ver)))
   end
 
 let start_edit ~ctxt sp ((pkg_str, (from_ver, to_ver)) as k) derived =

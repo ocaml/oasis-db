@@ -44,7 +44,7 @@ let page ~ctxt ~sp pkg_ver =
                       (Printexc.to_string e))]])
   end
   >>= fun box ->
-  Monitor.pkg_ver_box ~sp ~ctxt ()
+  Monitor.box ~sp ~ctxt (`PkgVer pkg_ver)
   >>= fun monitor_box ->
   Rating.pkg_ver_box ~sp ~ctxt pkg_ver
   >>= fun (_, rating_box) ->
@@ -52,18 +52,10 @@ let page ~ctxt ~sp pkg_ver =
   >>= fun derive_box ->
   PkgVerRemove.box ~sp ~ctxt pkg_ver
   >>= fun remove_box ->
+  PkgVerEdit.box ~sp ~ctxt pkg_ver
+  >>= fun edit_box ->
   begin
 
-    let edit_box =
-      match Account.get_id ~ctxt () with
-        | Some id ->
-            a Common.edit_pkg_ver sp 
-              [pcdata (s_ "Edit")] 
-              (pkg_ver.pkg, pkg_ver.ver)
-        | None ->
-            (* TODO: redirect link for login *)
-            span [pcdata (s_ "Edit")]
-    in
 
     (* Page titles *)
     let browser_ttl =
