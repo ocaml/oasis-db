@@ -125,25 +125,31 @@ let home_handler sp () () =
           (match t.latest with
              | hd :: tl ->
                  begin
-                   let to_li ver =
+                   let to_li log =
                      let date =
                        CalendarLib.Printer.Calendar.sprint
                          "%F"
-                         ver.upload_date
+                         log.ODBLog.log_timestamp
                      in
-                     let ver_s = 
-                       OASISVersion.string_of_version 
-                         ver.ver
-                     in
-                       li 
-                         [a 
-                            view_pkg_ver
-                            sp
-                            [pcdata 
-                               (Printf.sprintf 
-                                  (f_ "%s v%s (%s)")
-                                  ver.pkg ver_s date)]
-                            (ver.pkg, Version ver.ver)]
+                       match log.ODBLog.log_event with 
+                         | `Pkg(pkg_str, `VersionCreated ver) ->
+                             li 
+                               [a 
+                                  view_pkg_ver
+                                  sp
+                                  [pcdata 
+                                     (Printf.sprintf 
+                                        (f_ "%s v%s (%s)")
+                                        pkg_str 
+                                        (OASISVersion.string_of_version ver) 
+                                        date)]
+                                  (pkg_str, Version ver)]
+                         | _ ->
+                             li 
+                               [pcdata 
+                                  (Printf.sprintf "%s (%s)"
+                                     (ODBLog.to_string log)
+                                     date)]
                    in
                      ul (to_li hd) (List.map to_li tl)
                  end

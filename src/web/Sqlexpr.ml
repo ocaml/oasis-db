@@ -99,6 +99,11 @@ let create ?(log) ?(n=5) fn =
 let () = 
   Printexc.register_printer
     (function
+       | Sqlexpr_sqlite.Error(Failure(s)) ->
+           Some 
+             (Printf.sprintf 
+                "Sqlexpr_sqlite.Error(Failure(%S))"
+                s)
        | Sqlexpr_sqlite.Error(e) ->
            Some "Sqlexpr_sqlite.Error(...)" 
 (*

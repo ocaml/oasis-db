@@ -62,7 +62,19 @@ struct
                  string_of_version pkg_ver.ver
          in
            pkg_str^"/"^ver_str)
-           
+
+  let ver_of_pkg_ver_k =
+    function
+      | `Str (_, ver_str) -> version_of_string ver_str
+      | `StrVer (_, ver) -> ver
+      | `PkgVer ({ver = ver}) -> ver
+
+  let pkg_str_of_pkg_ver_k = 
+    function
+      | `Str (pkg_str, _) 
+      | `StrVer (pkg_str, _)
+      | `PkgVer ({pkg = pkg_str}) ->
+          pkg_str
 
   let pkg = 
     user_type
@@ -75,6 +87,12 @@ struct
            | `Str pkg_str -> pkg_str
            | `Pkg pkg -> pkg.ODBPkg.pkg_name
            | `PkgVer pkg_ver -> pkg_ver.pkg)
+
+  let pkg_str_of_pkg_k =
+    function
+      | `Str pkg_str -> pkg_str 
+      | `Pkg pkg -> pkg.ODBPkg.pkg_name
+      | `PkgVer pkg_ver -> pkg_ver.ODBPkgVer.pkg
 
 end
 

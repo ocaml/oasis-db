@@ -57,19 +57,19 @@ let to_string t =
           begin
             match se with 
               | `Created ->
-                  spf "package %s created" pkg
+                  spf "Package %s created" pkg
               | `Deleted ->
-                  spf "package %s deleted" pkg
+                  spf "Package %s deleted" pkg
               | `UscanChanged ->
-                  spf "uscan of package %s changed" pkg
+                  spf "Uscan of package %s changed" pkg
               | `Rated ->
-                  spf "package %s rated" pkg 
+                  spf "Package %s rated" pkg 
               | `Commented ->
-                  spf "package %s commented" pkg 
+                  spf "Package %s commented" pkg 
               | `VersionCreated ver ->
-                  spf "package %s version %s created" pkg (sov ver)
+                  spf "Package %s version %s created" pkg (sov ver)
               | `VersionDeleted ver ->
-                  spf "package %s version %s deleted" pkg (sov ver)
+                  spf "Package %s version %s deleted" pkg (sov ver)
           end
 
       | `Sys (sys, se) ->
