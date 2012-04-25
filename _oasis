@@ -167,6 +167,7 @@ Library "oasis-db-ocsigen"
            ExtODB,
            Descr,
            BoxedForms,
+           Cron,
            Init
   BuildDepends: oasis-db, 
                 ocsigen, 

@@ -68,6 +68,8 @@ let admin =
     (fun sp () () ->
        Context.get_admin ~sp ()
        >>= fun (ctxt, accnt) ->
+       Cron.box ~ctxt ~sp ()
+       >>= fun cron_box ->
        template
          ~ctxt
          ~sp
@@ -78,6 +80,7 @@ let admin =
                 (s_ "This page let you access operation that requires 'admin'
                      privileges.");
               em [pcdata (s_ "Use with caution.")]];
+           cron_box;
          ])
              
 let my_account_with_offset =
@@ -114,7 +117,7 @@ let my_account_handler sp redirect_opt log_offset =
            (li [a account_settings sp 
                   [pcdata (s_ "Settings")] ()])
            (* TODO *)
-           [li [a admin sp [pcdata (s_ "Create package")] ()]];
+           [li [a admin sp [pcdata (s_ "Administration")] ()]];
         ]
   end
 

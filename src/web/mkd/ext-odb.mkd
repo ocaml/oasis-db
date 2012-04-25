@@ -4,7 +4,7 @@ automated OCaml package installation.
 
 To install odb: 
 {{
-curl -O https://github.com/thelema/odb/raw/master/odb.ml
+curl -O https://raw.github.com/thelema/odb/master/odb.ml
 }}
 
 You can then get the list of available package:

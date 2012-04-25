@@ -22,7 +22,7 @@ let () =
       (f_ "E: Exception raised during initialization: %s\n%!")
       (Printexc.to_string e)
 
-let default () = 
+let default = 
   Redirection.register_new_service ~path:[""] ~get_params:unit 
     (fun sp () () -> return home)
 

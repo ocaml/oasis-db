@@ -110,6 +110,7 @@ deploy-dev:
 		--mkdir tmp \
 		--copy-dir src/web/static static \
 		--copy-dir src/web/mkd mkd \
+		--extra-native oasis \
 		--port 8080 \
 		--copy-file patches/META.cameleon lib/ocaml/METAS \
 		--copy-file patches/META.sqlexpr  lib/ocaml/sqlexpr/META \
