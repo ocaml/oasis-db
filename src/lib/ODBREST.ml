@@ -29,19 +29,14 @@ open ODBAPI
 open REST
 
 let mk ~ctxt api_fun base_url params = 
-  let curl_socket = 
-    Curl.init ()
-  in
-  let ctxt = 
-    RESTCurl.create 
-      ~dbug_print:(fun s -> ignore_result (ODBMessage.debug ~ctxt "%s" s))
-      base_url curl_socket
-  in
-  let res =
-    RESTCurl.mk_fun api_fun ~ctxt params
-  in
-    Curl.cleanup curl_socket;
-    res
+  ODBCurl.with_curl
+    (fun curl_socket ->
+       let ctxt = 
+         RESTCurl.create 
+           ~dbug_print:(fun s -> ignore_result (ODBMessage.debug ~ctxt "%s" s))
+           base_url curl_socket
+       in
+         RESTCurl.mk_fun api_fun ~ctxt params)
 
 module Pkg = 
 struct 

@@ -19,38 +19,35 @@ let tests =
 
        (* Upload a package *)
        let () = 
-         let curl = 
-           Curl.init ()
-         in
-         let write_fun = String.length in
+         ODBCurl.with_curl
+           (fun curl ->
+              let write_fun = String.length in
 
-           Curl.set_verbose curl !verbose; 
-           Curl.set_followlocation curl true;
-           Curl.set_failonerror curl true;
+                Curl.set_verbose curl !verbose; 
+                Curl.set_followlocation curl true;
+                Curl.set_failonerror curl true;
 
-           Curl.set_writefunction curl write_fun;
+                Curl.set_writefunction curl write_fun;
 
-           (* Login *)
-           Curl.set_url curl (base_url^"/login?login=admin1&password=");
-           Curl.set_cookiefile curl ""; (* Enabled in-memory cookie *)
-           Curl.perform curl;
+                (* Login *)
+                Curl.set_url curl (base_url^"/login?login=admin1&password=");
+                Curl.set_cookiefile curl ""; (* Enabled in-memory cookie *)
+                Curl.perform curl;
 
-           (* Upload *)
-           Curl.set_url curl (base_url^"/upload");
-           Curl.set_post curl true;
-           Curl.set_httppost curl
-             [Curl.CURLFORM_CONTENT("publink", "toto", Curl.DEFAULT);
-              Curl.CURLFORM_FILE("tarball", 
-                                 in_data_dir "ocaml-moifile-0.1.0.tar.gz",
-                                 Curl.DEFAULT)];
-           Curl.perform curl;
+                (* Upload *)
+                Curl.set_url curl (base_url^"/upload");
+                Curl.set_post curl true;
+                Curl.set_httppost curl
+                  [Curl.CURLFORM_CONTENT("publink", "toto", Curl.DEFAULT);
+                   Curl.CURLFORM_FILE("tarball", 
+                                      in_data_dir "ocaml-moifile-0.1.0.tar.gz",
+                                      Curl.DEFAULT)];
+                Curl.perform curl;
 
-           (* Logout *)
-           Curl.set_url curl (base_url^"/logout");
-           Curl.set_post curl false;
-           Curl.perform curl;
-
-           Curl.cleanup curl
+                (* Logout *)
+                Curl.set_url curl (base_url^"/logout");
+                Curl.set_post curl false;
+                Curl.perform curl)
        in
 
        let lst = 

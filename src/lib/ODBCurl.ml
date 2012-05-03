@@ -7,6 +7,10 @@
 open ODBGettext
 open ExtLib
 
+let () = 
+  Curl.global_init Curl.CURLINIT_GLOBALALL;
+  at_exit (fun () -> Curl.global_cleanup ()) 
+
 (** [uri_concat uri path] Concatenates a relative [path] onto an absolute
   * [uri] 
   *)
@@ -31,10 +35,11 @@ let with_curl f =
     Curl.cleanup c
   in
     try 
-      f c;
-      cleanup ()
+      let res = f c in
+        cleanup ();  
+        res
     with e ->
-      cleanup ();
+       cleanup ();
       raise e
 
 let download_chn' ?curl ?(custom=ignore) url fn chn = 
@@ -177,7 +182,6 @@ let () =
                |  Curl.CURLE_BAD_CONTENT_ENCODING        -> "CURLE_BAD_CONTENT_ENCODING"
                |  Curl.CURLE_LDAP_INVALID_URL            -> "CURLE_LDAP_INVALID_URL"
                |  Curl.CURLE_FILESIZE_EXCEEDED           -> "CURLE_FILESIZE_EXCEEDED"
-               |  Curl.CURLE_FTP_SSL_FAILED              -> "CURLE_FTP_SSL_FAILED"
                |  Curl.CURLE_USE_SSL_FAILED              -> "CURLE_USE_SSL_FAILED"
                |  Curl.CURLE_SEND_FAIL_REWIND            -> "CURLE_SEND_FAIL_REWIND"
                |  Curl.CURLE_SSL_ENGINE_INITFAILED       -> "CURLE_SSL_ENGINE_INITFAILED"

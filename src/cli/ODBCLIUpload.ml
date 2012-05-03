@@ -73,106 +73,102 @@ let main () =
                  (f_ "Selected repository '%s' doesn't have an API URI set")
                  repo.repo_name)
   in
-  let curl = 
-    Curl.init ()
-  in
+    ODBCurl.with_curl 
+      (fun curl ->
+         let msg_split str =
+           List.map String.strip (String.nsplit (String.strip str) "\n")
+         in
 
-  let msg_split str =
-    List.map String.strip (String.nsplit (String.strip str) "\n")
-  in
+         let curl_debug _ dbg_typ str =
+           let hdr, display =
+             match dbg_typ with 
+               | Curl.DEBUGTYPE_TEXT -> "text", true
+               | Curl.DEBUGTYPE_HEADER_IN -> "header-in", true
+               | Curl.DEBUGTYPE_HEADER_OUT -> "header-out", true
+               | Curl.DEBUGTYPE_DATA_IN -> "data-in", true
+               | Curl.DEBUGTYPE_DATA_OUT -> "data-out", false
+               | Curl.DEBUGTYPE_END -> "end", true
+           in
+             if display then 
+               List.iter 
+                 (fun s -> BaseMessage.debug "curl %s: %s" hdr s)
+                 (msg_split str)
+         in
 
-  let curl_debug _ dbg_typ str =
-    let hdr, display =
-      match dbg_typ with 
-        | Curl.DEBUGTYPE_TEXT -> "text", true
-        | Curl.DEBUGTYPE_HEADER_IN -> "header-in", true
-        | Curl.DEBUGTYPE_HEADER_OUT -> "header-out", true
-        | Curl.DEBUGTYPE_DATA_IN -> "data-in", true
-        | Curl.DEBUGTYPE_DATA_OUT -> "data-out", false
-        | Curl.DEBUGTYPE_END -> "end", true
-    in
-      if display then 
-        List.iter 
-          (fun s -> BaseMessage.debug "curl %s: %s" hdr s)
-          (msg_split str)
-  in
+         let answer = Buffer.create 13 
+         in
+         let curl_write d =
+           Buffer.add_string answer d;
+           String.length d
+         in
+           Curl.set_followlocation curl true;
+       (*     Curl.set_failonerror curl true; *)
+           Curl.set_verbose curl true;
+           Curl.set_debugfunction curl curl_debug;
+           Curl.set_httpheader curl ["Accept: text/plain"]; 
+           Curl.set_writefunction curl curl_write;
 
-  let answer = Buffer.create 13 
-  in
-  let curl_write d =
-    Buffer.add_string answer d;
-    String.length d
-  in
-    Curl.set_followlocation curl true;
-(*     Curl.set_failonerror curl true; *)
-    Curl.set_verbose curl true;
-    Curl.set_debugfunction curl curl_debug;
-    Curl.set_httpheader curl ["Accept: text/plain"]; 
-    Curl.set_writefunction curl curl_write;
+           (* Login *)
+           Curl.set_url curl 
+             (* TODO: login/password *)
+             (ODBCurl.uri_concat api_uri "login?login=admin1&password=");
+           Curl.set_cookiefile curl ""; (* Enabled in-memory cookie *)
+           Curl.perform curl;
 
-    (* Login *)
-    Curl.set_url curl 
-      (* TODO: login/password *)
-      (ODBCurl.uri_concat api_uri "login?login=admin1&password=");
-    Curl.set_cookiefile curl ""; (* Enabled in-memory cookie *)
-    Curl.perform curl;
+           (* Uploads *)
+           let () = 
+             let post_params = 
+                [Curl.CURLFORM_FILE("tarball", tarball_fn, Curl.DEFAULT)]
+             in
+             let post_params = 
+               match publink with 
+                 | Some uri ->
+                     Curl.CURLFORM_CONTENT("publink", uri, Curl.DEFAULT)
+                     :: post_params
+                 | None ->
+                     post_params
+             in
+             let () =
+               Curl.set_url curl (ODBCurl.uri_concat api_uri "upload");
+               Curl.set_post curl true;
+               Curl.set_httppost curl post_params;
+               Curl.perform curl
+             in
+             let http_code = 
+               Curl.get_httpcode curl
+             in
+             let msg_code = 
+               Printf.sprintf (f_ "HTTP code %d") http_code
+             in
+             let msg_lst = 
+               msg_split (Buffer.contents answer)
+             in
+               if 200 <= http_code && http_code < 400 then
+                 begin
+                   BaseMessage.debug "%s" msg_code;
+                   List.iter 
+                     (fun s -> 
+                        BaseMessage.info "%s" s)
+                     msg_lst
+                 end
+               else
+                 begin
+                   List.iter 
+                     (fun s ->
+                        BaseMessage.error "%s" s)
+                     (msg_code :: msg_lst);
+                   failwith 
+                     (Printf.sprintf
+                        (f_ "Error while uploading '%s'")
+                        tarball_fn)
+                 end;
+               Buffer.clear answer;
+           in
 
-    (* Uploads *)
-    let () = 
-      let post_params = 
-         [Curl.CURLFORM_FILE("tarball", tarball_fn, Curl.DEFAULT)]
-      in
-      let post_params = 
-        match publink with 
-          | Some uri ->
-              Curl.CURLFORM_CONTENT("publink", uri, Curl.DEFAULT)
-              :: post_params
-          | None ->
-              post_params
-      in
-      let () =
-        Curl.set_url curl (ODBCurl.uri_concat api_uri "upload");
-        Curl.set_post curl true;
-        Curl.set_httppost curl post_params;
-        Curl.perform curl
-      in
-      let http_code = 
-        Curl.get_httpcode curl
-      in
-      let msg_code = 
-        Printf.sprintf (f_ "HTTP code %d") http_code
-      in
-      let msg_lst = 
-        msg_split (Buffer.contents answer)
-      in
-        if 200 <= http_code && http_code < 400 then
-          begin
-            BaseMessage.debug "%s" msg_code;
-            List.iter 
-              (fun s -> 
-                 BaseMessage.info "%s" s)
-              msg_lst
-          end
-        else
-          begin
-            List.iter 
-              (fun s ->
-                 BaseMessage.error "%s" s)
-              (msg_code :: msg_lst);
-            failwith 
-              (Printf.sprintf
-                 (f_ "Error while uploading '%s'")
-                 tarball_fn)
-          end;
-        Buffer.clear answer;
-    in
-
-    (* Logout *)
-    Curl.set_url curl (ODBCurl.uri_concat api_uri "logout");
-    Curl.set_post curl false;
-    Curl.perform curl;
-
-    Curl.cleanup curl
+           (* Logout *)
+           Curl.set_url curl (ODBCurl.uri_concat api_uri "logout");
+           Curl.set_post curl false;
+           Curl.perform curl)
 
 let scmd = 
   {(SubCommand.make
