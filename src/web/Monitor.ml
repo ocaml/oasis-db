@@ -54,14 +54,12 @@ let user_settings_box ~sp ~ctxt () =
       (fun sp () pkg_lst ->
          Context.get_user ~sp () 
          >>= fun (ctxt, accnt) ->
-         S.use ctxt.sqle
-           (fun db ->
-              Lwt_list.iter_s
-                (fun pkg -> 
-                   S.execute db
-                     sql"DELETE FROM monitor_pkg WHERE user_id = %d AND pkg = %s"
-                     accnt.OCAAccount.accnt_id pkg)
-                pkg_lst))
+         Lwt_list.iter_s
+           (fun pkg -> 
+              S.execute ctxt.sqle
+                sql"DELETE FROM monitor_pkg WHERE user_id = %d AND pkg = %s"
+                accnt.OCAAccount.accnt_id pkg)
+           pkg_lst)
   in
 
   let monitor_list = 
@@ -72,14 +70,12 @@ let user_settings_box ~sp ~ctxt () =
       (fun sp () pkg_lst ->
          Context.get_user ~sp ()
          >>= fun (ctxt, accnt) ->
-         S.use ctxt.sqle
-           (fun db ->
-              Lwt_list.iter_s
-                (fun pkg ->
-                   S.execute db
-                     sql"INSERT INTO monitor_pkg(user_id, pkg) VALUES (%d, %s)"
-                     accnt.OCAAccount.accnt_id pkg)
-                pkg_lst))
+         Lwt_list.iter_s
+           (fun pkg ->
+              S.execute ctxt.sqle
+                sql"INSERT INTO monitor_pkg(user_id, pkg) VALUES (%d, %s)"
+                accnt.OCAAccount.accnt_id pkg)
+           pkg_lst)
   in
 
   let switch_pkg_list =
@@ -124,28 +120,26 @@ let user_settings_box ~sp ~ctxt () =
          
   ODBStorage.Pkg.elements ctxt.stor 
   >>= fun other_pkg_lst ->
-  S.use ctxt.sqle
-    (fun db ->
-       begin
-         match Account.get_id ~ctxt () with 
-           | Some id ->
-               S.select db
-                 sql"SELECT @s{pkg} FROM monitor_pkg WHERE user_id = %d"
-                 id
-           | None ->
-               return []
-       end
-       >>= fun lst ->
-       Lwt_list.fold_left_s 
-         (fun acc pkg_str ->
-            ODBStorage.Pkg.mem ctxt.stor (`Str pkg_str)
-            >|= fun exists ->
-              if exists then
-                pkg_str :: acc
-              else
-                acc)
-         []
-         lst)
+  begin
+    match Account.get_id ~ctxt () with 
+      | Some id ->
+          S.select ctxt.sqle
+            sql"SELECT @s{pkg} FROM monitor_pkg WHERE user_id = %d"
+            id
+      | None ->
+          return []
+  end
+  >>= fun lst ->
+  Lwt_list.fold_left_s 
+    (fun acc pkg_str ->
+       ODBStorage.Pkg.mem ctxt.stor (`Str pkg_str)
+       >|= fun exists ->
+         if exists then
+           pkg_str :: acc
+         else
+           acc)
+    []
+    lst
   >>= fun pkg_str_lst ->
   let other_pkg_lst = 
     List.filter 
@@ -226,61 +220,53 @@ let monitor =
        >>= fun (ctxt, _) ->
        match Account.get_id ~ctxt () with 
          | Some id ->
-             S.use ctxt.sqle
-               (fun db ->
-                  S.execute db 
-                  (if monitor then
-                     sql"INSERT INTO monitor_pkg(user_id, pkg) VALUES (%d, %s)"
-                   else
-                     sql"DELETE FROM monitor_pkg WHERE user_id = %d AND pkg = %s")
-                    id (ExtParams.pkg_str_of_pkg_k k))
+             S.execute ctxt.sqle
+             (if monitor then
+                sql"INSERT INTO monitor_pkg(user_id, pkg) VALUES (%d, %s)"
+              else
+                sql"DELETE FROM monitor_pkg WHERE user_id = %d AND pkg = %s")
+               id (ExtParams.pkg_str_of_pkg_k k)
          | None ->
              return ())
 
 let box ~sp ~ctxt k = 
-  S.use ctxt.sqle
-    (fun db ->
-       begin
-         match Account.get_id ~ctxt () with 
-           | Some id ->
-               S.select_one db
-                 sql"SELECT @d?{count(*)} FROM monitor_pkg WHERE pkg = %s AND user_id = %d"
-                 (ExtParams.pkg_str_of_pkg_k k) id
-           | None ->
-               return None
-       end
-       >|= fun mark_opt ->
-         let vmonitor, txt =
-           match mark_opt with 
-             | Some 0 
-             | None -> 
-                 true, s_ "Start monitor"
-             | Some _ -> 
-                 false, s_ "Stop monitor"
-         in
-           (Session.link_need_login ~sp ~ctxt
-              txt
-              (preapply monitor (k, vmonitor))))
+  begin
+    match Account.get_id ~ctxt () with 
+      | Some id ->
+          S.select_one ctxt.sqle
+            sql"SELECT @d?{count(*)} FROM monitor_pkg WHERE pkg = %s AND user_id = %d"
+            (ExtParams.pkg_str_of_pkg_k k) id
+      | None ->
+          return None
+  end
+  >|= fun mark_opt ->
+    let vmonitor, txt =
+      match mark_opt with 
+        | Some 0 
+        | None -> 
+            true, s_ "Start monitor"
+        | Some _ -> 
+            false, s_ "Stop monitor"
+    in
+      (Session.link_need_login ~sp ~ctxt
+         txt
+         (preapply monitor (k, vmonitor)))
 
 let monitor_data ~ctxt limit offset = 
   match Account.get_id ~ctxt (), Context.is_admin ~ctxt () with 
     | Some id, false ->
-        S.use ctxt.sqle
-          (fun db ->
-             Log.exec_fold_decode db
-               (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                    WHERE pkg IN (SELECT pkg FROM monitor_pkg WHERE user_id = %d) \
-                    ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-               id limit offset)
+        Log.exec_fold_decode ctxt.sqle
+          (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+               WHERE pkg IN (SELECT pkg FROM monitor_pkg WHERE user_id = %d) \
+               ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+          id limit offset
     | Some id, true ->
-        S.use ctxt.sqle
-          (fun db ->
-             Log.exec_fold_decode db
-               (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                    WHERE pkg IN (SELECT pkg FROM monitor_pkg WHERE user_id = %d) OR
-                          sys NOT NULL \
-                    ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-               id limit offset)
+        Log.exec_fold_decode ctxt.sqle
+          (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+               WHERE pkg IN (SELECT pkg FROM monitor_pkg WHERE user_id = %d) OR
+                     sys NOT NULL \
+               ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+          id limit offset
     | None, _ ->
         return []
 
@@ -288,36 +274,34 @@ let monitor_token_allocate ~ctxt () =
   (* Test existence of the token and inject it if possible *)
   match Account.get_id ~ctxt () with 
     | Some id ->
-        S.use ctxt.sqle
+        S.transaction ctxt.sqle
           (fun db ->
-             S.transaction db
-               (fun db ->
-                  let rec allocate' () =
-                    let token = 
-                      string_of_int (Random.bits ()) 
-                    in
-                      S.select_one db
-                        sql"SELECT @d{count(token)} FROM monitor_token WHERE token = %s"
-                        token
-                      >>=
-                        function 
-                          | 0 ->
-                              begin
-                                S.execute db
-                                  sql"INSERT INTO monitor_token(user_id, token) VALUES (%d, %s)"
-                                  id token
-                                >|= fun () ->
-                                Some token
-                              end
+             let rec allocate' () =
+               let token = 
+                 string_of_int (Random.bits ()) 
+               in
+                 S.select_one db
+                   sql"SELECT @d{count(token)} FROM monitor_token WHERE token = %s"
+                   token
+                 >>=
+                   function 
+                     | 0 ->
+                         begin
+                           S.execute db
+                             sql"INSERT INTO monitor_token(user_id, token) VALUES (%d, %s)"
+                             id token
+                           >|= fun () ->
+                           Some token
+                         end
 
-                          | _ ->
-                              allocate' ()
-                  in
-                    S.execute db
-                      sql"DELETE FROM monitor_token WHERE user_id = %d"
-                      id
-                    >>= fun () ->
-                    allocate' ()))
+                     | _ ->
+                         allocate' ()
+             in
+               S.execute db
+                 sql"DELETE FROM monitor_token WHERE user_id = %d"
+                 id
+               >>= fun () ->
+               allocate' ())
     | None ->
         return None
 
@@ -325,11 +309,9 @@ let monitor_token ~ctxt () =
   match Account.get_id ~ctxt () with 
     | Some id ->
         begin
-          S.use ctxt.sqle
-            (fun db ->
-               S.select db
-                 sql"SELECT @s{token} FROM monitor_token WHERE user_id = %d"
-                 id)
+          S.select ctxt.sqle
+            sql"SELECT @s{token} FROM monitor_token WHERE user_id = %d"
+            id
           >>= 
             function
               | token :: _ ->
@@ -370,11 +352,9 @@ let feed_handler sp token ()  =
   Context.get ~sp () 
   >>= fun ctxt ->
   (* Get account matching the provided token *)
-  S.use ctxt.sqle 
-    (fun db ->
-       S.select_one db
-         sql"SELECT @d{user_id} FROM monitor_token WHERE token = %s"
-         token)
+  S.select_one ctxt.sqle
+    sql"SELECT @d{user_id} FROM monitor_token WHERE token = %s"
+    token
   >>= fun user_id ->
   Account.of_id ~ctxt user_id
   >>= fun accnt ->

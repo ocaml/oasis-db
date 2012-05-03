@@ -90,49 +90,47 @@ let add sqle ?timestamp (ev: ODBLog.event) =
       | `Stopped as e ->
           e
   in
-    S.use sqle
-      (fun db ->
-         let sexp = 
-           Sexplib.Sexp.to_string 
-             (ODBLog.sexp_of_event ev)
-         in
+  let sexp = 
+    Sexplib.Sexp.to_string 
+      (ODBLog.sexp_of_event ev)
+  in
 
-         let sys_opt, pkg_opt, ver_opt, se =
-           match ev with
-             | `Pkg (pkg, se) ->
-                 begin
-                   let ver_opt = 
-                     match se with 
-                       | `VersionCreated ver 
-                       | `VersionDeleted ver ->
-                           Some (OASISVersion.string_of_version ver)
-                       | `Created | `Deleted | `UscanChanged
-                       | `Rated | `Commented ->
-                           None
-                   in
-                     None, (Some pkg), ver_opt, 
-                     (sevent_of_xxx_event se)
-                 end
+  let sys_opt, pkg_opt, ver_opt, se =
+    match ev with
+      | `Pkg (pkg, se) ->
+          begin
+            let ver_opt = 
+              match se with 
+                | `VersionCreated ver 
+                | `VersionDeleted ver ->
+                    Some (OASISVersion.string_of_version ver)
+                | `Created | `Deleted | `UscanChanged
+                | `Rated | `Commented ->
+                    None
+            in
+              None, (Some pkg), ver_opt, 
+              (sevent_of_xxx_event se)
+          end
 
-             | `Sys (sys, se) ->
-                 (Some sys), None, None, 
-                 (sevent_of_xxx_event se)
-         in
+      | `Sys (sys, se) ->
+          (Some sys), None, None, 
+          (sevent_of_xxx_event se)
+  in
 
-           
-         let exec =
-           match timestamp with 
-             | Some tm ->
-                 S.execute db
-                   (sql"INSERT INTO log (timestamp, sys, pkg, ver, event, sexp) \
-                        VALUES (%s, %s?, %s?, %s?, %d, %s)")
-                   (Printer.Calendar.to_string tm)
-             | None ->
-                 S.execute db
-                   (sql"INSERT INTO log (sys, pkg, ver, event, sexp) \
-                        VALUES (%s?, %s?, %s?, %d, %s)")
-         in
-           exec sys_opt pkg_opt ver_opt (int_of_sevent se) sexp)
+    
+  let exec =
+    match timestamp with 
+      | Some tm ->
+          S.execute sqle
+            (sql"INSERT INTO log (timestamp, sys, pkg, ver, event, sexp) \
+                 VALUES (%s, %s?, %s?, %s?, %d, %s)")
+            (Printer.Calendar.to_string tm)
+      | None ->
+          S.execute sqle
+            (sql"INSERT INTO log (sys, pkg, ver, event, sexp) \
+                 VALUES (%s?, %s?, %s?, %d, %s)")
+  in
+    exec sys_opt pkg_opt ver_opt (int_of_sevent se) sexp
 
 type filter =
     [ `Pkg of string
@@ -142,154 +140,136 @@ type filter =
 
 let exec_fold_decode db sql =
  let decode acc (id, sexp, timestamp) = 
-   id >>= fun id ->
-   sexp >>= fun sexp ->
-   timestamp >>= fun timestamp -> 
-   begin
-     let res = 
-       {
-         log_id = id;
-         log_timestamp = 
-           (Printer.Calendar.from_string 
-              timestamp);
-         log_event = 
-           (ODBLog.event_of_sexp 
-              (Sexplib.Sexp.of_string sexp));
-       }
-     in
-       return (res :: acc)
-   end
+   let res = 
+     {
+       log_id = id;
+       log_timestamp = 
+         (Printer.Calendar.from_string 
+            timestamp);
+       log_event = 
+         (ODBLog.event_of_sexp 
+            (Sexplib.Sexp.of_string sexp));
+     }
+   in
+     return (res :: acc)
  in
    S.fold db decode [] sql
 
 let get ?(offset=0) ?(limit=(-1)) ?filter sqle =
-  S.use sqle
-    (fun db ->
-       begin
-         match filter with 
-           | None ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-                 limit offset
+  begin
+    match filter with 
+      | None ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+            limit offset
 
-           | Some (`Pkg pkg_str) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE pkg = %s \
-                      ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-                 pkg_str
-                 limit offset
+      | Some (`Pkg pkg_str) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE pkg = %s \
+                 ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+            pkg_str
+            limit offset
 
-           | Some (`Sys sys_str) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE sys = %s \
-                      ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-                 sys_str
-                 limit offset
+      | Some (`Sys sys_str) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE sys = %s \
+                 ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+            sys_str
+            limit offset
 
-           | Some (`Event sev) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE event = %d \
-                      ORDER BY timestamp DESC LIMIT %d OFFSET %d")
-                 (int_of_sevent sev)
-                 limit offset
-       end
-       >>= fun lst ->
-       return (List.rev lst))
+      | Some (`Event sev) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE event = %d \
+                 ORDER BY timestamp DESC LIMIT %d OFFSET %d")
+            (int_of_sevent sev)
+            limit offset
+  end
+  >>= fun lst ->
+  return (List.rev lst)
 
 let get_rev ?filter ?(limit=(-1)) ?(offset=0) sqle = 
   (* TODO: code duplicate *)
-  S.use sqle
-    (fun db ->
-       begin
-         match filter with 
-           | None ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      ORDER BY timestamp ASC LIMIT %d OFFSET %d")
-                 limit offset
+  begin
+    match filter with 
+      | None ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 ORDER BY timestamp ASC LIMIT %d OFFSET %d")
+            limit offset
 
-           | Some (`Pkg pkg_str) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE pkg = %s \
-                      ORDER BY timestamp ASC LIMIT %d OFFSET %d")
-                 pkg_str
-                 limit offset
+      | Some (`Pkg pkg_str) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE pkg = %s \
+                 ORDER BY timestamp ASC LIMIT %d OFFSET %d")
+            pkg_str
+            limit offset
 
-           | Some (`Sys sys_str) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE sys = %s \
-                      ORDER BY timestamp ASC LIMIT %d OFFSET %d")
-                 sys_str
-                 limit offset
+      | Some (`Sys sys_str) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE sys = %s \
+                 ORDER BY timestamp ASC LIMIT %d OFFSET %d")
+            sys_str
+            limit offset
 
-           | Some (`Event sev) ->
-               exec_fold_decode db
-                 (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
-                      WHERE event = %d \
-                      ORDER BY timestamp ASC LIMIT %d OFFSET %d")
-                 (int_of_sevent sev)
-                 limit offset
-       end
-       >>= fun lst ->
-       return (List.rev lst))
+      | Some (`Event sev) ->
+          exec_fold_decode sqle
+            (sql"SELECT @d{id}, @s{sexp}, @s{timestamp} FROM log \
+                 WHERE event = %d \
+                 ORDER BY timestamp ASC LIMIT %d OFFSET %d")
+            (int_of_sevent sev)
+            limit offset
+  end
+  >>= fun lst ->
+  return (List.rev lst)
 
 let get_count ?filter sqle =
-  S.use sqle
-    (fun db ->
-       begin
-         match filter with 
-           | None ->
-               S.select_one db
-                 (sql"SELECT @d{count(*)} FROM log")
+  begin
+    match filter with 
+      | None ->
+          S.select_one sqle
+            (sql"SELECT @d{count(*)} FROM log")
 
-           | Some (`Pkg pkg_str) ->
-               S.select_one db
-                 (sql"SELECT @d{count(*)} FROM log WHERE pkg = %s")
-                 pkg_str
+      | Some (`Pkg pkg_str) ->
+          S.select_one sqle
+            (sql"SELECT @d{count(*)} FROM log WHERE pkg = %s")
+            pkg_str
 
-           | Some (`Sys sys_str) ->
-               S.select_one db
-                 (sql"SELECT @d{count(*)} FROM log WHERE sys = %s")
-                 sys_str
+      | Some (`Sys sys_str) ->
+          S.select_one sqle
+            (sql"SELECT @d{count(*)} FROM log WHERE sys = %s")
+            sys_str
 
-           | Some (`Event sev) ->
-               S.select_one db
-                 (sql"SELECT @d{count(*)} FROM log WHERE event = %d")
-                 (int_of_sevent sev)
-       end
-       >>= fun count ->
-       return count)
+      | Some (`Event sev) ->
+          S.select_one sqle
+            (sql"SELECT @d{count(*)} FROM log WHERE event = %d")
+            (int_of_sevent sev)
+  end
 
 let upload_stats sqle fst_date = 
   let fold_decode ev = 
-    S.use sqle
-      (fun db ->
-         S.fold db
-           (fun acc (year_str, month_str, count) ->
-              year_str >>= fun year_str ->
-              month_str >>= fun month_str ->
-              count >>= fun count ->
-              return 
-                ((Calendar.lmake
-                    ~year:(int_of_string year_str)
-                    ~month:(int_of_string month_str)
-                    (),
-                  count) 
-                :: acc))
-           []
-           sql"SELECT @s{strftime('%%Y', timestamp) AS year}, \
-                      @s{strftime('%%m', timestamp) AS month}, \
-                      @d{count(*)} FROM log \
-               WHERE pkg NOT NULL AND event = %d AND timestamp >= %f \
-               GROUP BY year, month ORDER BY year DESC, month DESC"
-           (int_of_sevent ev)
-           (Calendar.to_unixfloat fst_date))
+    S.fold sqle
+      (fun acc (year_str, month_str, count) ->
+         return 
+           ((Calendar.lmake
+               ~year:(int_of_string year_str)
+               ~month:(int_of_string month_str)
+               (),
+             count) 
+           :: acc))
+      []
+      sql"SELECT @s{strftime('%%Y', timestamp) AS year}, \
+                 @s{strftime('%%m', timestamp) AS month}, \
+                 @d{count(*)} FROM log \
+          WHERE pkg NOT NULL AND event = %d AND timestamp >= %f \
+          GROUP BY year, month ORDER BY year DESC, month DESC"
+      (int_of_sevent ev)
+      (Calendar.to_unixfloat fst_date)
   in
     fold_decode `VersionCreated
     >>= fun pkg_ver_created ->

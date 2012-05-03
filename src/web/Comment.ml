@@ -70,33 +70,30 @@ let save =
     (fun sp () (pkg, (ver_opt, (mkd, id_opt))) ->
        Context.get_user ~sp ()
        >>= fun (ctxt, accnt) ->
-       S.use ctxt.Context.sqle
-         (fun db ->
-            begin
-              let user_id = 
-                accnt.OCAAccount.accnt_id
-              in
-              let ver_str_opt = 
-                match ver_opt with
-                  | Some v -> Some (OASISVersion.string_of_version v)
-                  | None -> None
-              in
-                match id_opt with 
-                  | Some id ->
-                      if Context.is_admin ~ctxt () then
-                        S.execute db 
-                          sql"UPDATE comment SET markdown = %s WHERE id = %d"
-                          mkd id
-                      else
-                        S.execute db
-                          sql"UPDATE comment SET markdown = %s WHERE id = %d AND user_id = %d"
-                          mkd id user_id 
-                  | None ->
-                      S.execute db
-                        sql"INSERT INTO comment(user_id, pkg, ver, markdown) \
-                            VALUES (%d, %s, %s?, %s)"
-                        user_id pkg ver_str_opt mkd
-            end)
+       begin
+         let db = ctxt.Context.sqle in
+         let user_id = accnt.OCAAccount.accnt_id in
+         let ver_str_opt = 
+           match ver_opt with
+             | Some v -> Some (OASISVersion.string_of_version v)
+             | None -> None
+         in
+           match id_opt with 
+             | Some id ->
+                 if Context.is_admin ~ctxt () then
+                   S.execute db 
+                     sql"UPDATE comment SET markdown = %s WHERE id = %d"
+                     mkd id
+                 else
+                   S.execute db
+                     sql"UPDATE comment SET markdown = %s WHERE id = %d AND user_id = %d"
+                     mkd id user_id 
+             | None ->
+                 S.execute db
+                   sql"INSERT INTO comment(user_id, pkg, ver, markdown) \
+                       VALUES (%d, %s, %s?, %s)"
+                   user_id pkg ver_str_opt mkd
+       end
        >>= fun () ->
        Log.add ctxt.Context.sqle (`Pkg (pkg, `Commented))
        >>= fun () ->
@@ -116,19 +113,18 @@ let delete =
     (fun sp () id ->
        Context.get_user ~sp ()
        >>= fun (ctxt, accnt) ->
-       S.use ctxt.Context.sqle
-         (fun db ->
-            (* Allow to delete by itself or by admin *)
-            begin
-              if Context.is_admin ~ctxt () then
-                S.execute db
-                  sql"DELETE FROM comment WHERE id = %d"
-                  id
-              else
-                S.execute db
-                  sql"DELETE FROM comment WHERE id = %d AND user_id = %d"
-                  id accnt.OCAAccount.accnt_id
-            end)
+       (* Allow to delete by itself or by admin *)
+       begin
+         let db = ctxt.Context.sqle in
+         if Context.is_admin ~ctxt () then
+           S.execute db
+             sql"DELETE FROM comment WHERE id = %d"
+             id
+         else
+           S.execute db
+             sql"DELETE FROM comment WHERE id = %d AND user_id = %d"
+             id accnt.OCAAccount.accnt_id
+       end
        >>= fun () ->
        return (edited_state_remove ~sp id))
 
@@ -219,12 +215,6 @@ let pkg_box_handler ~sp ~ctxt pkg ver_opt =
   in
 
   let decode (id, user_id, ver_str_opt, mkd, timestamp) = 
-    id >>= fun id ->
-    user_id >>= fun user_id ->
-    ver_str_opt >>= fun ver_str_opt ->
-    mkd >>= fun mkd ->
-    timestamp >>= fun timestamp ->
-
     Account.of_id ~ctxt user_id
     >>= fun user_accnt ->
 
@@ -311,17 +301,16 @@ let pkg_box_handler ~sp ~ctxt pkg ver_opt =
         return (is_edited, res)
     end
   in
-    S.use ctxt.Context.sqle 
-      (fun db ->
-         S.fold db 
-           (fun (is_edited, lst) e ->
-              decode e 
-              >>= fun (is_edited', div) -> 
-              return (is_edited || is_edited', div :: lst))
-           (false, [])
-           sql"SELECT @d{id}, @d{user_id}, @s?{ver}, @s{markdown}, @s{timestamp} FROM comment \
-               WHERE pkg = %s ORDER BY timestamp ASC"
-           pkg)
+  let db = ctxt.Context.sqle in
+    S.fold db 
+      (fun (is_edited, lst) e ->
+         decode e 
+         >>= fun (is_edited', div) -> 
+         return (is_edited || is_edited', div :: lst))
+      (false, [])
+      sql"SELECT @d{id}, @d{user_id}, @s?{ver}, @s{markdown}, @s{timestamp} FROM comment \
+          WHERE pkg = %s ORDER BY timestamp ASC"
+      pkg
     >>= fun (is_edited, lst) ->
     begin
       let lst =

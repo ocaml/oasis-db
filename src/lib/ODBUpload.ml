@@ -145,6 +145,9 @@ let upload_begin ~ctxt stor upload_method tarball_content tarball_nm publink =
     end
 
 let upload_commit ~ctxt t = 
+  (* TODO: more general commit framework, commit what has been changed 
+   * in the VFS.
+   *)
   check_exists ~ctxt ~assume_sure:true t
   >>= fun t ->
   begin
@@ -170,7 +173,6 @@ let upload_commit ~ctxt t =
           return ()
   end 
   >>= fun () ->
-
   LwtExt.IO.MemoryIn.with_file_in t.tarball_content
     (fun chn ->
        ODBStorage.PkgVer.create t.storage pkg_ver chn)
@@ -206,10 +208,26 @@ let upload_rollback ~ctxt t =
   return ()
 
 let upload_phantom_storage ~ctxt t =
-  ODBStorage.create_read_write ~ctxt 
-    (new ODBVFSUnion.read_write
-       (new ODBFSMemory.read_write (ODBFSTree.root ()))
-       [ODBStorage.fs t.storage])
+  let mem_fs = new ODBFSMemory.read_write (ODBFSTree.root ()) in
+  let real_fs = ODBStorage.fs t.storage in
+  ODBVFS.fold
+    (fun ev () ->
+       match ev with 
+         | `PreDir fn -> 
+             begin
+               real_fs#stat fn 
+               >>= fun {Unix.LargeFile.st_perm = perm} ->
+               mem_fs#file_exists fn
+               >>= function
+                 | true -> return ()
+                 | false -> mem_fs#mkdir fn perm
+             end
+         | `PostDir _ | `File _ ->
+             return ())
+    real_fs "" ()
+  >>= fun () ->
+  ODBStorage.create_read_write ~ctxt
+    (new ODBVFSUnion.read_write mem_fs [real_fs])
   >>= fun storage ->
   upload_commit ~ctxt {t with storage = storage}
   >|= fun pkg_ver ->

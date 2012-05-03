@@ -111,10 +111,16 @@ let main () =
                    | Some oasis ->
                        begin
                          (* Build the map of findlib name to package name *)
-                         let nm_fndlb_mp =
-                           OASISLibrary.name_findlib_map oasis 
+                         let _, _, nm_fndlb_mp =
+                           OASISLibrary.findlib_mapping oasis 
                          in
-                           OASISUtils.MapString.mem name_cond nm_fndlb_mp
+                           try 
+                             let _str : string = 
+                               nm_fndlb_mp name_cond 
+                             in
+                               true
+                           with OASISLibrary.FindlibPackageNotFound _ ->
+                             false
                        end
                    | None ->
                        begin

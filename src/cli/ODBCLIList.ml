@@ -59,22 +59,30 @@ let main () =
                (fun mp (pkg, _, oasis_opt) ->
                   match oasis_opt with 
                     | Some oasis ->
-                        let nm_fndlb_mp = 
-                          OASISLibrary.name_findlib_map oasis
+                        let rec dfs mp prefix =
+                          function
+                            | OASISLibrary.Container (fndlb_part_nm, children) ->
+                                dfs_list mp (fndlb_part_nm :: prefix) children
+                            | OASISLibrary.Package (fndlb_part_nm, _, _, _, children) ->
+                                let mp = 
+                                  MapString.add
+                                    (String.concat "." (List.rev (fndlb_part_nm :: prefix)))
+                                    [Printf.sprintf
+                                       (f_ "(version: %s)")
+                                       (OASISVersion.string_of_version oasis.version);
+                                     Printf.sprintf
+                                       (f_ "package: %s")
+                                       pkg.pkg_name]
+                                    mp
+                                in
+                                  dfs_list mp (fndlb_part_nm :: prefix) children
+                        and dfs_list mp prefix lst = 
+                          List.fold_left
+                            (fun mp grp -> dfs mp prefix grp)
+                            mp lst 
                         in
-                          MapString.fold
-                            (fun fndlb _ mp ->
-                               MapString.add
-                                 fndlb
-                                 [Printf.sprintf
-                                    (f_ "(version: %s)")
-                                    (OASISVersion.string_of_version oasis.version);
-                                  Printf.sprintf
-                                    (f_ "package: %s")
-                                    pkg.pkg_name]
-                                 mp)
-                            nm_fndlb_mp
-                            mp
+                        let groups, _, _ = OASISLibrary.findlib_mapping oasis in
+                          dfs_list mp [] groups
                     | None ->
                         mp)
                mp

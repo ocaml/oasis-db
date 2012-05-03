@@ -1,12 +1,15 @@
 # OASIS_START
-# DO NOT EDIT (digest: e4ef54463fc1e13c2cd0ae1af0e270fe)
+# DO NOT EDIT (digest: cea8ecb32a31bf84a385292e571aaf2f)
+FileUtilExt
+LwtExt
+OASISExprExt
+OASISBuildSectionExt
 ODBUtils
 ODBConf
 ODBGettext
 ODBContext
 ODBMessage
 ODBTypes
-ODBFileUtil
 ODBProcess
 ODBArchive
 ODBPkg
@@ -15,8 +18,24 @@ ODBStorage
 ODBInotify
 ODBCompletion
 ODBIncoming
-ODBMain
-ODBRunner
 ODBOASIS
-LwtExt
+ODBProvides
+ODBDeps
+ODBREST
+ODBLog
+ODBSync
+ODBUpload
+ODBRWLock
+ODBFSTree
+ODBVFS
+ODBVFSLock
+ODBVFSUnion
+ODBFSMemory
+ODBFSDisk
+ODBFSDiskLock
+ODBHLS
+ODBRepository
+ODBCurl
+ODBPkgVerSolver
+ODBDerive
 # OASIS_STOP

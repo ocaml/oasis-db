@@ -111,14 +111,10 @@ let is_odb_admin ~ctxt () =
           else
             catch 
               (fun () ->
-                 S.use ctxt.sqle 
-                   (fun db ->
-                      S.select_one db 
-                        sql"SELECT @d{user_id} FROM odb_user WHERE user_id = %d"
-                        id
-                      >>= fun _ ->
-                      return ())
-                 >>= fun () ->
+                 S.select_one ctxt.sqle
+                   sql"SELECT @d{user_id} FROM odb_user WHERE user_id = %d"
+                   id
+                 >>= fun _ ->
                  return true)
               (function
                  | Not_found ->
@@ -176,15 +172,10 @@ let list_tarball ~ctxt mp =
 
 (* Return a listing of the repository *)
 let list_repo ~ctxt nm = 
-  S.use ctxt.sqle
-    (fun db ->
-       S.fold db
-         (fun mp (pkg, ver) ->
-            pkg >>= fun pkg ->
-            ver >>= fun ver ->
-            return (MapString.add pkg ver mp))
-         MapString.empty
-         sql"SELECT @s{pkg}, @s{ver} FROM odb WHERE repo = %s" nm)
+  S.fold ctxt.sqle
+    (fun mp (pkg, ver) -> return (MapString.add pkg ver mp))
+    MapString.empty
+    sql"SELECT @s{pkg}, @s{ver} FROM odb WHERE repo = %s" nm
 
 (* Return a listing of latest version *)
 let list_latest ~ctxt () = 
@@ -221,8 +212,7 @@ let reg_sql_action ~name ~post_params f f' =
     (fun sp () p ->
        get_odb_admin ~sp () 
        >>= fun (ctxt, accnt) ->
-       S.use ctxt.sqle 
-         (fun db -> f ctxt sp accnt p db)
+       f ctxt sp accnt p ctxt.sqle
        >>= fun res ->
        f' ctxt sp accnt p res)
 
@@ -302,10 +292,7 @@ let repo_pkg_ver_set =
 let repo_pkg_clone =
   let snapshot_repo db nm =
     S.fold db 
-      (fun acc (pkg, ver) ->
-         pkg >>= fun pkg ->
-         ver >>= fun ver ->
-         return ((pkg, ver) :: acc))
+      (fun acc (pkg, ver) -> return ((pkg, ver) :: acc))
       []
       sql"SELECT @s{pkg}, @s{ver} FROM odb WHERE repo = %s ORDER BY pkg DESC"
       nm
@@ -428,14 +415,10 @@ let program_add =
 
 (* List external programs *)
 let program_list ~ctxt () =
-  S.use ctxt.sqle
-    (fun db ->
-       S.fold db
-         (fun acc program -> 
-            program >>= fun program ->
-            return (program :: acc))
-         []
-         sql"SELECT @s{program} FROM odb_program ORDER BY program DESC")
+  S.fold ctxt.sqle
+    (fun acc program -> return (program :: acc))
+    []
+    sql"SELECT @s{program} FROM odb_program ORDER BY program DESC"
 
 (* Delete an external library *)
 let library_delete = 
@@ -461,14 +444,10 @@ let library_add =
 
 (* List external libraries *)
 let library_list ~ctxt () =
-  S.use ctxt.sqle
-    (fun db ->
-       S.fold db
-         (fun acc library -> 
-            library >>= fun library ->
-            return (library :: acc))
-         []
-         sql"SELECT @s{library} FROM odb_library ORDER BY library DESC")
+  S.fold ctxt.sqle
+    (fun acc library -> return (library :: acc))
+    []
+    sql"SELECT @s{library} FROM odb_library ORDER BY library DESC"
 
 (* Data returned by map_info_name when oasis is present *)
 type info_t = 
@@ -1142,12 +1121,10 @@ let library_management_box ~ctxt ~sp () =
 let user_management_box ~ctxt ~sp () = 
   Account.list ~ctxt () 
   >>= fun accnt_lst ->
-  S.use ctxt.sqle
-    (fun db ->
-       S.fold db
-         (fun st id -> id >>= fun id -> return (SetInt.add id st))
-         SetInt.empty
-         sql"SELECT @d{user_id} FROM odb_user")
+  S.fold ctxt.sqle
+    (fun st id -> return (SetInt.add id st))
+    SetInt.empty
+    sql"SELECT @d{user_id} FROM odb_user"
   >>= fun admin_st ->
   let lst_admin, lst_other = 
     List.fold_left

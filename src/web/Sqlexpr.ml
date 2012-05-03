@@ -5,28 +5,17 @@
 
 open Lwt 
 
-module Sqlexpr = 
-  Sqlexpr_sqlite.Make
-    (struct 
-       include Lwt 
-       let auto_yield = Lwt_unix.auto_yield
-       let sleep = Lwt_unix.sleep
-     end)
+module Sqlexpr = Sqlexpr_sqlite_lwt
 
 include Sqlexpr
 
-module S = Sqlexpr
-
-type t = Sqlexpr_sqlite.db Lwt_pool.t
+type t = db
 
 let fun_init = 
   ref [] 
 
 let register key ver init upgrade =
   fun_init := (key, ver, init, upgrade) :: !fun_init
-
-let use t f = 
-  Lwt_pool.use t f
 
 let create ?(log) ?(n=5) fn = 
    let log fmt =
@@ -42,11 +31,9 @@ let create ?(log) ?(n=5) fn =
        Printf.ksprintf output fmt
    in
 
-   let res = 
-     Lwt_pool.create n (fun () -> return (open_db fn))
-   in
+   let db = open_db fn in
 
-   let init db = 
+     (* init db *)
      execute db
        sqlinit"CREATE TABLE IF NOT EXISTS version \
         (key TEXT PRIMARY KEY NOT NULL,
@@ -90,25 +77,21 @@ let create ?(log) ?(n=5) fn =
                | e ->
                    fail e))
        (List.rev !fun_init)
-   in
-
-     use res init
      >>= fun () ->
-     return res
+     return db
 
 let () = 
   Printexc.register_printer
     (function
-       | Sqlexpr_sqlite.Error(Failure(s)) ->
+       | Sqlexpr_sqlite.Error(str, Failure(s)) ->
            Some 
              (Printf.sprintf 
-                "Sqlexpr_sqlite.Error(Failure(%S))"
-                s)
-       | Sqlexpr_sqlite.Error(e) ->
-           Some "Sqlexpr_sqlite.Error(...)" 
-(*
-             (Printf.sprintf "Sqlexpr_sqlite.Error(%s)"
-                (Printexc.to_string e))
- *)
+                "Sqlexpr_sqlite.Error(%S, Failure(%S))"
+                str s)
+       | Sqlexpr_sqlite.Error(str, _) ->
+           Some 
+             (Printf.sprintf 
+                "Sqlexpr_sqlite.Error(%S, ...)"
+                str)
        | _ ->
            None)

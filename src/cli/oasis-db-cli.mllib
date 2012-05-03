@@ -1,0 +1,17 @@
+# OASIS_START
+# DO NOT EDIT (digest: 8736779b90301d1cce31e42d400cfc48)
+ODBCLICommon
+ODBCLIInstall
+ODBCLIList
+ODBCLIUpload
+ODBCLIRegister
+ODBCLIRemove
+ODBCLISearch
+ODBCLIShow
+ODBCLIUpdate
+ODBCLIFetch
+ODBCLIBundle
+ODBCLIPlugins
+InifilesExt
+ODBCLIData
+# OASIS_STOP

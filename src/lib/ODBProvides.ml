@@ -89,8 +89,8 @@ end
 
 let of_oasis_package pkg =
   (* TODO: precompute flags *)
-  let fndlb_mp = 
-    OASISLibrary.findlib_name_map pkg
+  let _, fndlb_of_lib, _ = 
+    OASISLibrary.findlib_mapping pkg
   in
     List.fold_left
       (fun acc -> 
@@ -111,17 +111,10 @@ let of_oasis_package pkg =
                    | `Always | `Sometimes as status ->
                        begin
                          try 
-                           let fndlb_nm = 
-                             match MapString.find cs.cs_name fndlb_mp with 
-                               | Some pre, suf ->
-                                   pre^"."^suf
-                               | None, nm ->
-                                   nm
-                           in
-                             (`FindlibPackage (fndlb_nm, pkg.version), status) 
-                             :: 
-                             acc
-                         with Not_found ->
+                           (`FindlibPackage 
+                              (fndlb_of_lib cs.cs_name, pkg.version), 
+                            status) :: acc
+                         with OASISLibrary.InternalLibraryNotFound _ ->
                            acc
                        end
 

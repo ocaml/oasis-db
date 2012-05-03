@@ -75,7 +75,8 @@ let build t =
          prepend_path "LD_LIBRARY_PATH" build_libdir]
   in
   let setup args = 
-    BaseExec.run "env" (extra_env @ ["ocaml"; "setup.ml"] @ args)
+    OASISExec.run ~ctxt:!BaseContext.default
+      "env" (extra_env @ ["ocaml"; "setup.ml"] @ args)
   in
 
   let build_pkg pkg = 
@@ -91,7 +92,7 @@ let build t =
   in
 
     List.iter 
-      (BaseFileUtil.mkdir_parent ignore) 
+      (OASISFileUtil.mkdir_parent ~ctxt:!BaseContext.default ignore) 
       [build_bindir; 
        build_libdir; 
        build_ocamllibdir];

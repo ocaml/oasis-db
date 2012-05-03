@@ -180,7 +180,7 @@ Library "oasis-db-ocsigen"
                 cameleon.rss,
                 sexplib,
                 rest.ocsigen, 
-                sqlexpr,
+                sqlexpr (>= 0.4.1),
                 ocamlcore-api (>= 0.0.3),
                 ocamlcore-api.ocsigen
 

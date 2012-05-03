@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 409aafdfb26a3932a8e43663265e712a) *)
+(* DO NOT EDIT (digest: 3ad77b3560ed93449fc93c59be53e32c) *)
 This is the INSTALL file for the oasis-db distribution.
 
 This package uses OASIS to generate its build system. See section OASIS for
@@ -11,24 +11,36 @@ Dependencies
 In order to compile this package, you will need:
 * ocaml for all, test main
 * findlib
-* lwt for library oasis-db
+* lwt (>= 2.3.0) for library git, library oasis-db, library rest
+* make for all, test main
+* yojson for library oasis-db, library rest
+* sexplib (>= 5.2.1) for library oasis-db, library oasis-db-ocsigen,
+  library rest
+* oasis for library oasis-db, library oasis-db-cli, library rest,
+  executable test_cli
+* gettext for library rest
+* ocsigen for library oasis-db-ocsigen, library rest-ocsigen
+* markdown for library oasis-db-ocsigen, library rest-ocsigen
+* extlib for library rest-curl
+* curl for library rest-curl
 * pcre for library oasis-db
-* oasis for library oasis-db
-* sexplib for library oasis-db
 * calendar for library oasis-db, library oasis-db-ocsigen
 * inotify for library oasis-db, executable inrestart
-* make for all, test main
-* oUnit for executable test
-* fileutils for executable inrestart, executable test
-* ocsigen for library oasis-db-ocsigen, executable oasis-server
-* pgocaml for library oasis-db-ocsigen
+* fileutils for library oasis-db, executable inrestart, executable test
+* inifiles for library oasis-db
 * netstring for library oasis-db-ocsigen
-* markdown for library oasis-db-ocsigen
+* cameleon for library oasis-db-ocsigen
+* sqlexpr (>= 0.4.1) for library oasis-db-ocsigen
+* ocamlcore-api (>= 0.0.3) for library oasis-db-ocsigen
+* xdg-basedir for library oasis-db-cli, executable test_cli
+* odn (>= 0.0.4) for library oasis-db-cli
+* ocamlify for library oasis-db-cli
+* oUnit (>= 1.1.0) for executable test
 
 Installing
 ==========
 
-1. Uncompress source directory and got to the root of the package
+1. Uncompress the source archive and go to the root of the package
 2. Run 'ocaml setup.ml -configure'
 3. Run 'ocaml setup.ml -build'
 4. Run 'ocaml setup.ml -install'
@@ -42,8 +54,8 @@ Uninstalling
 OASIS
 =====
 
-OASIS is a software that helps to write setup.ml using a simple '_oasis'
-configuration file. The generated setup only depends on standard OCaml
-installation, no additional library is required.
+OASIS is a program that generates a setup.ml file using a simple '_oasis'
+configuration file. The generated setup only depends on the standard OCaml
+installation: no additional library is required.
 
 (* OASIS_STOP *)

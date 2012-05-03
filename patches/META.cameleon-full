@@ -1,22 +1,22 @@
 # META for cameleon
-version="1.9.20"
+version="1.9.21"
 directory="+cameleon"
 
 package "config_file" (
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="config_file.cmo"
   archive(native)="config_file.cmx"
 )
 
 package "configwin" (
   requires = "cameleon.config_file cameleon.okey lablgtk2"
-  version="1.9.20"
+  version="1.9.21"
   archive(byte)="configwin.cma"
   archive(native)="configwin.cmxa"
 )
 
 package "dbforge_gui" (
-  version = "1.9.20"
+  version = "1.9.21"
   requires = "str xml-light lablgtk2.glade"
   archive(byte) = "dbforge_gui.cma"
   archive(native) = "dbforge_gui.cmxa"
@@ -24,62 +24,62 @@ package "dbforge_gui" (
 
 package "ffind" (
   requires = "str"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="ffind.cmo"
   archive(native)="ffind.cmx"
 )
 
 package "gdir" (
   requires = "lablgtk2 cameleon.gstuff"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="gdir.cmo"
   archive(native)="gdir.cmx"
 )
 
 package "gmylist" (
   requires = "lablgtk2"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="gmylist.cmo"
   archive(native)="gmylist.cmx"
 )
 
 package "gstuff" (
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="gstuff.cmo"
   archive(native)="gstuff.cmx"
 )
 
 package "okey" (
   requires = "lablgtk2"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte) = "okey.cmo"
   archive(native) = "okey.cmx"
 )
 
 package "report" (
   requires = "xml-light"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="report.cma"
   archive(native)="report.cmxa"
 )
 
 package "report_gui" (
   requires = "lablgtk2.glade cameleon.configwin xml-light"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="report_gui.cma"
   archive(native)="report_gui.cmxa"
 )
 
 package "tmpl-engine" (
   requires = ""
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="tmpl-engine.cma"
   archive(native)="tmpl-engine.cmxa"
 )
 
 package "rss" (
   requires = "unix xml-light"
-  version = "1.9.20"
+  version = "1.9.21"
   archive(byte)="rss.cma"
   archive(native)="rss.cmxa"
 )
