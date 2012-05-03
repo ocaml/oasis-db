@@ -320,7 +320,10 @@ let order ~ctxt stor a_pkg a_ver =
 
                 | v1 :: [] ->
                     begin
-                      return (Sure (v1.ODBPkgVer.ord + 10))
+                      if cmp ver v1.ODBPkgVer.ver < 0 then
+                        return (Sure (v1.ODBPkgVer.ord / 2))
+                      else
+                        return (Sure (v1.ODBPkgVer.ord + 10))
                     end
 
                 | [] ->
