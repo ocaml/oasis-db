@@ -260,11 +260,67 @@ struct
       (wait_change ?timeout fn f)
 end
 
-let bracket_ocsigen conf pre_start f post_stop () =
+let conf_std str ocs fn = 
+   let std_conf = 
+     Printf.sprintf 
+       "<port>%s:%d</port>
+        <charset>utf-8</charset>
+        <logdir>%s</logdir>
+        <commandpipe>%s</commandpipe>
+        <extension findlib-package=\"ocsigen.ext.staticmod\"/>
+        <extension findlib-package=\"ocsigen.ext.ocsipersist-sqlite\">
+          <database file=\"%s/ocsidb\"/>
+        </extension>
+        <extension findlib-package=\"ocsigen.ext.eliom\"/>
+        <uploaddir>%s</uploaddir>
+        <maxuploadfilesize>4MB</maxuploadfilesize>"
+       (string_of_inet_addr ocs.ocs_addr)
+       ocs.ocs_port ocs.ocs_rootdir ocs.ocs_command
+       ocs.ocs_rootdir ocs.ocs_rootdir
+   in
+   let buf = Buffer.create (String.length str + String.length std_conf) in
+   let () =
+     Buffer.add_substitute
+       buf
+       (function
+          | "port" -> 
+              (string_of_inet_addr ocs.ocs_addr)^":"
+              ^(string_of_int ocs.ocs_port)
+          | "rootdir" -> ocs.ocs_rootdir
+          | "curdir"  -> FileUtil.pwd ()
+          | "std_conf" -> std_conf
+          | "command_fn" -> ocs.ocs_command
+          | str ->
+              invalid_arg
+                (Printf.sprintf "conf_std(%s)" str))
+       str
+   in
+   let chn = open_out fn in
+     Buffer.output_buffer chn buf;
+     close_out chn
 
-  let conf_fn, chn = 
-    Filename.open_temp_file "oasis-db-" ".conf"
+let conf_oasis_db ocs fn =
+  let args = 
+    List.fold_left
+      (fun acc (vr, vl) -> "-set" :: vr :: vl :: acc)
+      ["etc/ocsigen.conf.in"; "-o"; fn]
+      [
+        "port", (string_of_inet_addr ocs.ocs_addr)^":"
+          ^(string_of_int ocs.ocs_port);
+        "topdir", Sys.getcwd (); 
+        "command_pipe", ocs.ocs_command;
+        "logdir", ocs.ocs_rootdir;
+        "ocsidb", Filename.concat ocs.ocs_rootdir "ocsidb";
+        "upload_dir", ocs.ocs_rootdir;
+        "incoming_dir", Filename.concat ocs.ocs_rootdir "incoming";
+        "dist_dir", Filename.concat ocs.ocs_rootdir "dist";
+        "db_fn", Filename.concat ocs.ocs_rootdir "db.sql";
+      ]
   in
+  let args = "-local" :: args in
+    assert_command "ocaml" ("etc/generate.ml" :: args)
+
+let bracket_ocsigen conf pre_start f post_stop () =
 
   let port =
     (* Find an available port *)
@@ -294,22 +350,7 @@ let bracket_ocsigen conf pre_start f post_stop () =
     Filename.concat rootdir "ocsigen_command"
   in
 
-  let std_conf = 
-    Printf.sprintf 
-      "<port>%s:%d</port>
-       <charset>utf-8</charset>
-       <logdir>%s</logdir>
-       <commandpipe>%s</commandpipe>
-       <extension findlib-package=\"ocsigen.ext.staticmod\"/>
-       <extension findlib-package=\"ocsigen.ext.ocsipersist-sqlite\">
-         <database file=\"%s/ocsidb\"/>
-       </extension>
-       <extension findlib-package=\"ocsigen.ext.eliom\"/>
-       <uploaddir>%s</uploaddir>
-       <maxuploadfilesize>4MB</maxuploadfilesize>"
-      (string_of_inet_addr addr)
-      port rootdir command_fn rootdir rootdir
-  in
+  let conf_fn = Filename.concat rootdir "ocsigen.conf" in
 
   let dbug fmt =
     if !verbose then
@@ -370,7 +411,7 @@ let bracket_ocsigen conf pre_start f post_stop () =
   in
 
   let clean () = 
-    FileUtil.rm ~recurse:true [conf_fn; rootdir] 
+    FileUtil.rm ~recurse:true [rootdir] 
   in
 
   let ocs = 
@@ -387,30 +428,18 @@ let bracket_ocsigen conf pre_start f post_stop () =
 
     try 
       begin
-        let buf = 
-          Buffer.create (String.length conf)
-        in
         let () = 
           (* Create configuration file and log dir *)
-          Buffer.add_substitute
-            buf
-            (function
-               | "port" -> (string_of_inet_addr addr)^":"^(string_of_int port)
-               | "rootdir" -> rootdir
-               | "curdir"  -> FileUtil.pwd () 
-               | "std_conf" -> std_conf
-               | "command_fn" -> command_fn
-               | str -> 
-                   invalid_arg 
-                     (Printf.sprintf "with_ocsigen_running(%s)" str))
-            conf;
-          Buffer.output_buffer chn buf;
-          close_out chn;
+          conf ocs conf_fn;
           if !verbose then
             begin
-              Buffer.output_buffer Pervasives.stderr buf;
-              output_string Pervasives.stderr "\n";
-              Pervasives.flush Pervasives.stderr
+              let chn = open_in conf_fn in
+                try 
+                  while true do 
+                    prerr_endline (input_line chn)
+                  done
+                with End_of_file ->
+                  close_in chn
             end;
           pre_start ocs
         in
@@ -470,42 +499,7 @@ let bracket_ocsigen conf pre_start f post_stop () =
 
 let bracket_oasis_db pre_start f post_stop = 
    bracket_ocsigen
-     "<ocsigen>
-        <server>
-          $std_conf
-          <extension findlib-package=\"oasis\" />
-          <extension findlib-package=\"sexplib\" />
-          <extension findlib-package=\"inotify\" />
-          <extension findlib-package=\"markdown\" />
-          <extension findlib-package=\"markdown.html\" />
-          <extension findlib-package=\"cameleon.rss\" />
-          <extension findlib-package=\"yojson\" />
-          <extension findlib-package=\"curl\" />
-          <extension findlib-package=\"sqlexpr\" />
-          <extension findlib-package=\"ocamlcore-api.ocsigen\" />
-
-          <host charset=\"utf-8\" >
-            <site path=\"\">
-              <eliom module=\"$curdir/_build/src/rest/rest.cma\" />
-              <eliom module=\"$curdir/_build/src/rest/curl/rest-curl.cma\" />
-              <eliom module=\"$curdir/_build/src/rest/ocsigen/rest-ocsigen.cma\" />
-              <eliom module=\"$curdir/_build/src/lib/oasis-db.cma\" />
-              <eliom module=\"$curdir/_build/src/web/oasis-db-ocsigen.cma\">
-                <dir rel=\"incoming\">$rootdir/incoming</dir>
-                <dir rel=\"dist\">$rootdir/dist</dir>
-                <dir rel=\"mkd\">$curdir/src/web/mkd\"</dir>
-                <db>$rootdir/db.sql</db>
-                <ocamlcore-api>
-                  <stub>true</stub>
-                  <base-path>stub</base-path>
-                </ocamlcore-api>
-              </eliom>
-              <static dir=\"$curdir/src/web/static\" /> 
-            </site>
-          </host>
-        </server>
-      </ocsigen>"
-
+     conf_oasis_db
      (fun ocs ->
         List.iter
           (fun nm ->

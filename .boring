@@ -117,3 +117,5 @@
 ^setup.data$
 ^Makefile.secret$
 ^test/data/storage$
+^etc/ocsigen-dev.conf$
+^etc/ocsigen-local.conf$

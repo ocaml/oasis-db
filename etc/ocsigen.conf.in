@@ -1,17 +1,16 @@
 <ocsigen>
   <server>
-    <port>8080</port>
+    <port>$port</port>
     <charset>utf-8</charset>
-    <logdir>tmp</logdir>
-    <commandpipe>tmp/ocsigen_command</commandpipe>
-    <extension findlib-package="ocsigen.ext.staticmod"/>
+    <logdir>$logdir</logdir>
+    <commandpipe>$command_pipe</commandpipe>
     <extension findlib-package="ocsigen.ext.ocsipersist-sqlite">
-      <database file="tmp/ocsidb"/>
+      <database file="$ocsidb"/>
     </extension>
     <extension findlib-package="ocsigen.ext.eliom"/>
     <extension findlib-package="ocsigen.ext.staticmod"/>
-    <extension findlib-package="pgocaml" />
     <extension findlib-package="oasis" />
+    <extension findlib-package="pgocaml" />
     <extension findlib-package="sexplib" />
     <extension findlib-package="inotify" />
     <extension findlib-package="markdown" />
@@ -22,27 +21,27 @@
     <extension findlib-package="sqlexpr" />
     <extension findlib-package="ocamlcore-api.ocsigen" />
     <extension findlib-package="fileutils" />
-    <uploaddir>tmp/</uploaddir> 
+    <uploaddir>$upload_dir</uploaddir>
     <maxuploadfilesize>4MB</maxuploadfilesize>
 
     <host charset="utf-8" >
       <site path="">
-        <eliom module="_build/src/rest/rest.cma" />
-        <eliom module="_build/src/rest/curl/rest-curl.cma" />
-        <eliom module="_build/src/rest/ocsigen/rest-ocsigen.cma" />
-        <eliom module="_build/src/lib/oasis-db.cma" />
-        <eliom module="_build/src/web/oasis-db-ocsigen.cma">
-          <dir rel="incoming">test/data/storage/incoming</dir>
-          <dir rel="dist">test/data/storage/dist</dir>
-          <user role="admin">0</user>
-          <db>test/data/storage/db.sql</db>
+        <eliom module="$topdir/_build/src/rest/rest.cma" />
+        <eliom module="$topdir/_build/src/rest/curl/rest-curl.cma" />
+        <eliom module="$topdir/_build/src/rest/ocsigen/rest-ocsigen.cma" />
+        <eliom module="$topdir/_build/src/lib/oasis-db.cma" />
+        <eliom module="$topdir/_build/src/web/oasis-db-ocsigen.cma">
+          <dir rel="incoming">$incoming_dir</dir>
+          <dir rel="dist">$dist_dir</dir>
+          <dir rel="mkd">$mkd_dir</dir>
+          <user role="admin">$role_admin</user>
+          <db>$db_file</db>
           <google-analytics account="UA-22267703-1" />
           <ocamlcore-api>
-            <stub>true</stub>
-            <base-path>ocamlcore-api/stub</base-path>
+            $ocamlcore_api_block
           </ocamlcore-api>
         </eliom>
-        <static dir="/home/gildor/programmation/oasis-db/src/web/static" /> 
+        <static dir="$static_dir" /> 
       </site>
     </host>
   </server>

@@ -6,16 +6,17 @@ open Lwt
 let tests = 
   "Sync" >::
   bracket_ocsigen 
-    ("<ocsigen>
-        <server>
-          $std_conf
-          <host>
-            <site path=\"\">
-              <static dir=\"$rootdir\" />
-            </site>
-          </host>
-        </server>
-      </ocsigen>")
+    (conf_std
+       "<ocsigen>
+          <server>
+            $std_conf
+            <host>
+              <site path=\"\">
+                <static dir=\"$rootdir\" />
+              </site>
+            </host>
+          </server>
+        </ocsigen>")
 
     (* Pre start *)
     ignore 
