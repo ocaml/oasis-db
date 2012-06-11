@@ -14,12 +14,17 @@ type t =
   }
 
 
-(* TODO: get rid of incoming_dir *)
+(* TODO: get rid of incoming_dir, tar, unzip *)
 let default ?logger incoming_dir = 
   let logger =
     match logger with 
       | Some l -> l
       | None -> !Lwt_log.default
+  in
+  let logger = 
+    Lwt_log.broadcast
+      [logger; 
+       Lwt_log.channel ~close_mode:`Keep ~channel:Lwt_io.stderr ()]
   in
     {
       section          = Section.make "oasis-db";

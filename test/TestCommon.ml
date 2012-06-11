@@ -72,7 +72,7 @@ let bracket_tmpdir f =
 
 module InotifyExt =
 struct 
-  let default_timeout = 10.0
+  let default_timeout = 60.0
 
   let wait_create ~is_file ?(timeout=default_timeout) topfn = 
 
@@ -479,19 +479,21 @@ let bracket_ocsigen conf pre_start f post_stop () =
             | None -> ()
         in
 
+        let () = 
           (* Test *)
-          begin
-            try 
-              f ocs;
+          try 
+            let res = f ocs in
               (* Stop ocisgen *)
               shutdown pid 0;
-            with e ->
-              shutdown pid 0;
-              raise e
-          end;
+              res
+          with e ->
+            shutdown pid 0;
+            raise e
+        in
 
-          post_stop ocs;
-          clean ();
+        let () = post_stop ocs in
+
+          clean ()
       end
     with e ->
       clean ();

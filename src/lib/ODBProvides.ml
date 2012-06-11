@@ -87,7 +87,7 @@ struct
 end
 
 
-let of_oasis_package pkg =
+let of_oasis_package preset_data pkg =
   (* TODO: precompute flags *)
   let _, fndlb_of_lib, _ = 
     OASISLibrary.findlib_mapping pkg
@@ -97,7 +97,7 @@ let of_oasis_package pkg =
          function 
            | Executable (cs, bs, exec) ->
                begin
-                 match OASISBuildSectionExt.installable pkg bs with 
+                 match OASISBuildSectionExt.installable preset_data pkg cs bs with 
                    | `Always | `Sometimes as status ->
                        (`ExternalTool (cs.cs_name, Some pkg.version), status) 
                        :: 
@@ -107,7 +107,7 @@ let of_oasis_package pkg =
                end
            | Library (cs, bs, lib) ->
                begin
-                 match OASISBuildSectionExt.installable pkg bs with 
+                 match OASISBuildSectionExt.installable preset_data pkg cs bs with 
                    | `Always | `Sometimes as status ->
                        begin
                          try 
@@ -128,7 +128,7 @@ let of_oasis_package pkg =
 
 
 
-let map stor = 
+let map preset_data stor = 
   ODBStorage.Pkg.elements stor
   >>= 
   begin
@@ -139,7 +139,7 @@ let map stor =
           | Some oasis ->
               List.rev_map 
                 (fun (prvd, status) -> (prvd, (status, pkg_ver)))
-                (of_oasis_package oasis)
+                (of_oasis_package preset_data oasis)
           | None ->
               []
     in

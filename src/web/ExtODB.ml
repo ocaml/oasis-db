@@ -463,6 +463,8 @@ type info_t =
  * by the administrator 
  *)
 let map_info_name ~ctxt mp_repo = 
+  let preset_data = [] in
+
   let add_merge_entry nm e (msg, mp) =
     try 
       let frmr =
@@ -594,7 +596,7 @@ let map_info_name ~ctxt mp_repo =
       (pkg_str, ver_str)
     in
     let provides =
-      ODBProvides.of_oasis_package oasis
+      ODBProvides.of_oasis_package preset_data oasis
     in
       List.fold_left 
         (fun acc ->
@@ -680,11 +682,12 @@ let map_info_name ~ctxt mp_repo =
 
 (* Compute non optional dependency out of t datastructure *)
 let non_optional_deps ~ctxt oasis = 
-  ODBProvides.map ctxt.stor 
+  let preset_data = [] in
+  ODBProvides.map preset_data ctxt.stor 
   >|= fun provides ->
   begin
     let deps = 
-      ODBDeps.solve (ODBDeps.of_oasis_package oasis) provides
+      ODBDeps.solve (ODBDeps.of_oasis_package preset_data oasis) provides
     in
       ODBDeps.fold 
         (fun dep e acc ->

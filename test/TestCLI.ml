@@ -24,6 +24,7 @@ let bracket_oasis_db_cli f =
                   Filename.concat tmpdir vl
                 in
                   mkdir ~parent:true vl;
+                  (* TODO: don't modify env *)
                   Unix.putenv nm vl;
                   Filename.concat vl "oasis"
               in

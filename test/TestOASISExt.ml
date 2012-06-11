@@ -25,10 +25,10 @@ let tests =
        OASISSection.section_find (`Executable, "ocamlify") oasis.sections
      in
        match sct with 
-         | Executable (_, bs, _) ->
+         | Executable (cs, bs, _) ->
              assert_equal 
                `Always 
-               (OASISBuildSectionExt.installable oasis bs)
+               (OASISBuildSectionExt.installable [] oasis cs bs)
          | _ ->
              assert_failure "Expected section 'ocamlify'")
 

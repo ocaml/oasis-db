@@ -79,6 +79,8 @@ let upload ocs date fn =
     Calendar.to_unixfloat
       (Printer.Calendar.from_string date)
   in
+    if !verbose then
+      Printf.eprintf "Copying file %s to %s\n%!" (in_data_dir fn) (fn_tarball);
     cp [in_data_dir fn] fn_tarball;
     touch ~time:(Touch_timestamp tm) fn_tarball;
     odb_run
@@ -202,7 +204,7 @@ let tests =
             (fun _ ->
                skip_long ())
             (fun ocs -> 
-               one ocs vec)
+               one ocs vec ())
             ignore)
        vecs)
     @

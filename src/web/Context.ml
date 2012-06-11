@@ -349,6 +349,9 @@ let init () =
       return ()
     end
 
+let () = 
+  Lwt.ignore_result (init ())
+
 let get_sys () =
   init ()
   >>= fun () ->

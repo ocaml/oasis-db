@@ -7,29 +7,31 @@
 open OASISTypes 
 open OASISExprExt
 
-let status_choose pkg choices =
-  match trivial_choose pkg choices with 
-    | Some true ->
-        `Always
-    | Some false ->
-        `Never
-    | None ->
-        `Sometimes
+let status_choose what preset_data pkg cs choices =
+  let res, str = 
+    match trivial_choose preset_data pkg choices with 
+      | Some true ->
+          `Always, "always"
+      | Some false ->
+          `Never, "never"
+      | None ->
+          `Sometimes, "sometimes"
+  in
+    Printf.eprintf 
+      "%s.%s %s [%s] -> %s\n%!"
+      pkg.name cs.cs_name what 
+      (OASISExpr.string_of_choices string_of_bool choices) 
+      str;
+    res
 
-(* Compute buildability of a build section. 
- * TODO: It should take into account default flag value 
- * + reasonable env like in oasis2debian
- *)
-let buildable pkg bs = 
-  status_choose pkg bs.bs_build
+(* Compute buildability of a build section. *)
+let buildable preset_data pkg cs bs = 
+  status_choose "buildable" preset_data pkg cs bs.bs_build
 
-(* Compute installability of a build section. 
- * TODO: It should take into account default flag value 
- * + reasonable env like in oasis2debian
- *)
-let installable pkg bs = 
-  match buildable pkg bs with
+(* Compute installability of a build section. *)
+let installable preset_data pkg cs bs = 
+  match buildable preset_data pkg cs bs with
     | `Always ->
-        status_choose pkg bs.bs_install
+        status_choose "installable" preset_data pkg cs bs.bs_install
     | e ->
         e

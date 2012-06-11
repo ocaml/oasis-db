@@ -65,7 +65,7 @@ let add dep e1 t =
       t
 
 (* Extract build dependencies from OASIS package *)
-let of_oasis_package pkg = 
+let of_oasis_package preset_flags pkg = 
   let rec add_tool_list optional = 
     List.fold_left
       (fun acc ->
@@ -84,14 +84,14 @@ let of_oasis_package pkg =
     List.fold_left
       (fun acc ->
          function
-           | Executable (_, bs, _)
-           | Library (_, bs, _) ->
+           | Executable (cs, bs, _)
+           | Library (cs, bs, _) ->
                begin
                  let built, optional =
                    (* If the build is optional, the dependencies
                     * are optional as well 
                     *)
-                   match OASISBuildSectionExt.buildable pkg bs with 
+                   match OASISBuildSectionExt.buildable preset_flags pkg cs bs with 
                      | `Always -> true, false
                      | `Sometimes -> true, true
                      | `Never -> false, true
@@ -130,7 +130,7 @@ let of_oasis_package pkg =
 
            | Test (cs, test) ->
                begin 
-                 if OASISExprExt.trivial_choose pkg test.test_run <> Some false then
+                 if OASISExprExt.trivial_choose preset_flags pkg test.test_run <> Some false then
                    (* Running test is not mandatory, so it is always optional *)
                    add_tool_list true acc test.test_tools 
                  else
@@ -139,7 +139,7 @@ let of_oasis_package pkg =
 
            | Doc (cs, doc) ->
                begin
-                 if OASISExprExt.trivial_choose pkg doc.doc_build <> Some false then
+                 if OASISExprExt.trivial_choose preset_flags pkg doc.doc_build <> Some false then
                    (* Building doc is not mandatory, so it is always optional *)
                    add_tool_list true acc doc.doc_build_tools
                  else

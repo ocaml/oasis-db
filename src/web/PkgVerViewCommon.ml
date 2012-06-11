@@ -29,16 +29,17 @@ let email_hide =
         Pcre.replace ~rex:email_re ~itempl:email_subst str
 
 let oasis_fields ~ctxt ~sp pkg =
+  let preset_data = [] in
   (* TODO: link to packages that rev-depends
    *)
 
   (* Build a map of provide -> package's versions *)
-  ODBProvides.map ctxt.stor
+  ODBProvides.map preset_data ctxt.stor
   >|= fun provides -> 
 
   begin
     let deps = 
-      ODBDeps.solve (ODBDeps.of_oasis_package pkg) provides
+      ODBDeps.solve (ODBDeps.of_oasis_package preset_data pkg) provides
     in
  
     let build_tools, build_deps =
@@ -108,7 +109,7 @@ let oasis_fields ~ctxt ~sp pkg =
                    provide_tools,
                    str :: provide_fndlbs)
         ([], [])
-        (ODBProvides.of_oasis_package pkg)
+        (ODBProvides.of_oasis_package preset_data pkg)
     in
 
     let src_repos = 

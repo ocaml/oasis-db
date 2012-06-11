@@ -78,4 +78,5 @@ let _ :: _ | [] =
          TestFSMemory.tests;
          TestODBOASIS.tests;
          TestPkgVerDerive.tests;
+         TestBundle.tests;
        ])

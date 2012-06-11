@@ -18,10 +18,10 @@ type pkg =
 
 type t = 
     {
-      bndl_deps: pkg list;
+      bndl_builds: pkg list;
       bndl_exts: [ `FindlibPackage of string * OASISVersion.comparator option
                  | `ExternalTool of string ] list;
-      bndl_tgt: pkg;
+      bndl_prog_installs: (string * bool) list;
     } with odn 
 
 let build t = 
@@ -75,7 +75,7 @@ let build t =
          prepend_path "LD_LIBRARY_PATH" build_libdir]
   in
   let setup args = 
-    OASISExec.run ~ctxt:!BaseContext.default
+    OASISExec.run ~ctxt:{!BaseContext.default with OASISContext.info = true}
       "env" (extra_env @ ["ocaml"; "setup.ml"] @ args)
   in
 
@@ -107,7 +107,7 @@ let build t =
                   "--libdir"; Filename.quote build_libdir;
                   "--bindir"; Filename.quote build_bindir
                 ] @ pkg.bndl_configure_args})
-      t.bndl_deps;
+      t.bndl_builds;
 
     build_pkg t.bndl_tgt
 
@@ -187,6 +187,46 @@ let main () =
     !output
   in
 
+  let preset_data = ["tests", "false"; "docs", "false"] in
+
+  let configure_bndl oasis in_bundle_nm = 
+    let build_sensible_to ~what oasis = 
+      List.exists 
+        (function
+           | Library (cs, bs, _) 
+           | Executable (cs, bs, _) ->
+               OASISExprExt.choice_contains ~what bs.bs_build
+           | Doc (cs, doc) ->
+               OASISExprExt.choice_contains ~what doc.doc_build
+           | Test (cs, test) ->
+               OASISExprExt.choice_contains ~what test.test_run
+           | Flag (cs, flag) ->
+               OASISExprExt.choice_contains ~what flag.flag_default
+           | SrcRepo _ ->
+               false)
+        oasis.sections
+    in
+    let configure_args = 
+      List.flatten 
+        [
+          if build_sensible_to ~what:(OASISExpr.EFlag "tests") oasis then
+            ["--disable-tests"]
+          else
+            [];
+          if build_sensible_to ~what:(OASISExpr.EFlag "docs") oasis then
+            ["--disable-docs"]
+          else
+            [];
+        ]
+    in
+      {
+        bndl_dir            = in_bundle_nm;
+        bndl_configure_args = configure_args;
+        bndl_build_args     = [];
+        bndl_install_args   = [];
+      }
+  in
+
   let job =
     (* Create a temporary directory *)
     FileUtilExt.with_temp_dir "oasis-db-bundle-" ""
@@ -233,10 +273,10 @@ let main () =
          >>= fun slvr ->
          begin
            let pkg_ver_deps, exts = 
-             ODBPkgVerSolver.solve slvr oasis 
+             ODBPkgVerSolver.solve slvr preset_data oasis 
            in
              Lwt_list.map_s
-               (fun (pkg_ver, stor) ->
+               (fun (pkg_ver, stor, oasis) ->
                   ODBStorage.PkgVer.with_file_in 
                     stor (`PkgVer pkg_ver) `Tarball
                     (fun chn ->
@@ -252,18 +292,9 @@ let main () =
                                 pkg_ver.pkg 
                                 (string_of_version pkg_ver.ver)
                             in
-                            let pkgdn = 
-                              Filename.concat rootdn in_bundle_nm 
-                            in
-                            let pkg = 
-                              {
-                                bndl_dir            = in_bundle_nm;
-                                bndl_configure_args = []; (* TODO: set flags *)
-                                bndl_build_args     = [];
-                                bndl_install_args   = [];
-                              }
-                            in
-                              return (pkgdn, pkg))))
+                            let pkgdn = Filename.concat rootdn in_bundle_nm in
+                            let bndl = configure_bndl oasis in_bundle_nm in
+                              return (pkgdn, bndl))))
                pkg_ver_deps
             >|= fun lst ->
             (exts, lst)
@@ -272,15 +303,8 @@ let main () =
          begin
            let t =
              {
-               bndl_deps = List.map snd deps;
+               bndl_builds = (List.map snd deps) @ [configure_bndl oasis tgt_nm];
                bndl_exts = exts;
-               bndl_tgt  = 
-                 {
-                   bndl_dir            = tgt_nm;
-                   bndl_configure_args = [];
-                   bndl_build_args     = [];
-                   bndl_install_args   = [];
-                 }
              }
            in
 
