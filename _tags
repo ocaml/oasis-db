@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: daf88e38e386b96b5fc6ff23c6a588f1)
+# DO NOT EDIT (digest: b65574dd737ce0f9716d4ee4a6b006e4)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -84,7 +84,7 @@
 <src/web/*.ml{,i}>: pkg_calendar
 <src/web/*.ml{,i}>: pkg_markdown
 <src/web/*.ml{,i}>: pkg_markdown.html
-<src/web/*.ml{,i}>: pkg_cameleon.rss
+<src/web/*.ml{,i}>: pkg_rss
 <src/web/*.ml{,i}>: pkg_sexplib
 <src/web/*.ml{,i}>: pkg_sqlexpr
 <src/web/*.ml{,i}>: pkg_ocamlcore-api

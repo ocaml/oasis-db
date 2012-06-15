@@ -177,7 +177,7 @@ Library "oasis-db-ocsigen"
                 threads, 
                 calendar,
                 markdown, markdown.html,
-                cameleon.rss,
+                rss,
                 sexplib,
                 rest.ocsigen, 
                 sqlexpr (>= 0.4.1),

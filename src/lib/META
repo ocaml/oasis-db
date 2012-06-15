@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 294188a2049149441c71e3ce2958695a)
+# DO NOT EDIT (digest: 60fbf3ee741bbebff3732154224f17b0)
 version = "0.1.0~alpha3"
 description = "Database and web interface of OASIS packages"
 requires =
@@ -13,7 +13,7 @@ package "ocsigen" (
  version = "0.1.0~alpha3"
  description = "Database and web interface of OASIS packages"
  requires =
- "oasis-db ocsigen ocsigen.ext.eliom ocsigen.ext.ocsipersist-sqlite netstring threads calendar markdown markdown.html cameleon.rss sexplib rest.ocsigen sqlexpr ocamlcore-api ocamlcore-api.ocsigen"
+ "oasis-db ocsigen ocsigen.ext.eliom ocsigen.ext.ocsipersist-sqlite netstring threads calendar markdown markdown.html rss sexplib rest.ocsigen sqlexpr ocamlcore-api ocamlcore-api.ocsigen"
  archive(byte) = "oasis-db-ocsigen.cma"
  archive(byte, plugin) = "oasis-db-ocsigen.cma"
  exists_if = "oasis-db-ocsigen.cma"
