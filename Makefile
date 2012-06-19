@@ -27,11 +27,13 @@ export LWT_LOG
 OCAMLRUNPARAM=b
 export OCAMLRUNPARAM
 
-TESTFLAGS = -not-long
+#TESTFLAGS += -not-long
+#TESTFLAGS += -only-test OASIS-DB:5:CLI:0:Fetch
+#TESTFLAGS += -verbose
+
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display --enable-dev --enable-oasis-db-ocsigen
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
 
-#default: build
 default: test
 
 # OASIS_START
