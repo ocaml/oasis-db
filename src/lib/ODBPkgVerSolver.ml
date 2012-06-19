@@ -218,7 +218,6 @@ let solve t preset_data oasis =
                    let ext =
                      match dep with 
                        | `FindlibPackage nm ->
-                           Printf.eprintf "WWW: findlib package %s\n%!" nm;
                            `FindlibPackage (nm, dep_elt.ODBDeps.version_cmp)
                        | `ExternalTool nm ->
                            `ExternalTool nm
@@ -267,7 +266,6 @@ let solve t preset_data oasis =
            | `ExternalTool nm ->
                (`ExternalTool nm) :: acc
            | `FindlibPackage (nm, ver_cmp) ->
-               Printf.eprintf "III: findlib package %s\n%!" nm;
                (`FindlibPackage (nm, ver_cmp)) :: acc
            | `OASISPkgVer _ ->
                acc)

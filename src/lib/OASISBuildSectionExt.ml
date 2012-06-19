@@ -17,11 +17,6 @@ let status_choose what preset_data pkg cs choices =
       | None ->
           `Sometimes, "sometimes"
   in
-    Printf.eprintf 
-      "%s.%s %s [%s] -> %s\n%!"
-      pkg.name cs.cs_name what 
-      (OASISExpr.string_of_choices string_of_bool choices) 
-      str;
     res
 
 (* Compute buildability of a build section. *)
