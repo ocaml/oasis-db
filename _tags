@@ -225,3 +225,6 @@
 "src/web/ExtODB.ml": syntax_camlp4o, pkg_sqlexpr.syntax
 
 "src/cli/ODBCLIBundle.ml": syntax_camlp4o, pkg_odn.with.syntax
+
+"build": -traverse
+"build": not_hygienic
