@@ -36,6 +36,7 @@ godi.build("godi-ocamlrss")
 godi.build("godi-ocaml-xdg-basedir")
 godi.build("apps-ocsigen-bundler")
 
+ci.exec("ocaml", "setup.ml", "-distclean")
 ci.exec("ocaml", "setup.ml", "-configure", "--enable-dev", "--enable-oasis-db-ocsigen")
 ci.exec("ocaml", "setup.ml", "-build")
 ci.exec("ocaml", "setup.ml", "-test")
