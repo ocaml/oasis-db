@@ -26,15 +26,15 @@ godi.build("godi-calendar")
 godi.build("godi-ocaml-fileutils")
 godi.build("godi-inifiles")
 godi.build("godi-ocamlnet")
-godi.build("godi-curl") -- TODO: patch to avoid pb
-godi.build("godi-ocaml-gettext") -- TODO
-godi.build("godi-ocaml-markdown") -- TODO
-godi.build("godi-inotify") -- TODO
-godi.build("godi-ocamlcore-api") -- TODO
-godi.build("godi-sqlexpr") -- TODO
-godi.build("godi-cameleon-rss") -- TODO (or something better!!!!)
-godi.build("godi-ocaml-xdg-basedir") -- TODO 
-
+godi.build("godi-curl")
+godi.build("godi-ocaml-gettext")
+godi.build("godi-ocaml-markdown") 
+godi.build("godi-inotify") 
+godi.build("godi-ocamlcore-api") 
+godi.build("godi-ocaml-sqlexpr")
+godi.build("godi-ocamlrss")
+godi.build("godi-ocaml-xdg-basedir")
+godi.build("apps-ocsigen-bundler")
 
 ci.exec("ocaml", "setup.ml", "-configure", "--enable-tests", "--enable-dev", "--enable-oasis-db-ocsigen")
 ci.exec("ocaml", "setup.ml", "-build")
