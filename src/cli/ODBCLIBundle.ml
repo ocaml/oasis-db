@@ -107,9 +107,9 @@ let build t =
                   "--libdir"; Filename.quote build_libdir;
                   "--bindir"; Filename.quote build_bindir
                 ] @ pkg.bndl_configure_args})
-      t.bndl_builds;
+      t.bndl_builds
 
-    build_pkg t.bndl_tgt
+    (* TODO: install the target using bndl_prog_installs *)
 
 
 (* END EXPORT *)
@@ -305,6 +305,7 @@ let main () =
              {
                bndl_builds = (List.map snd deps) @ [configure_bndl oasis tgt_nm];
                bndl_exts = exts;
+               bndl_prog_installs = []; (* TODO *)
              }
            in
 
