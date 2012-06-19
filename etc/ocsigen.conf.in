@@ -15,7 +15,7 @@
     <extension findlib-package="inotify" />
     <extension findlib-package="markdown" />
     <extension findlib-package="markdown.html" />
-    <extension findlib-package="cameleon.rss" />
+    <extension findlib-package="rss" />
     <extension findlib-package="yojson" />
     <extension findlib-package="curl" />
     <extension findlib-package="sqlexpr" />
