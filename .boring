@@ -14,8 +14,6 @@
 # haskell program coverage resp. profiling info
 \.tix$
 \.prof$
-# fortran module files
-\.mod$
 # linux kernel
 \.ko\.cmd$
 \.mod\.c$
