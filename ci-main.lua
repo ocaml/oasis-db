@@ -36,7 +36,8 @@ godi.build_many(
    "godi-ocaml-xdg-basedir",
    "apps-ocsigen-bundler",
    "apps-ocamlmod",
-   "apps-ocamlify"})
+   "apps-ocamlify"},
+   "godi-pgocaml:GODI_PGOCAML_USE_BATTERIES=yes")
 
 oasis.std_process("--enable-dev", "--enable-oasis-db-ocsigen")
 ci.exec("make", "dist-deploy-dev")
