@@ -203,7 +203,7 @@ Library "oasis-db-cli"
            InifilesExt
   InternalModules: ODBCLIData
   BuildDepends: oasis-db, xdg-basedir, oasis.cli, odn (>= 0.0.4)
-  BuildTools: ocamlify
+  BuildTools: ocamlify, ocamlmod
 
 
 Executable test

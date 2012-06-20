@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 34c4177e7eb199c95135e15a49fd7ce5) *)
+(* DO NOT EDIT (digest: 59e0f930d31bda0bf1b41999208842c7) *)
 This is the INSTALL file for the oasis-db distribution.
 
 This package uses OASIS to generate its build system. See section OASIS for
@@ -35,6 +35,7 @@ In order to compile this package, you will need:
 * xdg-basedir for library oasis-db-cli, executable test_cli
 * odn (>= 0.0.4) for library oasis-db-cli
 * ocamlify for library oasis-db-cli
+* ocamlmod for library oasis-db-cli
 * oUnit (>= 1.1.0) for executable test
 
 Installing
