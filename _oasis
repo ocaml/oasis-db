@@ -29,6 +29,10 @@ if flag(gettext)
   PostInstallCommand:   $make -C po install PODIR=$prefix/share/locale
   PostUninstallCommand: $make -C po install PODIR=$prefix/share/locale
 
+# Not compatible with gettext !!!
+PostBuildCommand: $make -C etc all
+PostCleanCommand: $make -C etc clean
+
 Library "git"
   Path: src/git
   CompiledObject: Best
