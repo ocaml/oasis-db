@@ -117,3 +117,5 @@
 ^test/data/storage$
 ^etc/ocsigen-dev.conf$
 ^etc/ocsigen-local.conf$
+^dist$
+^build$
