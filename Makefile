@@ -102,11 +102,11 @@ db-create:
 
 # Deploy dev
 OCSIGEN_BUNDLER=ocsigen-bundler
-deploy-dev:
+dist-deploy-dev:
 	$(OCSIGEN_BUNDLER) \
 		--verbose \
 		--conf etc/ocsigen-dev.conf \
-		--target _build/tgt-dev \
+		--target _build/deploy-dev \
 		--mkdir data/incoming \
 		--mkdir data/dist \
 		--mkdir tmp \
@@ -114,10 +114,19 @@ deploy-dev:
 		--copy-dir src/web/mkd mkd \
 		--extra-native oasis \
 		--port 8080 \
-		--copy-file patches/META.cameleon lib/ocaml/METAS \
 		--copy-file patches/META.sqlexpr  lib/ocaml/sqlexpr/META \
-		--copy-file patches/META.sexplib  lib/ocaml/sexplib/META \
-		--deploy-host ssh.ocamlcore.org \
-		--deploy-dir /home/groups/oasis/ocsigen/dev/ 
+		--copy-file patches/META.sexplib  lib/ocaml/sexplib/META 
+	-mkdir dist
+	$(RM) dist/deploy-dev.zip
+	cd _build && zip -r ../dist/deploy-dev.zip deploy-dev
+
+CI_URL=http://mini:8080/job/oasis-db/label=master/lastSuccessfulBuild/artifact/dist
+deploy-dev:
+	curl -o _build/deploy-tmp/deploy-dev.zip $(CI_URL)/deploy-dev.zip
+	curl -o _build/deploy-tmp/tag.darcs $(CI_URL)/tag.darcs
+	cd _build/deploy-tmp/ && unzip deploy-dev.zip
+	$(OCSIGEN_BUNDLER) --source _build/deploy-tmp/deploy-dev/ \
+		--deploy-host ssh.ocamlcore.org --deploy-dir /home/groups/oasis/ocsigen/dev/ 
+	darcs apply _build/deploy-tmp/tag.darcs
 
 .PHONY: deploy-dev

@@ -4,6 +4,8 @@ bootstrap.init()
 
 ci = require("ci")
 godi = require("godi")
+oasis = require("oasis")
+darcs = require("darcs")
 
 ci.init()
 godi.init()
@@ -40,3 +42,6 @@ ci.exec("ocaml", "setup.ml", "-distclean")
 ci.exec("ocaml", "setup.ml", "-configure", "--enable-dev", "--enable-oasis-db-ocsigen")
 ci.exec("ocaml", "setup.ml", "-build")
 ci.exec("ocaml", "setup.ml", "-test")
+
+ci.exec("make", "dist-deploy-dev")
+darcs.create_tag(oasis.package_version())
