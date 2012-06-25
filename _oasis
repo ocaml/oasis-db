@@ -214,7 +214,7 @@ Executable test
   Path:   test
   MainIs: test.ml
   Install: false
-  BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db, git
+  BuildDepends: oUnit (>= 1.1.0), fileutils, oasis-db, git, findlib
   
 Executable "test_cli"
   Path: src/cli
@@ -223,7 +223,7 @@ Executable "test_cli"
   BuildDepends: oasis-db, xdg-basedir, oasis.cli
 
 Test main
-  Command: $test -oasis-cli $test_cli
+  Command: $test -oasis-cli $test_cli -oasis-db-ocsigen $oasis_db_ocsigen
   TestTools: test
 
 Executable inrestart 

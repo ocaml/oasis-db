@@ -57,6 +57,10 @@ let _ :: _ | [] =
       "-oasis-cli",
       Arg.Set_string oasis_cli,
       "prog OASIS CLI test command";
+
+      "-oasis-db-ocsigen",
+      Arg.String (fun str -> oasis_db_ocsigen := bool_of_string str),
+      "(true|false) Define if the ocsigen server has been compiled.";
     ]
   in
 

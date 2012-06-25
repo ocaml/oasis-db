@@ -16,6 +16,8 @@ let ocsigen_args = ref ["-s"]
 
 let oasis_cli = ref "false"
 
+let oasis_db_ocsigen = ref false
+
 let in_data_dir fn = 
   FilePath.make_filename ["test"; "data"; fn]
 
@@ -68,7 +70,13 @@ let bracket_tmpdir f =
          dn)
     f
     (fun dn ->
-       FileUtil.rm ~recurse:true [dn])
+       (* TODO: re-enable when
+        * https://forge.ocamlcore.org/tracker/index.php?func=detail&aid=711&group_id=128&atid=589
+        * fixed.
+        *)
+(*          FileUtil.rm ~recurse:true [dn] *)
+       OASISFileUtil.rmdir ~ctxt:(ODBContext.to_oasis !odb) dn)
+
 
 module InotifyExt =
 struct 
@@ -321,6 +329,11 @@ let conf_oasis_db ocs fn =
     assert_command "ocaml" ("etc/generate.ml" :: args)
 
 let bracket_ocsigen conf pre_start f post_stop () =
+
+  let () =
+    skip_if (not !oasis_db_ocsigen)
+      "Ocsigen extension not available"
+  in
 
   let port =
     (* Find an available port *)

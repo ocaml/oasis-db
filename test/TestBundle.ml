@@ -3,6 +3,9 @@ open TestCommon
 open TestCLI
 open OUnit
 
+let () = 
+  Findlib.init ()
+
 let tests = 
   "Bundle" >::
   bracket_oasis_db_cli
@@ -14,6 +17,9 @@ let tests =
             in
             let site_lib_dir = 
               Filename.concat tmpdir "site-lib"
+            in
+            let findlib_conf_fn =
+              Filename.concat tmpdir "findlib.conf"
             in
             let env_export nm vl env = 
               let replaced = ref false in
@@ -47,20 +53,32 @@ let tests =
               assert_command "tar" ["-C"; tmpdir; "-xzf"; bundle_fn];
               FileUtil.mkdir metas_dir;
               begin
-                let sys_metas_dir = "/usr/lib/ocaml/METAS" in
-                  FileUtil.cp 
-                    (List.map 
-                       (fun ext -> (Filename.concat sys_metas_dir "META") ^"."^ext) 
-                       (* TODO: why threads is needed *)
-                       ["unix"; "dynlink"; "camlp4"; "str"; "threads"])
-                    metas_dir
+                let sys_metas_dir = Findlib.meta_directory () in
+                  List.iter 
+                    (fun pkg ->
+                       try 
+                         let org_fn =
+                           List.find
+                             (fun fn -> Sys.file_exists fn)
+                             ((Filename.concat sys_metas_dir ("META"^"."^pkg)) ::
+                              List.map 
+                                (fun dn -> FilePath.make_filename [dn; pkg; "META"])
+                                (Findlib.search_path ()))
+                         in
+                         let dst_fn = Filename.concat metas_dir ("META."^pkg) in
+                           FileUtil.cp [org_fn] dst_fn
+                       with Not_found ->
+                         failwith 
+                           (Printf.sprintf "Cannot find META for package '%s'" pkg))
+                     (* TODO: why threads is needed *)
+                     ["unix"; "dynlink"; "camlp4"; "str"; "threads"]
               end;
               FileUtil.mkdir site_lib_dir;
+              FileUtil.touch findlib_conf_fn;
               begin
                 let ctxt = ODBContext.to_oasis !odb in  
                 let findlib_dir = 
-                  OASISExec.run_read_one_line ~ctxt
-                    "ocamlfind" ["query"; "-format"; "%d"; "findlib"]
+                  Findlib.package_directory "findlib"
                 in
                   OASISFileUtil.cp ~ctxt ~recurse:true findlib_dir site_lib_dir
               end;
@@ -72,7 +90,7 @@ let tests =
                      ~env:(env_export 
                              "OCAMLPATH" (metas_dir^":"^site_lib_dir)
                              (env_export
-                                "OCAMLFIND_CONF" "foo.conf"
+                                "OCAMLFIND_CONF" findlib_conf_fn
                                 (Unix.environment ())))
                       "ocaml" ["bundle.ml"]) 
                 (fun dn -> Sys.chdir dn)

@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b65574dd737ce0f9716d4ee4a6b006e4)
+# DO NOT EDIT (digest: ae02b58cfb3cf66950c2bbb37869f467)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -111,6 +111,7 @@
 "test/test.byte": pkg_unix
 "test/test.byte": pkg_fileutils
 "test/test.byte": pkg_oUnit
+"test/test.byte": pkg_findlib
 "test/test.byte": pkg_threads
 "test/test.byte": pkg_calendar
 "test/test.byte": pkg_sexplib
@@ -132,6 +133,7 @@
 <test/*.ml{,i}>: pkg_unix
 <test/*.ml{,i}>: pkg_fileutils
 <test/*.ml{,i}>: pkg_oUnit
+<test/*.ml{,i}>: pkg_findlib
 <test/*.ml{,i}>: pkg_threads
 <test/*.ml{,i}>: pkg_calendar
 <test/*.ml{,i}>: pkg_sexplib
