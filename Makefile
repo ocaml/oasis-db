@@ -30,6 +30,7 @@ export OCAMLRUNPARAM
 #TESTFLAGS += -not-long
 #TESTFLAGS += -only-test OASIS-DB:5:CLI:0:Fetch
 #TESTFLAGS += -verbose
+ 
 
 CONFIGUREFLAGS += --override ocamlbuildflags -classic-display --enable-dev --enable-oasis-db-ocsigen
 #CONFIGUREFLAGS += $(if $(shell ocamlfind query gettext),--enable-gettext,--disable-gettext)
@@ -103,6 +104,7 @@ db-create:
 # Deploy dev
 OCSIGEN_BUNDLER=ocsigen-bundler
 dist-deploy-dev:
+	-$(RM) -r _build/deploy-dev
 	$(OCSIGEN_BUNDLER) \
 		--verbose \
 		--conf etc/ocsigen-dev.conf \
@@ -120,13 +122,7 @@ dist-deploy-dev:
 	$(RM) dist/deploy-dev.zip
 	cd _build && zip -r ../dist/deploy-dev.zip deploy-dev
 
-CI_URL=http://mini:8080/job/oasis-db/label=master/lastSuccessfulBuild/artifact/dist
 deploy-dev:
-	curl -o _build/deploy-tmp/deploy-dev.zip $(CI_URL)/deploy-dev.zip
-	curl -o _build/deploy-tmp/tag.darcs $(CI_URL)/tag.darcs
-	cd _build/deploy-tmp/ && unzip deploy-dev.zip
-	$(OCSIGEN_BUNDLER) --source _build/deploy-tmp/deploy-dev/ \
-		--deploy-host ssh.ocamlcore.org --deploy-dir /home/groups/oasis/ocsigen/dev/ 
-	darcs apply _build/deploy-tmp/tag.darcs
+	./deploy-dev.sh
 
 .PHONY: deploy-dev
