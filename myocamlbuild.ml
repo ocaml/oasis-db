@@ -93,9 +93,9 @@ rule "ocamlify: %.mlify & %.mlify.depends -> %.ml"
 ;;
 
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 638e656b4941abde04f0160b73678bfd) *)
+(* DO NOT EDIT (digest: 69a481dc124378f800f1ee91fe4c4989) *)
 module OASISGettext = struct
-(* # 21 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/oasis/OASISGettext.ml" *)
+# 21 "/home/gildor/programmation/oasis/src/oasis/OASISGettext.ml"
 
   let ns_ str =
     str
@@ -118,7 +118,7 @@ module OASISGettext = struct
 end
 
 module OASISExpr = struct
-(* # 21 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/oasis/OASISExpr.ml" *)
+# 21 "/home/gildor/programmation/oasis/src/oasis/OASISExpr.ml"
 
 
 
@@ -210,7 +210,7 @@ end
 
 # 117 "myocamlbuild.ml"
 module BaseEnvLight = struct
-(* # 21 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/base/BaseEnvLight.ml" *)
+# 21 "/home/gildor/programmation/oasis/src/base/BaseEnvLight.ml"
 
   module MapString = Map.Make(String)
 
@@ -308,7 +308,7 @@ end
 
 # 215 "myocamlbuild.ml"
 module MyOCamlbuildFindlib = struct
-(* # 21 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml" *)
+# 21 "/home/gildor/programmation/oasis/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml"
 
   (** OCamlbuild extension, copied from 
     * http://brion.inria.fr/gallium/index.php/Using_ocamlfind_with_ocamlbuild
@@ -417,7 +417,7 @@ module MyOCamlbuildFindlib = struct
 end
 
 module MyOCamlbuildBase = struct
-(* # 21 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
+# 21 "/home/gildor/programmation/oasis/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
 
   (** Base functions for writing myocamlbuild.ml
       @author Sylvain Le Gall
@@ -433,7 +433,7 @@ module MyOCamlbuildBase = struct
   type name = string 
   type tag = string 
 
-(* # 56 "/opt/godi/build/apps/apps-oasis/work/oasis-0.3.0~rc6/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
+# 56 "/home/gildor/programmation/oasis/src/plugins/ocamlbuild/MyOCamlbuildBase.ml"
 
   type t =
       {
@@ -489,78 +489,6 @@ module MyOCamlbuildBase = struct
                   Options.ext_dll, "ext_dll";
                 ]
 
-        | Before_rules ->
-          (* TODO: move this into its own file and conditionnaly include it, if
-           * needed.
-           *)
-          (* OCaml cmxs rules: cmxs available in ocamlopt but not ocamlbuild.
-             Copied from ocaml_specific.ml in ocamlbuild sources. *)
-          let has_native_dynlink =
-            try
-              bool_of_string (BaseEnvLight.var_get "native_dynlink" env)
-            with Not_found ->
-              false
-          in
-          if has_native_dynlink && String.sub Sys.ocaml_version 0 4 = "3.11" then
-            begin
-              let ext_lib = !Options.ext_lib in
-              let ext_obj = !Options.ext_obj in
-              let ext_dll = !Options.ext_dll in
-              let x_o = "%"-.-ext_obj in
-              let x_a = "%"-.-ext_lib in
-              let x_dll = "%"-.-ext_dll in
-              let x_p_o = "%.p"-.-ext_obj in
-              let x_p_a = "%.p"-.-ext_lib in
-              let x_p_dll = "%.p"-.-ext_dll in
-
-              rule "ocaml: mldylib & p.cmx* & p.o* -> p.cmxs & p.so"
-                   ~tags:["ocaml"; "native"; "profile"; "shared"; "library"]
-                   ~prods:["%.p.cmxs"; x_p_dll]
-                   ~dep:"%.mldylib"
-                   (OC.native_profile_shared_library_link_mldylib
-                      "%.mldylib" "%.p.cmxs");
-
-              rule "ocaml: mldylib & cmx* & o* -> cmxs & so"
-                   ~tags:["ocaml"; "native"; "shared"; "library"]
-                   ~prods:["%.cmxs"; x_dll]
-                   ~dep:"%.mldylib"
-                   (OC.native_shared_library_link_mldylib
-                      "%.mldylib" "%.cmxs");
-
-              rule "ocaml: p.cmx & p.o -> p.cmxs & p.so"
-                   ~tags:["ocaml"; "native"; "profile"; "shared"; "library"]
-                   ~prods:["%.p.cmxs"; x_p_dll]
-                   ~deps:["%.p.cmx"; x_p_o]
-                   (OC.native_shared_library_link ~tags:["profile"]
-                                                  "%.p.cmx" "%.p.cmxs");
-
-              rule "ocaml: p.cmxa & p.a -> p.cmxs & p.so"
-                   ~tags:["ocaml"; "native"; "profile"; "shared"; "library"]
-                   ~prods:["%.p.cmxs"; x_p_dll]
-                   ~deps:["%.p.cmxa"; x_p_a]
-                   (OC.native_shared_library_link ~tags:["profile"; "linkall"]
-                                                  "%.p.cmxa" "%.p.cmxs");
-
-              rule "ocaml: cmx & o -> cmxs"
-                   ~tags:["ocaml"; "native"; "shared"; "library"]
-                   ~prods:["%.cmxs"]
-                   ~deps:["%.cmx"; x_o]
-                   (OC.native_shared_library_link "%.cmx" "%.cmxs");
-
-              rule "ocaml: cmx & o -> cmxs & so"
-                   ~tags:["ocaml"; "native"; "shared"; "library"]
-                   ~prods:["%.cmxs"; x_dll]
-                   ~deps:["%.cmx"; x_o]
-                   (OC.native_shared_library_link "%.cmx" "%.cmxs");
-
-              rule "ocaml: cmxa & a -> cmxs & so"
-                   ~tags:["ocaml"; "native"; "shared"; "library"]
-                   ~prods:["%.cmxs"; x_dll]
-                   ~deps:["%.cmxa"; x_a]
-                   (OC.native_shared_library_link ~tags:["linkall"]
-                                                  "%.cmxa" "%.cmxs");
-            end
-
         | After_rules -> 
             (* Declare OCaml libraries *)
             List.iter 
@@ -601,7 +529,7 @@ module MyOCamlbuildBase = struct
                    (* When ocaml link something that use the C library, then one
                       need that file to be up to date.
                     *)
-                   dep  ["link"; "ocaml"; "program"; tag_libstubs lib]
+                   dep ["link"; "ocaml"; "program"; tag_libstubs lib]
                      [dir/"lib"^(nm_libstubs lib)^"."^(!Options.ext_lib)];
 
                    dep  ["compile"; "ocaml"; "program"; tag_libstubs lib]
@@ -639,7 +567,7 @@ module MyOCamlbuildBase = struct
 end
 
 
-# 548 "myocamlbuild.ml"
+# 476 "myocamlbuild.ml"
 open Ocamlbuild_plugin;;
 let package_default =
   {
@@ -669,7 +597,7 @@ let package_default =
 
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
-# 579 "myocamlbuild.ml"
+# 507 "myocamlbuild.ml"
 (* OASIS_STOP *)
 
 open Ocamlbuild_plugin;;

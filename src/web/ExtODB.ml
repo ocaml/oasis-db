@@ -173,9 +173,25 @@ let list_tarball ~ctxt mp =
 (* Return a listing of the repository *)
 let list_repo ~ctxt nm = 
   S.fold ctxt.sqle
-    (fun mp (pkg, ver) -> return (MapString.add pkg ver mp))
-    MapString.empty
+    (* Filter non-existing version/non existing packages *)
+    (fun (mp, nopkg, nover) (pkg, ver) ->
+       ODBStorage.Pkg.mem ctxt.stor (`Str pkg)
+       >>= fun exists ->
+         if exists then 
+           begin
+             ODBStorage.PkgVer.mem ctxt.stor (`Str (pkg, ver))
+             >>= fun exists ->
+             if exists then
+               return (MapString.add pkg ver mp, nopkg, nover)
+             else 
+               return (mp, nopkg, (pkg, ver) :: nover)
+           end
+         else
+           return (mp, (pkg :: nopkg), nover))
+    (MapString.empty, [], [])
     sql"SELECT @s{pkg}, @s{ver} FROM odb WHERE repo = %s" nm
+  >>= fun (mp, _, _) ->
+  return mp
 
 (* Return a listing of latest version *)
 let list_latest ~ctxt () = 
@@ -636,11 +652,11 @@ let map_info_name ~ctxt mp_repo =
     add_merge_entry library (`Library library) acc
   in
 
-    Lwt_list.rev_map_p 
+    Lwt_list.rev_map_s
       (fun (pkg_str, ver_str) ->
          ODBStorage.PkgVer.oasis ctxt.stor (`Str (pkg_str, ver_str))
-         >>= fun oasis_opt ->
-         return (pkg_str, ver_str, oasis_opt))
+         >|= fun oasis_opt ->
+         (pkg_str, ver_str, oasis_opt))
       lst_repo
     >>= fun lst_repo_pkgver ->
     program_list ~ctxt ()
@@ -966,7 +982,7 @@ let table_packages_edit_box ~ctxt ~sp repo =
   map_info_name ~ctxt mp_unstable
   >>= fun (msg_unstable, mp_info_name_unstable) ->
   
-  Lwt_list.rev_map_p
+  Lwt_list.rev_map_s
     (fun table_t ->
        (* Build the select for testing change *)
        ODBStorage.PkgVer.elements ctxt.stor (`Str table_t.pkg_str)

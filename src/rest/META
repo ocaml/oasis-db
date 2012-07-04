@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 96124abb856c49d1ab0ada9b640af2d1)
-version = "0.1.0~alpha3"
+# DO NOT EDIT (digest: 91ebd590114bc546347e972240cd6981)
+version = "0.1.0~alpha4"
 description = "Database and web interface of OASIS packages"
 requires = "yojson sexplib oasis lwt gettext"
 archive(byte) = "rest.cma"
@@ -9,7 +9,7 @@ archive(native) = "rest.cmxa"
 archive(native, plugin) = "rest.cmxs"
 exists_if = "rest.cma"
 package "ocsigen" (
- version = "0.1.0~alpha3"
+ version = "0.1.0~alpha4"
  description = "Database and web interface of OASIS packages"
  requires = "rest ocsigen markdown markdown.html threads"
  archive(byte) = "rest-ocsigen.cma"
@@ -20,7 +20,7 @@ package "ocsigen" (
 )
 
 package "curl" (
- version = "0.1.0~alpha3"
+ version = "0.1.0~alpha4"
  description = "Database and web interface of OASIS packages"
  requires = "rest threads extlib curl"
  archive(byte) = "rest-curl.cma"

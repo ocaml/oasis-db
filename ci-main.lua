@@ -39,6 +39,6 @@ godi.build_many(
    "apps-ocamlify"},
    "godi-pgocaml:GODI_PGOCAML_USE_BATTERIES=yes")
 
-oasis.std_process("--enable-dev", "--enable-oasis-db-ocsigen")
+oasis.std_process("--enable-dev", "--enable-oasis-db-ocsigen", "--enable-tests")
 ci.exec("make", "dist-deploy-dev")
 darcs.create_tag(oasis.package_version())
