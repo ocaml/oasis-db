@@ -43,4 +43,4 @@ remote_cmd "rm $DEPLOY_DIR_BASE/dev"
 remote_cmd "ln -s $DEPLOY_DIR $DEPLOY_DIR_BASE/dev"
 remote_cmd "cd $DEPLOY_DIR_BASE/dev && ./daemon.sh start"
 
-#darcs apply $DEPLOY_TMP/tag.darcs
+darcs apply $DEPLOY_TMP/tag.darcs
