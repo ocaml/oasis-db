@@ -1,6 +1,6 @@
 OASISFormat: 0.3
 Name:        oasis-db
-Version:     0.1.0~alpha4
+Version:     0.1.0~alpha5
 Authors:     Sylvain Le Gall
 Copyrights:  (C) 2010 OCamlCore SARL 
 Homepage:    http://oasis.forge.ocamlcore.org/
@@ -113,7 +113,8 @@ Library "oasis-db"
            ODBRepository,
            ODBCurl,
            ODBPkgVerSolver,
-           ODBDerive
+           ODBDerive,
+           ODBFileCache
   BuildDepends: lwt (>= 2.3.0), lwt.unix,
                 unix, 
                 pcre,

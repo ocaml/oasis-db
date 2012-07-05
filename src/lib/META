@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 132642487c83776c3cb18f23a5123b2e)
-version = "0.1.0~alpha4"
+# DO NOT EDIT (digest: 5faa6a7a3844fb3c9f9fc1a8e00f38ac)
+version = "0.1.0~alpha5"
 description = "Database and web interface of OASIS packages"
 requires =
 "lwt lwt.unix unix pcre oasis oasis.builtin-plugins sexplib calendar inotify fileutils yojson rest rest.curl inifiles"
@@ -10,7 +10,7 @@ archive(native) = "oasis-db.cmxa"
 archive(native, plugin) = "oasis-db.cmxs"
 exists_if = "oasis-db.cma"
 package "ocsigen" (
- version = "0.1.0~alpha4"
+ version = "0.1.0~alpha5"
  description = "Database and web interface of OASIS packages"
  requires =
  "oasis-db ocsigen ocsigen.ext.eliom ocsigen.ext.ocsipersist-sqlite netstring threads calendar markdown markdown.html rss sexplib rest.ocsigen sqlexpr ocamlcore-api ocamlcore-api.ocsigen"
@@ -20,7 +20,7 @@ package "ocsigen" (
 )
 
 package "cli" (
- version = "0.1.0~alpha4"
+ version = "0.1.0~alpha5"
  description = "Database and web interface of OASIS packages"
  requires = "oasis-db xdg-basedir oasis.cli odn"
  archive(byte) = "oasis-db-cli.cma"

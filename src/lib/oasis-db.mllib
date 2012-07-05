@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: cea8ecb32a31bf84a385292e571aaf2f)
+# DO NOT EDIT (digest: bcc9751f02c2e5e8e336144a9e25f5fc)
 FileUtilExt
 LwtExt
 OASISExprExt
@@ -38,4 +38,5 @@ ODBRepository
 ODBCurl
 ODBPkgVerSolver
 ODBDerive
+ODBFileCache
 # OASIS_STOP

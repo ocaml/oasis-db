@@ -14,8 +14,12 @@ type watch = CalendarLib.Calendar.t -> ODBLog.event -> unit Lwt.t
 type oasis_content = 
     [ `Set of OASISTypes.package 
     | `Not_found 
-    | `Error
-    ]
+    | `Error]
+
+type 'a cached_content =
+    [ `Data of 'a
+    | `Doesnt_exist
+    | `Error of exn]
 
 type ver_str = string
 type pkg_str = string
@@ -25,10 +29,12 @@ type dirname = string
 (** Main datastructure *)
 type 'a t = 
     {
-      stor_fs:          'a;
-      stor_ctxt:        ODBContext.t;
-      stor_watchers:    watch list; 
-      stor_cache_oasis: (filename, oasis_content) Hashtbl.t;
+      stor_fs:            'a;
+      stor_ctxt:          ODBContext.t;
+      stor_watchers:      watch list; 
+      stor_cache_pkg:     (ODBPkg.t cached_content) ODBFileCache.t;
+      stor_cache_pkg_ver: (ODBPkgVer.t cached_content) ODBFileCache.t;
+      stor_cache_oasis:   oasis_content ODBFileCache.t;
     } constraint 'a = #ODBVFS.read_only
 
 type 'a read_only = (#FS.read_only as 'a) t
@@ -74,8 +80,13 @@ sig
   type file_type
   type data 
 
+  (** The cache for the storage.sexp data. *)
+  val cache: 'a t -> (data cached_content) ODBFileCache.t
+  (** A filename inside the [dirname]. *)
   val filename: 'a t -> key -> file_type -> data -> filename
+  (** Directory that contains storage.sexp. *)
   val dirname:  'a t -> key -> dirname 
+  (** Parse storage.sexp. *)
   val from_chn: ctxt:ODBContext.t -> fn:filename -> Lwt_io.input_channel -> data Lwt.t
 end
 
@@ -89,9 +100,34 @@ struct
 
   let load t k = 
     let fn = storage_filename (dirname t k) in
-      ODBVFS.with_file_in t.stor_fs fn
-        (O.from_chn ~ctxt:t.stor_ctxt ~fn)
+    ODBFileCache.get 
+      (O.cache t)
+      t.stor_fs
+      fn
+      (function
+         | Some chn ->
+             catch 
+               (fun () ->
+                  O.from_chn ~ctxt:t.stor_ctxt ~fn chn
+                  >|= fun data ->
+                  `Data data)
+               (fun e ->
+                  return (`Error e))
 
+         | None ->
+             return `Doesnt_exist)
+    >>= 
+      function
+        | `Data data -> 
+            return data
+        | `Error e ->
+            fail e 
+        | `Doesnt_exist ->
+            fail (Unix.Unix_error (Unix.ENOENT, "open", ""))
+
+  (* Extract the filename of a file contains in the directory of the
+   * package/package version.
+   *)
   let filename t k ft = 
     load t k 
     >|= fun data ->
@@ -116,6 +152,7 @@ struct
   let with_file_out t k ft f =
     filename t k ft 
     >>= fun fn ->
+    ODBFileCache.remove (O.cache t) fn;
     ODBVFS.with_file_out t.stor_fs fn f
 
   let with_file_in ?(catch=(fun e -> fail e)) t k fn read =
@@ -154,6 +191,8 @@ struct
              | `PkgVer of ODBPkgVer.t]
 
          type data = ODBPkg.t
+
+         let cache t = t.stor_cache_pkg
 
          let dirname t =
            function
@@ -252,6 +291,7 @@ struct
 
           type data = ODBPkgVer.t
 
+          let cache t = t.stor_cache_pkg_ver
 
           let key_str =
             function
@@ -417,38 +457,26 @@ struct
              fail e)
     end
 
-  let oasis_load t k =
-      filename t k `OASIS 
-      >>= fun fn ->
-      catch 
-        (fun () -> 
-           ODBVFS.with_file_in t.stor_fs fn
-             (fun chn ->
-                ODBOASIS.from_chn 
-                  ~ctxt:t.stor_ctxt 
-                  ~fn:(t.stor_fs#vroot fn) chn
-                >|= fun oasis ->
-                `Set oasis))
-        (fun _ ->
-           t.stor_fs#file_exists fn
-           >|= fun exists ->
-             if exists then
-               `Error
-             else
-               `Not_found)
-      >|= fun oasis_set ->
-      begin
-        Hashtbl.replace t.stor_cache_oasis fn oasis_set;
-        oasis_set
-      end
-
   let oasis_get t k =
-    filename t k `OASIS
+    filename t k `OASIS 
     >>= fun fn ->
-    try 
-      return (Hashtbl.find t.stor_cache_oasis fn)
-    with Not_found ->
-      oasis_load t k
+    ODBFileCache.get
+      t.stor_cache_oasis
+      t.stor_fs
+      fn
+      (function
+         | Some chn ->
+             catch 
+               (fun () ->
+                  ODBOASIS.from_chn 
+                    ~ctxt:t.stor_ctxt 
+                    ~fn:(t.stor_fs#vroot fn) chn
+                  >|= fun oasis ->
+                  `Set oasis)
+               (fun _ ->
+                  return `Error)
+         | None ->
+             return `Not_found)
 
   let rec oasis t k = 
     oasis_get t k
@@ -699,10 +727,12 @@ let fs_watcher t fn ev =
 let create ~ctxt ?(watchers=[]) fs  =
   let res =
     {
-      stor_fs          = fs;
-      stor_ctxt        = ctxt;
-      stor_watchers    = watchers;
-      stor_cache_oasis = Hashtbl.create 13;
+      stor_fs            = fs;
+      stor_ctxt          = ctxt;
+      stor_watchers      = watchers;
+      stor_cache_pkg     = ODBFileCache.create ();
+      stor_cache_pkg_ver = ODBFileCache.create ();
+      stor_cache_oasis   = ODBFileCache.create ();
     }
   in
     watch_notify res
