@@ -1,0 +1,13 @@
+_build
+tmp
+setup.log
+setup.data
+Makefile.secret
+test/data/storage
+etc/ocsigen-dev.conf
+etc/ocsigen-local.conf
+dist
+build
+Main.byte
+test.byte
+src/lib/ODBConf.ml
